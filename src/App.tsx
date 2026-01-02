@@ -7,8 +7,9 @@ import { Triage } from './pages/Triage';
 import { Roadmap } from './pages/Roadmap';
 import { Signals } from './pages/Signals';
 import { Constitution } from './pages/Constitution';
-import { Budget } from './pages/Budget'; // NEW
+import { Budget } from './pages/Budget';
 import { Settings } from './pages/Settings';
+import { Ledger } from './pages/Ledger'; // NEW IMPORT
 
 function App() {
   return (
@@ -19,7 +20,8 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/triage" element={<Triage />} />
           <Route path="/roadmap" element={<Roadmap />} />
-          <Route path="/budget" element={<Budget />} /> {/* NEW ROUTE */}
+          <Route path="/budget" element={<Budget />} />
+          <Route path="/ledger" element={<Ledger />} /> {/* NEW ROUTE */}
           
           {/* Research Engine */}
           <Route path="/signals" element={<Signals />} />

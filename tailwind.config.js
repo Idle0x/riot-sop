@@ -1,57 +1,57 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
-      "./index.html",
-          "./src/**/*.{js,ts,jsx,tsx}",
-            ],
-              theme: {
-                  extend: {
-                        colors: {
-                                bg: {
-                                          primary: '#0A0E1A',   // Deep Navy
-                                                    secondary: '#0F1419', // Lighter Navy
-                                                              tertiary: '#141922',
-                                                                      },
-                                                                              glass: {
-                                                                                        DEFAULT: 'rgba(18, 24, 43, 0.6)',
-                                                                                                  border: 'rgba(255, 255, 255, 0.1)',
-                                                                                                            highlight: 'rgba(255, 255, 255, 0.05)',
-                                                                                                                      success: 'rgba(16, 185, 129, 0.15)',
-                                                                                                                                warning: 'rgba(245, 158, 11, 0.15)',
-                                                                                                                                          danger: 'rgba(239, 68, 68, 0.15)',
-                                                                                                                                                    info: 'rgba(59, 130, 246, 0.15)',
-                                                                                                                                                            },
-                                                                                                                                                                    accent: {
-                                                                                                                                                                              success: '#10B981', // Emerald
-                                                                                                                                                                                        warning: '#F59E0B', // Amber
-                                                                                                                                                                                                  danger: '#EF4444',  // Red
-                                                                                                                                                                                                            info: '#3B82F6',    // Blue
-                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                          },
-                                                                                                                                                                                                                                fontFamily: {
-                                                                                                                                                                                                                                        sans: ['Inter', 'sans-serif'],
-                                                                                                                                                                                                                                                mono: ['JetBrains Mono', 'monospace'],
-                                                                                                                                                                                                                                                      },
-                                                                                                                                                                                                                                                            boxShadow: {
-                                                                                                                                                                                                                                                                    'glass-sm': '0 2px 8px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
-                                                                                                                                                                                                                                                                            'glass-md': '0 4px 16px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
-                                                                                                                                                                                                                                                                                    'glass-lg': '0 8px 32px rgba(0, 0, 0, 0.2), 0 4px 8px rgba(0, 0, 0, 0.3), inset 0 2px 0 rgba(255, 255, 255, 0.1)',
-                                                                                                                                                                                                                                                                                          },
-                                                                                                                                                                                                                                                                                                animation: {
-                                                                                                                                                                                                                                                                                                        'shimmer': 'shimmer 3s infinite',
-                                                                                                                                                                                                                                                                                                                'fade-in': 'fadeIn 0.4s ease-out forwards',
-                                                                                                                                                                                                                                                                                                                      },
-                                                                                                                                                                                                                                                                                                                            keyframes: {
-                                                                                                                                                                                                                                                                                                                                    shimmer: {
-                                                                                                                                                                                                                                                                                                                                              '0%': { backgroundPosition: '-200% 0' },
-                                                                                                                                                                                                                                                                                                                                                        '100%': { backgroundPosition: '200% 0' },
-                                                                                                                                                                                                                                                                                                                                                                },
-                                                                                                                                                                                                                                                                                                                                                                        fadeIn: {
-                                                                                                                                                                                                                                                                                                                                                                                  '0%': { opacity: '0', transform: 'translateY(10px)' },
-                                                                                                                                                                                                                                                                                                                                                                                            '100%': { opacity: '1', transform: 'translateY(0)' },
-                                                                                                                                                                                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                                                                                                                                                                                          }
-                                                                                                                                                                                                                                                                                                                                                                                                              },
-                                                                                                                                                                                                                                                                                                                                                                                                                },
-                                                                                                                                                                                                                                                                                                                                                                                                                  plugins: [],
-                                                                                                                                                                                                                                                                                                                                                                                                                  }
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        bg: {
+          primary: '#0A0E1A',
+          secondary: '#0F1419',
+          tertiary: '#141922',
+        },
+        glass: {
+          DEFAULT: 'rgba(18, 24, 43, 0.6)',
+          border: 'rgba(255, 255, 255, 0.1)',
+          highlight: 'rgba(255, 255, 255, 0.05)',
+          success: 'rgba(16, 185, 129, 0.15)',
+          warning: 'rgba(245, 158, 11, 0.15)',
+          danger: 'rgba(239, 68, 68, 0.15)',
+          info: 'rgba(59, 130, 246, 0.15)',
+        },
+        accent: {
+          success: '#10B981',
+          warning: '#F59E0B',
+          danger: '#EF4444',
+          info: '#3B82F6',
+        }
+      },
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
+      },
+      boxShadow: {
+        'glass-sm': '0 2px 8px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+        'glass-md': '0 4px 16px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
+        'glass-lg': '0 8px 32px rgba(0, 0, 0, 0.2), 0 4px 8px rgba(0, 0, 0, 0.3), inset 0 2px 0 rgba(255, 255, 255, 0.1)',
+      },
+      animation: {
+        'shimmer': 'shimmer 3s infinite',
+        'fade-in': 'fadeIn 0.4s ease-out forwards',
+      },
+      keyframes: {
+        shimmer: {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
+        fadeIn: {
+          '0%': { opacity: '0', transform: 'translateY(10px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        }
+      }
+    },
+  },
+  plugins: [],
+}

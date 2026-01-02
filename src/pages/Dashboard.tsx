@@ -3,10 +3,10 @@ import { useFinancials } from '../context/FinancialContext';
 import { MetricCard } from '../components/ui/MetricCard';
 import { GlassProgressBar } from '../components/ui/GlassProgressBar';
 import { GlassCard } from '../components/ui/GlassCard';
-import { Naira } from '../components/ui/Naira'; // Import Naira
+import { Naira } from '../components/ui/Naira';
 
 export const Dashboard = () => {
-  const { accounts, goals, monthlyBurn } = useFinancials(); // Pull monthlyBurn
+  const { accounts, goals, monthlyBurn, budgetCategories } = useFinancials();
 
   // 1. Get Real Account Balances
   const treasury = accounts.find(a => a.id === 'treasury');
@@ -131,14 +131,28 @@ export const Dashboard = () => {
           </div>
         </GlassCard>
 
+        {/* BUDGET MODULE (REAL DATA) */}
         <GlassCard className="p-6">
            <div className="flex justify-between items-center mb-6">
             <h3 className="font-bold text-white">Monthly Budget</h3>
-            <span className="text-xs text-gray-400">November 2025</span>
+            <span className="text-xs text-gray-400">Status</span>
           </div>
-           <div className="flex items-center justify-center h-40 text-gray-500 text-sm">
-             Budget Monitor Module Loading...
-           </div>
+          <div className="space-y-4">
+            {budgetCategories.slice(0, 3).map(cat => (
+               <div key={cat.id} className="space-y-1">
+                 <div className="flex justify-between text-xs text-gray-400">
+                   <span>{cat.name}</span>
+                   <span>{Math.round((cat.spent/cat.limit)*100)}%</span>
+                 </div>
+                 <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+                   <div className={`h-full bg-accent-${cat.color}`} style={{width: `${Math.min(100, (cat.spent/cat.limit)*100)}%`}}></div>
+                 </div>
+               </div>
+            ))}
+            <div className="pt-2">
+               <a href="/budget" className="text-xs text-accent-info hover:underline">View All Categories →</a>
+            </div>
+          </div>
         </GlassCard>
       </div>
 

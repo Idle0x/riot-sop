@@ -1,3 +1,4 @@
+// === FINANCIAL TYPES ===
 export type Currency = 'USD' | 'NGN';
 
 export type AccountType = 'treasury' | 'payroll' | 'buffer' | 'holding';
@@ -35,7 +36,6 @@ export interface Transaction {
   source?: string; // e.g., "Zama Airdrop"
 }
 
-// The "Triage Session" - Saving the math logic
 export interface TriageCalculation {
   dropId: string;
   totalAmount: number;
@@ -47,6 +47,8 @@ export interface TriageCalculation {
     amount: number;
   }[];
 }
+
+// === SIGNAL / RESEARCH TYPES ===
 
 export type ProjectStatus = 'discovery' | 'validation' | 'contribution' | 'delivered' | 'archived';
 export type ProjectType = 'hunter' | 'creator';

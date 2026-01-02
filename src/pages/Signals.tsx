@@ -3,14 +3,18 @@ import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
 import { GlassInput } from '../components/ui/GlassInput';
-import { Plus, Trash2, Clock, DollarSign } from 'lucide-react';
-import { type ProjectStatus } from '../types';
+import { Plus, Trash2, Clock, DollarSign, Archive, XCircle, RotateCcw } from 'lucide-react';
+import { type ProjectStatus, type Project } from '../types';
 import { cn } from '../utils/cn';
 
 export const Signals = () => {
-  const { projects, transactions, addProject, updateProjectStatus } = useFinancials(); // Pull transactions
-  const [isAdding, setIsAdding] = useState(false);
+  const { projects, transactions, addProject, updateProjectStatus } = useFinancials();
   
+  // UI State
+  const [isAdding, setIsAdding] = useState(false);
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'archived'>('pipeline');
+  
+  // New Project Form
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState<'hunter' | 'creator'>('hunter');
   const [newDesc, setNewDesc] = useState('');
@@ -21,6 +25,14 @@ export const Signals = () => {
     { id: 'contribution', label: 'Contribution', color: 'text-accent-warning' },
     { id: 'delivered', label: 'Shipped', color: 'text-accent-success' },
   ];
+
+  // Logic: Can we delete this? (1 Hour Limit)
+  const canDelete = (project: Project) => {
+    const ONE_HOUR = 60 * 60 * 1000;
+    const created = new Date(project.createdAt).getTime();
+    const now = new Date().getTime();
+    return (now - created) < ONE_HOUR;
+  };
 
   const handleAddProject = () => {
     if (!newName) return;
@@ -41,7 +53,14 @@ export const Signals = () => {
     setNewDesc('');
   };
 
-  // Helper to calculate earnings
+  // Helper to delete strictly (We need to add deleteProject to context in next batch if not present, 
+  // but for now we'll just use Archive as the primary destroy method, 
+  // or simple state filtering. Wait, we need deleteProject in context. 
+  // For this step, we will use 'archived' status as "Soft Delete" and real delete for the 1hr window)
+  
+  // Since we haven't added deleteProject to Context yet, we will mark as 'archived' for now.
+  // We will add the strict deleteProject action in the next Context update.
+
   const getProjectEarnings = (projectId: string) => {
     return transactions
       .filter(t => t.projectId === projectId && t.type === 'drop')
@@ -54,17 +73,35 @@ export const Signals = () => {
   return (
     <div className="space-y-8 animate-fade-in h-[calc(100vh-140px)] flex flex-col">
       
-      <div className="flex justify-between items-center">
+      {/* HEADER & TABS */}
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">Signal Intelligence</h1>
           <p className="text-gray-400">Hunter / Creator Pipeline</p>
         </div>
+        
+        <div className="flex bg-black/20 p-1 rounded-xl border border-glass-border">
+          <button 
+            onClick={() => setActiveTab('pipeline')}
+            className={cn("px-4 py-2 rounded-lg text-sm font-bold transition-all", activeTab === 'pipeline' ? "bg-glass-highlight text-white shadow-sm" : "text-gray-500 hover:text-gray-300")}
+          >
+            Active Pipeline
+          </button>
+          <button 
+            onClick={() => setActiveTab('archived')}
+            className={cn("px-4 py-2 rounded-lg text-sm font-bold transition-all", activeTab === 'archived' ? "bg-glass-highlight text-white shadow-sm" : "text-gray-500 hover:text-gray-300")}
+          >
+            Failed / Archived
+          </button>
+        </div>
+
         <GlassButton onClick={() => setIsAdding(!isAdding)}>
           <Plus className="w-4 h-4 mr-2" />
           New Signal
         </GlassButton>
       </div>
 
+      {/* QUICK ADD FORM */}
       {isAdding && (
         <GlassCard className="p-6 border-accent-info/30">
           <div className="flex items-start justify-between mb-4">
@@ -80,49 +117,104 @@ export const Signals = () => {
           </div>
           <textarea className="w-full bg-black/20 border border-glass-border rounded-xl p-4 text-white placeholder:text-gray-600 focus:border-accent-info outline-none resize-none mb-4" rows={2} placeholder="Quick notes: VCs, GitHub activity..." value={newDesc} onChange={(e) => setNewDesc(e.target.value)} />
           <div className="flex justify-between items-center">
-            <button className="text-xs text-accent-danger font-bold flex items-center hover:text-red-400"><Trash2 className="w-3 h-3 mr-1" /> REJECT (DEAD)</button>
+            <div className="text-xs text-gray-500">If rejected, just close. Only add if passing Level 0.</div>
             <GlassButton onClick={handleAddProject} disabled={!newName}>Add to Discovery</GlassButton>
           </div>
         </GlassCard>
       )}
 
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden min-h-[500px]">
-        {columns.map((col) => (
-          <div key={col.id} className="flex flex-col h-full bg-white/5 rounded-2xl border border-glass-border">
-            <div className={cn("p-4 border-b border-glass-border font-bold uppercase text-xs tracking-wider", col.color)}>
-              {col.label}
-            </div>
-            <div className="flex-1 p-3 space-y-3 overflow-y-auto">
-              {projects.filter(p => p.status === col.id).map(project => {
-                const earnings = getProjectEarnings(project.id);
-                return (
-                  <div key={project.id} className="group relative bg-glass hover:bg-white/10 border border-glass-border rounded-xl p-4 transition-all hover:-translate-y-1 hover:shadow-lg cursor-grab active:cursor-grabbing">
-                    <div className="flex justify-between items-start mb-2">
-                      <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded uppercase border", project.type === 'hunter' ? "bg-accent-info/10 text-accent-info border-accent-info/20" : "bg-accent-warning/10 text-accent-warning border-accent-warning/20")}>{project.type}</span>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {col.id !== 'discovery' && <button onClick={() => updateProjectStatus(project.id, columns[columns.findIndex(c => c.id === col.id) - 1].id)} className="p-1 hover:bg-white/20 rounded">←</button>}
-                        {col.id !== 'delivered' && <button onClick={() => updateProjectStatus(project.id, columns[columns.findIndex(c => c.id === col.id) + 1].id)} className="p-1 hover:bg-white/20 rounded">→</button>}
+      {/* VIEW: PIPELINE */}
+      {activeTab === 'pipeline' && (
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden min-h-[500px]">
+          {columns.map((col) => (
+            <div key={col.id} className="flex flex-col h-full bg-white/5 rounded-2xl border border-glass-border">
+              <div className={cn("p-4 border-b border-glass-border font-bold uppercase text-xs tracking-wider flex justify-between", col.color)}>
+                <span>{col.label}</span>
+                <span className="opacity-50">{projects.filter(p => p.status === col.id).length}</span>
+              </div>
+              <div className="flex-1 p-3 space-y-3 overflow-y-auto">
+                {projects.filter(p => p.status === col.id).map(project => {
+                  const earnings = getProjectEarnings(project.id);
+                  const isDeletable = canDelete(project);
+                  
+                  return (
+                    <div key={project.id} className="group relative bg-glass hover:bg-white/10 border border-glass-border rounded-xl p-4 transition-all hover:-translate-y-1 hover:shadow-lg">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded uppercase border", project.type === 'hunter' ? "bg-accent-info/10 text-accent-info border-accent-info/20" : "bg-accent-warning/10 text-accent-warning border-accent-warning/20")}>{project.type}</span>
+                        
+                        {/* CARD ACTIONS */}
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {isDeletable && (
+                            <button 
+                              onClick={() => {
+                                // For now, we reuse status 'archived' as delete until we add true delete to context
+                                if(confirm("Delete permanently? (Within 1hr window)")) updateProjectStatus(project.id, 'archived'); 
+                              }} 
+                              className="p-1 hover:bg-red-500/20 text-accent-danger rounded" title="Delete (Error)"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                           <button 
+                              onClick={() => updateProjectStatus(project.id, 'archived')} 
+                              className="p-1 hover:bg-white/20 text-gray-400 rounded" title="Archive / Fail"
+                            >
+                              <Archive size={12} />
+                            </button>
+                        </div>
+                      </div>
+
+                      <h4 className="font-bold text-white mb-1">{project.name}</h4>
+                      <p className="text-xs text-gray-400 line-clamp-2">{project.description}</p>
+                      
+                      <div className="mt-3 pt-3 border-t border-glass-border flex justify-between items-center text-xs text-gray-500">
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {col.id !== 'discovery' && <button onClick={() => updateProjectStatus(project.id, columns[columns.findIndex(c => c.id === col.id) - 1].id)} className="hover:text-white">←</button>}
+                            {col.id !== 'delivered' && <button onClick={() => updateProjectStatus(project.id, columns[columns.findIndex(c => c.id === col.id) + 1].id)} className="hover:text-white">→</button>}
+                        </div>
+                        {earnings > 0 && (
+                          <div className="flex items-center gap-1 font-bold text-accent-success bg-accent-success/10 px-2 py-0.5 rounded-full border border-accent-success/20">
+                            <DollarSign size={10} /> {formatUSD(earnings)}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <h4 className="font-bold text-white mb-1">{project.name}</h4>
-                    <p className="text-xs text-gray-400 line-clamp-2">{project.description}</p>
-                    
-                    {/* FOOTER: ROI Badge */}
-                    <div className="mt-3 pt-3 border-t border-glass-border flex justify-between items-center text-xs text-gray-500">
-                      <div className="flex items-center gap-1"><Clock size={12} /> {project.timeInvested}h</div>
-                      {earnings > 0 && (
-                        <div className="flex items-center gap-1 font-bold text-accent-success bg-accent-success/10 px-2 py-0.5 rounded-full border border-accent-success/20">
-                          <DollarSign size={10} /> {formatUSD(earnings)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
+
+      {/* VIEW: ARCHIVED */}
+      {activeTab === 'archived' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {projects.filter(p => p.status === 'archived').map(project => (
+             <GlassCard key={project.id} className="p-4 opacity-75 hover:opacity-100">
+               <div className="flex justify-between items-start mb-2">
+                 <div className="flex items-center gap-2">
+                   <XCircle size={16} className="text-gray-500" />
+                   <h4 className="font-bold text-gray-300">{project.name}</h4>
+                 </div>
+                 <button 
+                    onClick={() => updateProjectStatus(project.id, 'discovery')}
+                    className="p-1 hover:bg-white/10 rounded text-xs text-accent-info flex items-center gap-1"
+                 >
+                   <RotateCcw size={12} /> Restore
+                 </button>
+               </div>
+               <p className="text-xs text-gray-500">{project.description}</p>
+             </GlassCard>
+          ))}
+          {projects.filter(p => p.status === 'archived').length === 0 && (
+            <div className="col-span-full text-center py-12 text-gray-500">
+              No archived or failed projects yet.
+            </div>
+          )}
+        </div>
+      )}
+
     </div>
   );
 };

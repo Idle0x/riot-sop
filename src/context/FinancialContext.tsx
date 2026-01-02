@@ -21,6 +21,7 @@ interface FinancialContextType {
   addBudgetCategory: (category: BudgetCategory) => void;
   logExpense: (amount: number, categoryId: string, description: string) => void;
   resetMonthlyBudget: () => void;
+  deleteTransaction: (id: string) => void;
 }
 
 const FinancialContext = createContext<FinancialContextType | undefined>(undefined);

@@ -13,6 +13,11 @@ interface MetricCardProps {
   };
   icon?: React.ReactNode;
   isPrivate?: boolean;  // Default privacy state
+  value: string | React.ReactNode; // Allow components
+  subValue?: string | React.ReactNode; // Allow components
+  // ...
+}
+
 }
 
 export const MetricCard = ({ 

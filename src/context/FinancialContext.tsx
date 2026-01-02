@@ -2,32 +2,30 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import { type Account, type Goal, type Transaction, type Project, type BudgetCategory } from '../types';
 
 interface FinancialContextType {
-  // Financial Data
   accounts: Account[];
   goals: Goal[];
   transactions: Transaction[];
-  monthlyBurn: number; // Living Cost
-  
-  // Research/Signal Data
   projects: Project[];
-
-  // Actions
+  monthlyBurn: number;
+  budgetCategories: BudgetCategory[]; // NEW
+  
   updateAccountBalance: (id: string, newBalance: number) => void;
   updateGoalAmount: (id: string, amountToAdd: number) => void;
   addTransaction: (tx: Transaction) => void;
   addProject: (project: Project) => void;
   updateProjectStatus: (id: string, status: Project['status']) => void;
   updateMonthlyBurn: (amount: number, reason: string) => void;
-  resetBalances: () => void; // Nuclear Reset
-  budgetCategories: BudgetCategory[];
+  resetBalances: () => void;
+  
+  // NEW ACTIONS
   addBudgetCategory: (category: BudgetCategory) => void;
   logExpense: (amount: number, categoryId: string, description: string) => void;
-  resetMonthlyBudget: () => void; // For the 1st of the month
+  resetMonthlyBudget: () => void;
 }
 
 const FinancialContext = createContext<FinancialContextType | undefined>(undefined);
 
-// --- INITIAL FALLBACK DATA ---
+// --- INITIAL DUMMY DATA ---
 const INITIAL_ACCOUNTS: Account[] = [
   { id: 'treasury', name: 'Treasury (RedotPay)', balance: 0, currency: 'USD' },
   { id: 'payroll', name: 'Payroll (Opay)', balance: 0, currency: 'NGN' },
@@ -47,19 +45,101 @@ const INITIAL_BUDGET: BudgetCategory[] = [
 ];
 
 export const FinancialProvider = ({ children }: { children: ReactNode }) => {
-  // ... existing state ...
+  // --- LOAD FROM STORAGE ---
+  const [accounts, setAccounts] = useState<Account[]>(() => {
+    const saved = localStorage.getItem('riot_accounts');
+    return saved ? JSON.parse(saved) : INITIAL_ACCOUNTS;
+  });
+
+  const [goals, setGoals] = useState<Goal[]>(() => {
+    const saved = localStorage.getItem('riot_goals');
+    return saved ? JSON.parse(saved) : INITIAL_GOALS;
+  });
+
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    const saved = localStorage.getItem('riot_transactions');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [projects, setProjects] = useState<Project[]>(() => {
+    const saved = localStorage.getItem('riot_projects');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [monthlyBurn, setMonthlyBurn] = useState<number>(() => {
+    const saved = localStorage.getItem('riot_burn');
+    return saved ? JSON.parse(saved) : 1500;
+  });
 
   const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>(() => {
     const saved = localStorage.getItem('riot_budget');
     return saved ? JSON.parse(saved) : INITIAL_BUDGET;
   });
 
-  // Save on change
+  // --- SAVE TO STORAGE EFFECT ---
   useEffect(() => {
+    localStorage.setItem('riot_accounts', JSON.stringify(accounts));
+    localStorage.setItem('riot_goals', JSON.stringify(goals));
+    localStorage.setItem('riot_transactions', JSON.stringify(transactions));
+    localStorage.setItem('riot_projects', JSON.stringify(projects));
+    localStorage.setItem('riot_burn', JSON.stringify(monthlyBurn));
     localStorage.setItem('riot_budget', JSON.stringify(budgetCategories));
-  }, [budgetCategories]);
+  }, [accounts, goals, transactions, projects, monthlyBurn, budgetCategories]);
 
   // --- ACTIONS ---
+
+  const updateAccountBalance = (id: string, newBalance: number) => {
+    setAccounts(prev => prev.map(acc => 
+      acc.id === id ? { ...acc, balance: newBalance } : acc
+    ));
+  };
+
+  const updateGoalAmount = (id: string, amountToAdd: number) => {
+    setGoals(prev => prev.map(goal => {
+      if (goal.id === id) {
+        const newAmount = goal.currentAmount + amountToAdd;
+        return { 
+          ...goal, 
+          currentAmount: Math.min(newAmount, goal.targetAmount),
+          isCompleted: newAmount >= goal.targetAmount
+        };
+      }
+      return goal;
+    }));
+  };
+
+  const addTransaction = (tx: Transaction) => {
+    setTransactions(prev => [tx, ...prev]);
+  };
+
+  const addProject = (project: Project) => {
+    setProjects(prev => [project, ...prev]);
+  };
+
+  const updateProjectStatus = (id: string, status: Project['status']) => {
+    setProjects(prev => prev.map(p => 
+      p.id === id ? { ...p, status, updatedAt: new Date().toISOString() } : p
+    ));
+  };
+
+  const updateMonthlyBurn = (amount: number, reason: string) => {
+    setMonthlyBurn(amount);
+    addTransaction({
+      id: crypto.randomUUID(),
+      date: new Date().toISOString(),
+      amount: amount,
+      currency: 'USD',
+      type: 'expense',
+      description: `Living Cost Update: ${reason}`,
+      category: 'System'
+    });
+  };
+
+  const resetBalances = () => {
+    setAccounts(prev => prev.map(acc => ({ ...acc, balance: 0 })));
+  };
+
+  // --- NEW BUDGET ACTIONS ---
 
   const addBudgetCategory = (category: BudgetCategory) => {
     setBudgetCategories(prev => [...prev, category]);
@@ -83,7 +163,7 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
       amount: amount,
       currency: 'NGN',
       type: 'expense',
-      category: categoryId, // We store ID here, UI can look up name
+      category: categoryId,
       description: description
     });
   };
@@ -94,12 +174,17 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <FinancialContext.Provider value={{ 
-      accounts, goals, transactions, projects, monthlyBurn,
-      updateAccountBalance, updateGoalAmount, addTransaction, addProject, updateProjectStatus, updateMonthlyBurn, resetBalances,
-      // NEW EXPORTS
-      budgetCategories, addBudgetCategory, logExpense, resetMonthlyBudget
+      accounts, goals, transactions, projects, monthlyBurn, budgetCategories,
+      updateAccountBalance, updateGoalAmount, addTransaction, addProject, updateProjectStatus, 
+      updateMonthlyBurn, resetBalances, addBudgetCategory, logExpense, resetMonthlyBudget
     }}>
       {children}
     </FinancialContext.Provider>
   );
+};
+
+export const useFinancials = () => {
+  const context = useContext(FinancialContext);
+  if (context === undefined) throw new Error('useFinancials must be used within a FinancialProvider');
+  return context;
 };

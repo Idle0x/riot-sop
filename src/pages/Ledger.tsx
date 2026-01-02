@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
-import { ArrowDownLeft, ArrowUpRight, Trash2, Search, Filter, History } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Trash2, Search, History } from 'lucide-react';
 import { Naira } from '../components/ui/Naira';
 import { cn } from '../utils/cn';
 

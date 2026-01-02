@@ -1,5 +1,15 @@
 import { useState } from 'react';
-import { DollarSign, ArrowRight, ShieldCheck, Heart, AlertTriangle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  DollarSign, 
+  ArrowRight, 
+  ShieldCheck, 
+  Heart, 
+  AlertTriangle, 
+  CheckCircle2, 
+  Sparkles 
+} from 'lucide-react';
+import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
@@ -7,43 +17,121 @@ import { GlassProgressBar } from '../components/ui/GlassProgressBar';
 import { cn } from '../utils/cn';
 
 export const Triage = () => {
+  const navigate = useNavigate();
+  // Pull data and functions from our Global Brain
+  const { goals, updateGoalAmount, addTransaction } = useFinancials();
+  
   const [step, setStep] = useState(1);
   
-  // Form State
+  // --- STATE: STEP 1 (Input) ---
   const [amountUSD, setAmountUSD] = useState<string>('');
-  const [rate, setRate] = useState<string>('1500'); // Default dummy rate
+  const [rate, setRate] = useState<string>('1500');
+  
+  // --- STATE: STEP 2 (Logic) ---
   const [generosity, setGenerosity] = useState<string>('0');
+  
+  // --- STATE: STEP 3 (Allocation) ---
+  // Stores how much we are adding to each goal: { "goal-id-1": 50000, "goal-id-2": 20000 }
+  const [allocations, setAllocations] = useState<Record<string, number>>({});
 
-  // Derived Values
+  // --- CALCULATIONS ---
   const dropAmount = parseFloat(amountUSD) || 0;
   const exchangeRate = parseFloat(rate) || 0;
   const amountNGN = dropAmount * exchangeRate;
   
-  // CALCULATIONS (The Manual Logic)
-  const bufferAmount = amountNGN * 0.10; // 10% Fixed
+  const bufferAmount = amountNGN * 0.10; // Fixed 10% Rule
   const generosityAmount = parseFloat(generosity) || 0;
   
-  // Rule Enforcement
+  // Rule: Generosity Cap
   const GENEROSITY_CAP = 300000;
   const isCapBreached = generosityAmount > GENEROSITY_CAP;
   
-  const remainingForGoals = amountNGN - bufferAmount - generosityAmount;
-  const isNegative = remainingForGoals < 0;
+  // Money available for goals after Buffer & Generosity
+  const totalAvailableForGoals = amountNGN - bufferAmount - generosityAmount;
+  
+  // Step 3 Math
+  const totalAllocated = Object.values(allocations).reduce((a, b) => a + b, 0);
+  const remainingToAllocate = totalAvailableForGoals - totalAllocated;
+  const isOverAllocated = remainingToAllocate < 0;
+  const isNegativeFlow = totalAvailableForGoals < 0;
 
-  // Formatting Helper
+  // Helper: Format Currency
   const formatNGN = (val: number) => 
-    new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(val);
+    new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(val);
+
+  // --- ACTION: AUTO-FILL (The Digital Superpower) ---
+  const autoFill = () => {
+    let moneyLeft = totalAvailableForGoals;
+    const newAllocations: Record<string, number> = {};
+
+    // Sort active goals by priority (P1 first)
+    const activeGoals = goals
+      .filter(g => !g.isCompleted)
+      .sort((a, b) => a.priority - b.priority);
+
+    for (const goal of activeGoals) {
+      if (moneyLeft <= 0) break;
+      
+      const needed = goal.targetAmount - goal.currentAmount;
+      // We can only add what is needed OR what we have left
+      const toAdd = Math.min(needed, moneyLeft);
+      
+      if (toAdd > 0) {
+        newAllocations[goal.id] = toAdd;
+        moneyLeft -= toAdd;
+      }
+    }
+    setAllocations(newAllocations);
+  };
+
+  // --- ACTION: COMMIT TO LEDGER ---
+  const handleFinalize = () => {
+    const date = new Date().toISOString();
+
+    // 1. Log the incoming Drop
+    addTransaction({
+      id: crypto.randomUUID(),
+      date,
+      amount: dropAmount,
+      currency: 'USD',
+      type: 'drop',
+      description: 'Income Drop',
+    });
+
+    // 2. Update Goals with the allocated amounts
+    Object.entries(allocations).forEach(([goalId, amount]) => {
+      if (amount > 0) {
+        updateGoalAmount(goalId, amount);
+        
+        // Log the allocation transaction
+        addTransaction({
+          id: crypto.randomUUID(),
+          date,
+          amount: amount,
+          currency: 'NGN',
+          type: 'allocation',
+          description: `Allocation to goal`,
+          relatedGoalId: goalId
+        });
+      }
+    });
+
+    // 3. Return to Dashboard
+    navigate('/');
+  };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8 animate-fade-in">
+    <div className="max-w-3xl mx-auto space-y-8 animate-fade-in pb-20">
       
-      {/* Header */}
+      {/* HEADER */}
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-bold text-white tracking-tight">Triage Protocol</h1>
-        <p className="text-gray-400">Step {step} of 3: {step === 1 ? 'Input Data' : step === 2 ? 'The Split' : 'Goal Allocation'}</p>
+        <p className="text-gray-400">
+          Step {step} of 3: {step === 1 ? 'Input Data' : step === 2 ? 'The Split' : 'Goal Allocation'}
+        </p>
       </div>
 
-      {/* Progress Stepper */}
+      {/* PROGRESS STEPPER */}
       <div className="flex justify-between items-center px-12 relative">
         <div className="absolute top-1/2 left-0 w-full h-0.5 bg-glass-border -z-10" />
         {[1, 2, 3].map((s) => (
@@ -58,9 +146,9 @@ export const Triage = () => {
 
       <GlassCard className="p-8 min-h-[500px] flex flex-col">
         
-        {/* STEP 1: INPUT */}
+        {/* === STEP 1: INPUT === */}
         {step === 1 && (
-          <div className="space-y-8 flex-1">
+          <div className="space-y-8 flex-1 flex flex-col">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <GlassInput 
                 label="Drop Amount (USD)"
@@ -102,12 +190,12 @@ export const Triage = () => {
           </div>
         )}
 
-        {/* STEP 2: THE SPLIT */}
+        {/* === STEP 2: THE SPLIT === */}
         {step === 2 && (
-          <div className="space-y-8 flex-1">
+          <div className="space-y-8 flex-1 flex flex-col">
             
             <div className="space-y-6">
-              {/* Buffer (Auto) */}
+              {/* Buffer Vault (Auto) */}
               <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-glass-border">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-accent-warning/10 text-accent-warning rounded-lg">
@@ -160,14 +248,14 @@ export const Triage = () => {
               <div className="mt-8">
                 <div className="flex justify-between items-end mb-2">
                   <span className="text-sm font-bold uppercase text-gray-400">Available for Roadmap</span>
-                  <span className={cn("text-2xl font-mono font-bold", isNegative ? "text-accent-danger" : "text-accent-success")}>
-                    {formatNGN(remainingForGoals)}
+                  <span className={cn("text-2xl font-mono font-bold", isNegativeFlow ? "text-accent-danger" : "text-accent-success")}>
+                    {formatNGN(totalAvailableForGoals)}
                   </span>
                 </div>
                 <GlassProgressBar 
-                  value={remainingForGoals} 
+                  value={totalAvailableForGoals} 
                   max={amountNGN} 
-                  color={isNegative ? "danger" : "success"}
+                  color={isNegativeFlow ? "danger" : "success"}
                   showPercentage={false}
                 />
               </div>
@@ -177,7 +265,7 @@ export const Triage = () => {
               <GlassButton variant="secondary" onClick={() => setStep(1)}>Back</GlassButton>
               <GlassButton 
                 className="flex-1" 
-                disabled={isCapBreached || isNegative}
+                disabled={isCapBreached || isNegativeFlow}
                 onClick={() => setStep(3)}
               >
                 Proceed to Allocation
@@ -186,17 +274,95 @@ export const Triage = () => {
           </div>
         )}
 
-        {/* STEP 3: PLACEHOLDER (Next Phase) */}
+        {/* === STEP 3: ALLOCATION === */}
         {step === 3 && (
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-bold mb-4">Allocation Engine Ready</h2>
-            <p className="text-gray-400">
-              You have <span className="text-accent-success font-mono font-bold">{formatNGN(remainingForGoals)}</span> ready to deploy.
-            </p>
-            <p className="text-sm text-gray-500 mt-2">
-              (Goal Slider Logic connects here in next step)
-            </p>
-            <GlassButton variant="secondary" className="mt-8" onClick={() => setStep(2)}>Back</GlassButton>
+          <div className="space-y-6 flex-1 flex flex-col">
+            
+            {/* Top Bar: Remaining Funds */}
+            <div className="flex items-center justify-between bg-white/5 p-4 rounded-xl border border-glass-border sticky top-0 z-10 backdrop-blur-md">
+              <div>
+                <div className="text-xs text-gray-400 uppercase font-bold">Unallocated</div>
+                <div className={cn(
+                  "font-mono font-bold text-xl",
+                  isOverAllocated ? "text-accent-danger" : "text-white"
+                )}>
+                  {formatNGN(remainingToAllocate)}
+                </div>
+              </div>
+              <GlassButton size="sm" onClick={autoFill} variant="secondary">
+                <Sparkles className="w-4 h-4 mr-2 text-accent-success" />
+                Auto-Fill
+              </GlassButton>
+            </div>
+
+            {/* Goal List */}
+            <div className="space-y-4 overflow-y-auto max-h-[400px] pr-2">
+              {goals.filter(g => !g.isCompleted).map((goal) => {
+                const allocated = allocations[goal.id] || 0;
+                const remainingNeeded = goal.targetAmount - goal.currentAmount;
+                const newTotal = goal.currentAmount + allocated;
+                const progress = (newTotal / goal.targetAmount) * 100;
+
+                return (
+                  <div key={goal.id} className="p-4 rounded-xl border border-glass-border bg-black/20 hover:border-white/20 transition-all">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-white/10 text-gray-300">
+                            {goal.phase}
+                          </span>
+                          <h4 className="font-bold text-white">{goal.title}</h4>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Need: {formatNGN(remainingNeeded)}
+                        </div>
+                      </div>
+                      
+                      <div className="w-32">
+                        <GlassInput 
+                          type="number"
+                          placeholder="0"
+                          className="text-right h-10 bg-black/40"
+                          value={allocated || ''}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            setAllocations(prev => ({...prev, [goal.id]: val}));
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Mini Progress */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span>Progress</span>
+                        <span>{progress.toFixed(0)}%</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-accent-success transition-all duration-500"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer Action */}
+            <div className="pt-4 mt-auto flex gap-4">
+              <GlassButton variant="secondary" onClick={() => setStep(2)}>Back</GlassButton>
+              <GlassButton 
+                className="flex-1" 
+                disabled={isOverAllocated || remainingToAllocate < 0}
+                onClick={handleFinalize}
+              >
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                Commit to Ledger
+              </GlassButton>
+            </div>
+
           </div>
         )}
 

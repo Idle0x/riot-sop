@@ -6,6 +6,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Triage } from './pages/Triage';
 import { Roadmap } from './pages/Roadmap';
 import { Signals } from './pages/Signals';
+import { Constitution } from './pages/Constitution';
 
 function App() {
   return (

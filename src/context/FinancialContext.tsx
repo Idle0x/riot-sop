@@ -11,6 +11,9 @@ interface FinancialContextType {
   addTransaction: (tx: Transaction) => void;
   addProject: (project: Project) => void;
   updateProjectStatus: (id: string, status: Project['status']) => void;
+monthlyBurn: number;
+  updateMonthlyBurn: (amount: number, reason: string) => void;
+  resetBalances: () => void; // The Nuke
 }
 
 const FinancialContext = createContext<FinancialContextType | undefined>(undefined);

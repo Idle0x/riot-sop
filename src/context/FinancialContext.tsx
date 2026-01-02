@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
-import { Account, Goal, Transaction, Project } from '../types';
+import { createContext, useContext, useState, type ReactNode } from 'react';
+import { type Account, type Goal, type Transaction, type Project } from '../types';
 
 // Define what the Global Memory holds
 interface FinancialContextType {

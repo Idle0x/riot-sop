@@ -9,24 +9,26 @@ import {
   Settings, 
   LogOut,
   Menu,
-  Bell
+  Bell,
+  X,
+  Shield // New Icon for Constitution
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
-import { X } from 'lucide-react';
 
-// Navigation Items
+// Navigation Items - Now includes "Rules"
 const NAV_ITEMS = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { icon: Wallet, label: 'Triage', path: '/triage' },
   { icon: Target, label: 'Roadmap', path: '/roadmap' },
   { icon: Radio, label: 'Signals', path: '/signals' },
   { icon: BookOpen, label: 'Journal', path: '/journal' },
+  { icon: Shield, label: 'Rules', path: '/constitution' }, // <--- NEW LINK
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
 export const Layout = () => {
   const location = useLocation();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // New State
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Helper to close menu when clicking a link (Mobile UX)
   const handleNavClick = () => setIsMobileMenuOpen(false);
@@ -119,7 +121,7 @@ export const Layout = () => {
         </header>
 
         {/* Page Content */}
-        <div className="p-4 md:p-8"> {/* Reduced padding on mobile */}
+        <div className="p-4 md:p-8">
           <Outlet />
         </div>
       </main>

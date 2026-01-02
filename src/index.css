@@ -6,23 +6,27 @@
 
 @layer base {
   body {
-      @apply bg-bg-primary text-white font-sans antialiased overflow-x-hidden;
-          /* The subtle ambient background gradient */
-              background-image: 
-                    radial-gradient(circle at 20% 50%, rgba(16, 185, 129, 0.03) 0%, transparent 50%),
-                          radial-gradient(circle at 80% 80%, rgba(59, 130, 246, 0.03) 0%, transparent 50%),
-                                radial-gradient(circle at 40% 90%, rgba(245, 158, 11, 0.02) 0%, transparent 50%);
-                                    background-attachment: fixed;
-                                      }
-                                        
-                                          /* Custom Scrollbar for Glass Vibe */
-                                            ::-webkit-scrollbar {
-                                                width: 8px;
-                                                  }
-                                                    ::-webkit-scrollbar-track {
-                                                        @apply bg-bg-secondary;
-                                                          }
-                                                            ::-webkit-scrollbar-thumb {
-                                                                @apply bg-glass border border-glass-border rounded-full hover:bg-white/10;
-                                                                  }
-                                                                  }
+    @apply bg-bg-primary text-white font-sans antialiased overflow-x-hidden;
+    background-image: 
+      radial-gradient(circle at 20% 50%, rgba(16, 185, 129, 0.03) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(59, 130, 246, 0.03) 0%, transparent 50%),
+      radial-gradient(circle at 40% 90%, rgba(245, 158, 11, 0.02) 0%, transparent 50%);
+    background-attachment: fixed;
+  }
+  
+  /* FORCE NAIRA SUPPORT */
+  /* We use system fonts for symbols to ensure they render */
+  .font-mono {
+    font-family: 'JetBrains Mono', 'Segoe UI Symbol', 'Apple Symbols', monospace;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-bg-secondary;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-glass border border-glass-border rounded-full hover:bg-white/10;
+  }
+}

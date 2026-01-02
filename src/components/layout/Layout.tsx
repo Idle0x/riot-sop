@@ -11,18 +11,20 @@ import {
   Menu,
   Bell,
   X,
-  Shield // New Icon for Constitution
+  Shield,
+  PieChart // NEW ICON
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
-// Navigation Items - Now includes "Rules"
+// Navigation Items
 const NAV_ITEMS = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { icon: Wallet, label: 'Triage', path: '/triage' },
   { icon: Target, label: 'Roadmap', path: '/roadmap' },
+  { icon: PieChart, label: 'Budget', path: '/budget' }, // NEW LINK
   { icon: Radio, label: 'Signals', path: '/signals' },
   { icon: BookOpen, label: 'Journal', path: '/journal' },
-  { icon: Shield, label: 'Rules', path: '/constitution' }, // <--- NEW LINK
+  { icon: Shield, label: 'Rules', path: '/constitution' },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
@@ -30,13 +32,12 @@ export const Layout = () => {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Helper to close menu when clicking a link (Mobile UX)
   const handleNavClick = () => setIsMobileMenuOpen(false);
 
   return (
     <div className="flex min-h-screen bg-bg-primary font-sans text-white">
       
-      {/* MOBILE OVERLAY (Darken background when menu is open) */}
+      {/* MOBILE OVERLAY */}
       {isMobileMenuOpen && (
         <div 
           className="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm lg:hidden"
@@ -44,7 +45,7 @@ export const Layout = () => {
         />
       )}
 
-      {/* SIDEBAR (Responsive) */}
+      {/* SIDEBAR */}
       <aside className={cn(
         "fixed inset-y-0 left-0 z-50 w-64 flex-col border-r border-glass-border bg-glass/95 backdrop-blur-xl transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:bg-glass/30",
         isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
@@ -54,7 +55,6 @@ export const Layout = () => {
           <div className="text-xl font-bold tracking-wider text-white">
             THE <span className="text-accent-success">riot'</span> SOP
           </div>
-          {/* Close Button (Mobile Only) */}
           <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden text-gray-400 hover:text-white">
             <X size={24} />
           </button>
@@ -68,7 +68,7 @@ export const Layout = () => {
               <a
                 key={item.path}
                 href={item.path}
-                onClick={handleNavClick} // Close menu on click
+                onClick={handleNavClick}
                 className={cn(
                   "flex items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200",
                   isActive 
@@ -94,10 +94,8 @@ export const Layout = () => {
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 w-full">
-        {/* Top Header */}
         <header className="sticky top-0 z-40 flex h-20 items-center justify-between border-b border-glass-border bg-glass/50 px-8 backdrop-blur-xl">
           <div className="flex items-center gap-4 lg:hidden">
-            {/* Hamburger Button */}
             <button onClick={() => setIsMobileMenuOpen(true)} className="text-gray-400 hover:text-white">
               <Menu className="h-6 w-6" />
             </button>
@@ -120,7 +118,6 @@ export const Layout = () => {
           </div>
         </header>
 
-        {/* Page Content */}
         <div className="p-4 md:p-8">
           <Outlet />
         </div>

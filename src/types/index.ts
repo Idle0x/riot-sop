@@ -47,3 +47,20 @@ export interface TriageCalculation {
     amount: number;
   }[];
 }
+
+export type ProjectStatus = 'discovery' | 'validation' | 'contribution' | 'delivered' | 'archived';
+export type ProjectType = 'hunter' | 'creator';
+
+export interface Project {
+  id: string;
+  name: string;
+  type: ProjectType; // Hunter (Alpha) or Creator (Building)
+  status: ProjectStatus;
+  url?: string;
+  description: string;
+  redFlags: string[];
+  greenFlags: string[];
+  createdAt: string;
+  updatedAt: string;
+  timeInvested: number; // in hours
+}

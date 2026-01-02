@@ -1,4 +1,4 @@
-// === FINANCIAL TYPES ===
+// --- FINANCIAL TYPES ---
 export type Currency = 'USD' | 'NGN';
 
 export type AccountType = 'treasury' | 'payroll' | 'buffer' | 'holding';
@@ -34,23 +34,20 @@ export interface Transaction {
   description: string;
   relatedGoalId?: string; // If allocated to a goal
   source?: string; // e.g., "Zama Airdrop"
-  projectId?: string; // links drops to project 
+  projectId?: string;
 }
 
-export interface TriageCalculation {
-  dropId: string;
-  totalAmount: number;
-  exchangeRate: number; // USD to NGN at that moment
-  bufferSplit: number;  // 10%
-  taxSplit: number;    // If applicable
-  allocations: {
-    goalId: string;
-    amount: number;
-  }[];
+// --- BUDGET TYPES (NEW) ---
+export interface BudgetCategory {
+  id: string;
+  name: string;
+  limit: number;     // Monthly limit (e.g., 50,000)
+  spent: number;     // Amount spent this month
+  color: 'success' | 'warning' | 'danger' | 'info';
+  icon?: string;     // Emoji or icon name
 }
 
-// === SIGNAL / RESEARCH TYPES ===
-
+// --- SIGNAL / RESEARCH TYPES ---
 export type ProjectStatus = 'discovery' | 'validation' | 'contribution' | 'delivered' | 'archived';
 export type ProjectType = 'hunter' | 'creator';
 
@@ -67,13 +64,3 @@ export interface Project {
   updatedAt: string;
   timeInvested: number; // in hours
 }
-
-export interface BudgetCategory {
-  id: string;
-  name: string;
-  limit: number;     // Monthly limit (e.g., 50,000)
-  spent: number;     // Amount spent this month
-  color: 'success' | 'warning' | 'danger' | 'info';
-  icon?: string;     // Emoji or icon name
-}
-

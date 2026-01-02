@@ -67,3 +67,13 @@ export interface Project {
   updatedAt: string;
   timeInvested: number; // in hours
 }
+
+export interface BudgetCategory {
+  id: string;
+  name: string;
+  limit: number;     // Monthly limit (e.g., 50,000)
+  spent: number;     // Amount spent this month
+  color: 'success' | 'warning' | 'danger' | 'info';
+  icon?: string;     // Emoji or icon name
+}
+

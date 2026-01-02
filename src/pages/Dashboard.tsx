@@ -3,6 +3,8 @@ import { useFinancials } from '../context/FinancialContext';
 import { MetricCard } from '../components/ui/MetricCard';
 import { GlassProgressBar } from '../components/ui/GlassProgressBar';
 import { GlassCard } from '../components/ui/GlassCard';
+import { Naira } from '../components/ui/Naira';
+
 
 export const Dashboard = () => {
   const { accounts, goals } = useFinancials();

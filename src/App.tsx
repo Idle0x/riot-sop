@@ -6,8 +6,9 @@ import { Dashboard } from './pages/Dashboard';
 import { Triage } from './pages/Triage';
 import { Roadmap } from './pages/Roadmap';
 import { Signals } from './pages/Signals';
-import { Constitution } from './pages/Constitution'; // <--- NEW IMPORT
-import { Settings } from './pages/Settings'; // Import Settings
+import { Constitution } from './pages/Constitution';
+import { Budget } from './pages/Budget'; // NEW
+import { Settings } from './pages/Settings';
 
 function App() {
   return (
@@ -18,16 +19,17 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/triage" element={<Triage />} />
           <Route path="/roadmap" element={<Roadmap />} />
+          <Route path="/budget" element={<Budget />} /> {/* NEW ROUTE */}
           
           {/* Research Engine */}
           <Route path="/signals" element={<Signals />} />
           
           {/* Principles */}
-          <Route path="/constitution" element={<Constitution />} /> {/* <--- NEW ROUTE */}
+          <Route path="/constitution" element={<Constitution />} />
+          <Route path="/settings" element={<Settings />} />
           
           {/* Placeholders */}
           <Route path="/journal" element={<div className="p-8 text-white">Journal Coming Soon</div>} />
-          <Route path="/settings" element={<Settings />} /> {/* UPDATE THIS LINE */}
           
           {/* Redirect unknown routes to Dashboard */}
           <Route path="*" element={<Navigate to="/" replace />} />

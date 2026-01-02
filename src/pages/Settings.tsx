@@ -1,4 +1,4 @@
-import { Settings as SettingsIcon, Database, ShieldAlert, LogOut } from 'lucide-react';
+import { Settings as SettingsIcon, ShieldAlert } from 'lucide-react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
 

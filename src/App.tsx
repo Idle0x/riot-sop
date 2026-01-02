@@ -6,7 +6,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Triage } from './pages/Triage';
 import { Roadmap } from './pages/Roadmap';
 import { Signals } from './pages/Signals';
-import { Constitution } from './pages/Constitution';
+import { Constitution } from './pages/Constitution'; // <--- NEW IMPORT
 
 function App() {
   return (
@@ -18,8 +18,11 @@ function App() {
           <Route path="/triage" element={<Triage />} />
           <Route path="/roadmap" element={<Roadmap />} />
           
-          {/* Research Engine (New) */}
+          {/* Research Engine */}
           <Route path="/signals" element={<Signals />} />
+          
+          {/* Principles */}
+          <Route path="/constitution" element={<Constitution />} /> {/* <--- NEW ROUTE */}
           
           {/* Placeholders */}
           <Route path="/journal" element={<div className="p-8 text-white">Journal Coming Soon</div>} />

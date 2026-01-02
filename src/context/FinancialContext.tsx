@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { type Account, type Goal, type Transaction, type Project } from '../types';
+import { type Account, type Goal, type Transaction, type Project, type BudgetCategory } from '../types';
 
 interface FinancialContextType {
   // Financial Data

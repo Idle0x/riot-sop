@@ -3,57 +3,62 @@ import { useFinancials } from '../context/FinancialContext';
 import { MetricCard } from '../components/ui/MetricCard';
 import { GlassProgressBar } from '../components/ui/GlassProgressBar';
 import { GlassCard } from '../components/ui/GlassCard';
-import { Naira } from '../components/ui/Naira';
-
+import { Naira } from '../components/ui/Naira'; // Import Naira
 
 export const Dashboard = () => {
-  const { accounts, goals } = useFinancials();
+  const { accounts, goals, monthlyBurn } = useFinancials(); // Pull monthlyBurn
 
   // 1. Get Real Account Balances
   const treasury = accounts.find(a => a.id === 'treasury');
   const payroll = accounts.find(a => a.id === 'payroll');
   const buffer = accounts.find(a => a.id === 'buffer');
 
-  // 2. Calculate Real Runway (Assuming monthly burn of $1,500 for demo)
-  // In a future update, we will make "Monthly Burn" a setting.
-  const MONTHLY_BURN = 1500; 
+  // 2. Calculate Real Runway 
   const treasuryBalance = treasury?.balance || 0;
-  const runwayMonths = treasuryBalance / MONTHLY_BURN;
+  const runwayMonths = monthlyBurn > 0 ? treasuryBalance / monthlyBurn : 0;
   
-  // Runway Logic for Colors
   const runwayColor = runwayMonths < 3 ? 'danger' : runwayMonths < 6 ? 'warning' : 'success';
   const runwayLabel = runwayMonths < 3 ? 'CRITICAL' : runwayMonths < 6 ? 'CAUTION' : 'SECURE';
 
-  // 3. Get Active Goals (Not Completed)
+  // 3. Get Active Goals
   const activeGoals = goals
     .filter(g => !g.isCompleted)
     .sort((a, b) => a.priority - b.priority)
-    .slice(0, 3); // Show top 3
+    .slice(0, 3);
 
-  // Helper for formatting
   const formatUSD = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
-  const formatNGN = (val: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(val);
+  const formatNum = (val: number) => new Intl.NumberFormat('en-US').format(val);
 
   return (
     <div className="space-y-8 animate-fade-in">
       
-      {/* 1. TOP ROW - KEY METRICS (Live Data) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         
         {/* Treasury (USD) */}
         <MetricCard 
           title="Treasury"
           value={formatUSD(treasury?.balance || 0)}
-          subValue="≈ ₦(Rate x Balance)"
+          subValue={
+            <div className="flex items-center text-sm text-gray-500">
+              <span>≈</span>
+              <Naira className="mx-1" />
+              <span>(Rate x Bal)</span>
+            </div>
+          }
           icon={<Wallet size={20} />}
-          trend={{ value: 0, isPositive: true }} // We'll hook up trends later
-          isPrivate={true} // Default to hidden for safety
+          trend={{ value: 0, isPositive: true }} 
+          isPrivate={true} 
         />
 
         {/* Payroll (NGN) */}
         <MetricCard 
           title="Payroll"
-          value={formatNGN(payroll?.balance || 0)}
+          value={
+            <div className="flex items-center gap-1">
+              <Naira />
+              <span>{formatNum(payroll?.balance || 0)}</span>
+            </div>
+          }
           subValue="OpEx / Living"
           icon={<CreditCard size={20} />}
         />
@@ -61,18 +66,22 @@ export const Dashboard = () => {
         {/* Buffer (Locked) */}
         <MetricCard 
           title="Buffer Vault"
-          value={formatNGN(buffer?.balance || 0)}
+          value={
+            <div className="flex items-center gap-1">
+              <Naira />
+              <span>{formatNum(buffer?.balance || 0)}</span>
+            </div>
+          }
           subValue="Emergency Only"
           icon={<ShieldCheck size={20} />}
         />
       </div>
 
-      {/* 2. RUNWAY VISUALIZER (Live Data) */}
       <GlassCard className="p-8">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 className="text-xl font-bold text-white">Financial Runway</h3>
-            <p className="text-sm text-gray-400">Based on fixed burn rate of ${MONTHLY_BURN}/mo</p>
+            <p className="text-sm text-gray-400">Based on fixed burn rate of ${monthlyBurn}/mo</p>
           </div>
           <div className="text-right">
             <div className={`text-3xl font-mono font-bold text-accent-${runwayColor}`}>
@@ -98,7 +107,6 @@ export const Dashboard = () => {
         </div>
       </GlassCard>
 
-      {/* 3. ACTIVE GOALS PREVIEW (Live Data) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <GlassCard className="p-6">
           <div className="flex justify-between items-center mb-6">

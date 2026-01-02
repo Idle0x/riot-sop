@@ -1,23 +1,18 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Eye, EyeOff, TrendingUp, TrendingDown } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { cn } from '../../utils/cn';
 
 interface MetricCardProps {
   title: string;
-  value: string;        // Primary currency (e.g. USD)
-  subValue?: string;    // Secondary currency (e.g. NGN)
+  value: string | ReactNode;        // Updated to allow Naira component
+  subValue?: string | ReactNode;    // Updated to allow Naira component
   trend?: {
-    value: number;      // e.g. 12
+    value: number;
     isPositive: boolean;
   };
-  icon?: React.ReactNode;
-  isPrivate?: boolean;  // Default privacy state
-  value: string | React.ReactNode; // Allow components
-  subValue?: string | React.ReactNode; // Allow components
-  // ...
-}
-
+  icon?: ReactNode;
+  isPrivate?: boolean;
 }
 
 export const MetricCard = ({ 

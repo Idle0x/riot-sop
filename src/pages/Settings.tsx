@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings as SettingsIcon, ShieldAlert, AlertTriangle, Check, X } from 'lucide-react';
+import { Settings as SettingsIcon, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';

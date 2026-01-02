@@ -3,8 +3,8 @@ import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
 import { GlassInput } from '../components/ui/GlassInput';
-import { Plus, Trash2, Clock, CheckCircle2, DollarSign } from 'lucide-react';
-import { ProjectStatus } from '../types';
+import { Plus, Trash2, Clock, DollarSign } from 'lucide-react';
+import { type ProjectStatus } from '../types';
 import { cn } from '../utils/cn';
 
 export const Signals = () => {

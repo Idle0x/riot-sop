@@ -7,6 +7,7 @@ import { Triage } from './pages/Triage';
 import { Roadmap } from './pages/Roadmap';
 import { Signals } from './pages/Signals';
 import { Constitution } from './pages/Constitution'; // <--- NEW IMPORT
+import { Settings } from './pages/Settings'; // Import Settings
 
 function App() {
   return (
@@ -26,7 +27,7 @@ function App() {
           
           {/* Placeholders */}
           <Route path="/journal" element={<div className="p-8 text-white">Journal Coming Soon</div>} />
-          <Route path="/settings" element={<div className="p-8 text-white">Settings Coming Soon</div>} />
+          <Route path="/settings" element={<Settings />} /> {/* UPDATE THIS LINE */}
           
           {/* Redirect unknown routes to Dashboard */}
           <Route path="*" element={<Navigate to="/" replace />} />

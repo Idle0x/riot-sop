@@ -7,7 +7,7 @@ interface FinancialContextType {
   transactions: Transaction[];
   projects: Project[];
   monthlyBurn: number;
-  budgetCategories: BudgetCategory[]; // NEW
+  budgetCategories: BudgetCategory[];
   
   updateAccountBalance: (id: string, newBalance: number) => void;
   updateGoalAmount: (id: string, amountToAdd: number) => void;
@@ -17,10 +17,11 @@ interface FinancialContextType {
   updateMonthlyBurn: (amount: number, reason: string) => void;
   resetBalances: () => void;
   
-  // NEW ACTIONS
   addBudgetCategory: (category: BudgetCategory) => void;
   logExpense: (amount: number, categoryId: string, description: string) => void;
   resetMonthlyBudget: () => void;
+
+  // NEW: The Time Travel Function
   deleteTransaction: (id: string) => void;
 }
 
@@ -140,8 +141,6 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     setAccounts(prev => prev.map(acc => ({ ...acc, balance: 0 })));
   };
 
-  // --- NEW BUDGET ACTIONS ---
-
   const addBudgetCategory = (category: BudgetCategory) => {
     setBudgetCategories(prev => [...prev, category]);
   };
@@ -173,11 +172,52 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     setBudgetCategories(prev => prev.map(cat => ({ ...cat, spent: 0 })));
   };
 
+  // --- NEW: UNDO LOGIC ---
+  const deleteTransaction = (id: string) => {
+    const tx = transactions.find(t => t.id === id);
+    if (!tx) return;
+
+    // 1. REVERSE THE MONEY EFFECT
+    if (tx.type === 'expense') {
+      // Refund Payroll (Money comes back to account)
+      setAccounts(prev => prev.map(acc => 
+        acc.id === 'payroll' ? { ...acc, balance: acc.balance + tx.amount } : acc
+      ));
+      
+      // Fix Budget Category (Remove from 'Spent')
+      if (tx.category) {
+        setBudgetCategories(prev => prev.map(cat => 
+          cat.id === tx.category ? { ...cat, spent: Math.max(0, cat.spent - tx.amount) } : cat
+        ));
+      }
+    } 
+    else if (tx.type === 'allocation' && tx.relatedGoalId) {
+      // Remove money from Goal
+      setGoals(prev => prev.map(g => 
+        g.id === tx.relatedGoalId ? { 
+          ...g, 
+          currentAmount: Math.max(0, g.currentAmount - tx.amount),
+          isCompleted: false // Re-open goal if it was done
+        } : g
+      ));
+    }
+    else if (tx.type === 'drop') {
+      // Remove money from Treasury (Oops, I didn't actually get paid)
+      setAccounts(prev => prev.map(acc => 
+        acc.id === 'treasury' ? { ...acc, balance: Math.max(0, acc.balance - tx.amount) } : acc
+      ));
+    }
+
+    // 2. DELETE THE RECORD
+    setTransactions(prev => prev.filter(t => t.id !== id));
+  };
+
   return (
     <FinancialContext.Provider value={{ 
       accounts, goals, transactions, projects, monthlyBurn, budgetCategories,
       updateAccountBalance, updateGoalAmount, addTransaction, addProject, updateProjectStatus, 
-      updateMonthlyBurn, resetBalances, addBudgetCategory, logExpense, resetMonthlyBudget
+      updateMonthlyBurn, resetBalances, addBudgetCategory, logExpense, resetMonthlyBudget,
+      deleteTransaction // Exported
     }}>
       {children}
     </FinancialContext.Provider>

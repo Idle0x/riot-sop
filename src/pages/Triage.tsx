@@ -8,7 +8,7 @@ import {
   AlertTriangle, 
   CheckCircle2, 
   Sparkles,
-  Briefcase // New Icon
+  Briefcase 
 } from 'lucide-react';
 import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -19,33 +19,32 @@ import { cn } from '../utils/cn';
 
 export const Triage = () => {
   const navigate = useNavigate();
-  const { goals, projects, updateGoalAmount, addTransaction } = useFinancials(); // Pull projects
+  // PULL ACCOUNTS AND UPDATE FUNCTION
+  const { 
+    accounts, 
+    goals, 
+    projects, 
+    updateGoalAmount, 
+    addTransaction, 
+    updateAccountBalance 
+  } = useFinancials();
   
   const [step, setStep] = useState(1);
-  
-  // --- STATE: STEP 1 (Input) ---
   const [amountUSD, setAmountUSD] = useState<string>('');
   const [rate, setRate] = useState<string>('1500');
-  const [selectedProjectId, setSelectedProjectId] = useState<string>(''); // New State
-  
-  // --- STATE: STEP 2 (Logic) ---
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [generosity, setGenerosity] = useState<string>('0');
-  
-  // --- STATE: STEP 3 (Allocation) ---
   const [allocations, setAllocations] = useState<Record<string, number>>({});
 
-  // --- CALCULATIONS ---
+  // Calculations
   const dropAmount = parseFloat(amountUSD) || 0;
   const exchangeRate = parseFloat(rate) || 0;
   const amountNGN = dropAmount * exchangeRate;
-  
   const bufferAmount = amountNGN * 0.10;
   const generosityAmount = parseFloat(generosity) || 0;
   const GENEROSITY_CAP = 300000;
   const isCapBreached = generosityAmount > GENEROSITY_CAP;
-  
   const totalAvailableForGoals = amountNGN - bufferAmount - generosityAmount;
-  
   const totalAllocated = Object.values(allocations).reduce((a, b) => a + b, 0);
   const remainingToAllocate = totalAvailableForGoals - totalAllocated;
   const isOverAllocated = remainingToAllocate < 0;
@@ -54,7 +53,6 @@ export const Triage = () => {
   const formatNGN = (val: number) => 
     new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(val);
 
-  // --- AUTO-FILL ---
   const autoFill = () => {
     let moneyLeft = totalAvailableForGoals;
     const newAllocations: Record<string, number> = {};
@@ -72,14 +70,12 @@ export const Triage = () => {
     setAllocations(newAllocations);
   };
 
-  // --- COMMIT ---
+  // --- THE FIX IS HERE ---
   const handleFinalize = () => {
     const date = new Date().toISOString();
-    
-    // Find project name for description if selected
     const projectSource = projects.find(p => p.id === selectedProjectId)?.name || 'Unknown Source';
 
-    // 1. Log Drop with Link
+    // 1. Log Drop Transaction
     addTransaction({
       id: crypto.randomUUID(),
       date,
@@ -87,10 +83,24 @@ export const Triage = () => {
       currency: 'USD',
       type: 'drop',
       description: `Income from ${projectSource}`,
-      projectId: selectedProjectId || undefined, // The Neural Link
+      projectId: selectedProjectId || undefined,
     });
 
-    // 2. Allocations
+    // 2. UPDATE TREASURY (USD)
+    // We assume the Drop lands in your Treasury (RedotPay)
+    const treasury = accounts.find(a => a.id === 'treasury');
+    if (treasury) {
+      updateAccountBalance('treasury', treasury.balance + dropAmount);
+    }
+
+    // 3. UPDATE BUFFER (NGN)
+    // We assume you mentally (or physically) move the 10% to Piggyvest
+    const buffer = accounts.find(a => a.id === 'buffer');
+    if (buffer) {
+      updateAccountBalance('buffer', buffer.balance + bufferAmount);
+    }
+
+    // 4. Update Goals
     Object.entries(allocations).forEach(([goalId, amount]) => {
       if (amount > 0) {
         updateGoalAmount(goalId, amount);
@@ -131,7 +141,7 @@ export const Triage = () => {
 
       <GlassCard className="p-8 min-h-[500px] flex flex-col">
         
-        {/* === STEP 1: INPUT === */}
+        {/* STEP 1: INPUT */}
         {step === 1 && (
           <div className="space-y-8 flex-1 flex flex-col">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -153,7 +163,6 @@ export const Triage = () => {
               />
             </div>
 
-            {/* NEW: SOURCE SELECTOR */}
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">
                 Source Project (Signal)
@@ -200,7 +209,7 @@ export const Triage = () => {
           </div>
         )}
 
-        {/* STEP 2 & 3 remain functionally identical, just re-rendered inside this new component structure */}
+        {/* STEP 2: LOGIC */}
         {step === 2 && (
           <div className="space-y-8 flex-1 flex flex-col">
             <div className="space-y-6">
@@ -238,6 +247,7 @@ export const Triage = () => {
           </div>
         )}
 
+        {/* STEP 3: ALLOCATION */}
         {step === 3 && (
           <div className="space-y-6 flex-1 flex flex-col">
             <div className="flex items-center justify-between bg-white/5 p-4 rounded-xl border border-glass-border sticky top-0 z-10 backdrop-blur-md">

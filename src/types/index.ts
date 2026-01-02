@@ -34,6 +34,7 @@ export interface Transaction {
   description: string;
   relatedGoalId?: string; // If allocated to a goal
   source?: string; // e.g., "Zama Airdrop"
+  projectId?: string; // links drops to project 
 }
 
 export interface TriageCalculation {

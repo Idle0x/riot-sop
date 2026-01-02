@@ -4,7 +4,7 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassProgressBar } from '../components/ui/GlassProgressBar';
-import { Plus, CreditCard, PieChart, RefreshCw } from 'lucide-react';
+import { CreditCard, RefreshCw } from 'lucide-react';
 import { Naira } from '../components/ui/Naira';
 import { cn } from '../utils/cn';
 

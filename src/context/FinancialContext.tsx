@@ -2,23 +2,28 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import { type Account, type Goal, type Transaction, type Project } from '../types';
 
 interface FinancialContextType {
+  // Financial Data
   accounts: Account[];
   goals: Goal[];
   transactions: Transaction[];
+  monthlyBurn: number; // Living Cost
+  
+  // Research/Signal Data
   projects: Project[];
+
+  // Actions
   updateAccountBalance: (id: string, newBalance: number) => void;
   updateGoalAmount: (id: string, amountToAdd: number) => void;
   addTransaction: (tx: Transaction) => void;
   addProject: (project: Project) => void;
   updateProjectStatus: (id: string, status: Project['status']) => void;
-monthlyBurn: number;
   updateMonthlyBurn: (amount: number, reason: string) => void;
-  resetBalances: () => void; // The Nuke
+  resetBalances: () => void; // Nuclear Reset
 }
 
 const FinancialContext = createContext<FinancialContextType | undefined>(undefined);
 
-// --- INITIAL DUMMY DATA (Fallback if storage is empty) ---
+// --- INITIAL FALLBACK DATA ---
 const INITIAL_ACCOUNTS: Account[] = [
   { id: 'treasury', name: 'Treasury (RedotPay)', balance: 0, currency: 'USD' },
   { id: 'payroll', name: 'Payroll (Opay)', balance: 0, currency: 'NGN' },
@@ -32,7 +37,9 @@ const INITIAL_GOALS: Goal[] = [
 ];
 
 export const FinancialProvider = ({ children }: { children: ReactNode }) => {
-  // --- LOAD FROM STORAGE OR USE DEFAULT ---
+  
+  // --- STATE INITIALIZATION (Load from Storage) ---
+  
   const [accounts, setAccounts] = useState<Account[]>(() => {
     const saved = localStorage.getItem('riot_accounts');
     return saved ? JSON.parse(saved) : INITIAL_ACCOUNTS;
@@ -53,13 +60,20 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // --- SAVE TO STORAGE EFFECT ---
+  const [monthlyBurn, setMonthlyBurn] = useState<number>(() => {
+    const saved = localStorage.getItem('riot_burn');
+    return saved ? JSON.parse(saved) : 1500;
+  });
+
+  // --- PERSISTENCE EFFECTS (Save on Change) ---
+
   useEffect(() => {
     localStorage.setItem('riot_accounts', JSON.stringify(accounts));
     localStorage.setItem('riot_goals', JSON.stringify(goals));
     localStorage.setItem('riot_transactions', JSON.stringify(transactions));
     localStorage.setItem('riot_projects', JSON.stringify(projects));
-  }, [accounts, goals, transactions, projects]);
+    localStorage.setItem('riot_burn', JSON.stringify(monthlyBurn));
+  }, [accounts, goals, transactions, projects, monthlyBurn]);
 
   // --- ACTIONS ---
 
@@ -97,18 +111,51 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     ));
   };
 
+  const updateMonthlyBurn = (amount: number, reason: string) => {
+    setMonthlyBurn(amount);
+    // Log the configuration change as a system event
+    addTransaction({
+      id: crypto.randomUUID(),
+      date: new Date().toISOString(),
+      amount: amount,
+      currency: 'USD',
+      type: 'expense',
+      category: 'System',
+      description: `Living Cost Update: ${reason}`
+    });
+  };
+
+  // THE NUCLEAR OPTION: Zeros out balances but keeps history
+  const resetBalances = () => {
+    setAccounts(prev => prev.map(acc => ({ ...acc, balance: 0 })));
+  };
+
   return (
     <FinancialContext.Provider value={{ 
-      accounts, goals, transactions, projects,
-      updateAccountBalance, updateGoalAmount, addTransaction, addProject, updateProjectStatus
+      accounts, 
+      goals, 
+      transactions, 
+      projects,
+      monthlyBurn,
+      updateAccountBalance, 
+      updateGoalAmount, 
+      addTransaction, 
+      addProject, 
+      updateProjectStatus,
+      updateMonthlyBurn,
+      resetBalances
     }}>
       {children}
     </FinancialContext.Provider>
   );
 };
 
+// --- HOOK EXPORT ---
+
 export const useFinancials = () => {
   const context = useContext(FinancialContext);
-  if (context === undefined) throw new Error('useFinancials must be used within a FinancialProvider');
+  if (context === undefined) {
+    throw new Error('useFinancials must be used within a FinancialProvider');
+  }
   return context;
 };

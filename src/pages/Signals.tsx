@@ -3,7 +3,7 @@ import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
 import { GlassInput } from '../components/ui/GlassInput';
-import { Plus, Trash2, Clock, DollarSign, Archive, XCircle, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, DollarSign, Archive, XCircle, RotateCcw } from 'lucide-react';
 import { type ProjectStatus, type Project } from '../types';
 import { cn } from '../utils/cn';
 
@@ -52,14 +52,6 @@ export const Signals = () => {
     setNewName('');
     setNewDesc('');
   };
-
-  // Helper to delete strictly (We need to add deleteProject to context in next batch if not present, 
-  // but for now we'll just use Archive as the primary destroy method, 
-  // or simple state filtering. Wait, we need deleteProject in context. 
-  // For this step, we will use 'archived' status as "Soft Delete" and real delete for the 1hr window)
-  
-  // Since we haven't added deleteProject to Context yet, we will mark as 'archived' for now.
-  // We will add the strict deleteProject action in the next Context update.
 
   const getProjectEarnings = (projectId: string) => {
     return transactions
@@ -147,7 +139,6 @@ export const Signals = () => {
                           {isDeletable && (
                             <button 
                               onClick={() => {
-                                // For now, we reuse status 'archived' as delete until we add true delete to context
                                 if(confirm("Delete permanently? (Within 1hr window)")) updateProjectStatus(project.id, 'archived'); 
                               }} 
                               className="p-1 hover:bg-red-500/20 text-accent-danger rounded" title="Delete (Error)"

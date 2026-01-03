@@ -1,5 +1,13 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { type Account, type Goal, type Transaction, type Project, type BudgetCategory } from '../types';
+import { 
+  type Account, 
+  type Goal, 
+  type Transaction, 
+  type Project, 
+  type BudgetCategory, 
+  type JournalEntry, 
+  type JournalTag 
+} from '../types';
 
 interface FinancialContextType {
   accounts: Account[];
@@ -8,6 +16,7 @@ interface FinancialContextType {
   projects: Project[];
   monthlyBurn: number;
   budgetCategories: BudgetCategory[];
+  journalEntries: JournalEntry[]; // NEW
   
   updateAccountBalance: (id: string, newBalance: number) => void;
   updateGoalAmount: (id: string, amountToAdd: number) => void;
@@ -20,9 +29,11 @@ interface FinancialContextType {
   addBudgetCategory: (category: BudgetCategory) => void;
   logExpense: (amount: number, categoryId: string, description: string) => void;
   resetMonthlyBudget: () => void;
-
-  // NEW: The Time Travel Function
   deleteTransaction: (id: string) => void;
+
+  // NEW ACTIONS
+  addJournalEntry: (content: string, tags: JournalTag[]) => void;
+  deleteJournalEntry: (id: string) => void;
 }
 
 const FinancialContext = createContext<FinancialContextType | undefined>(undefined);
@@ -78,6 +89,11 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     return saved ? JSON.parse(saved) : INITIAL_BUDGET;
   });
 
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>(() => {
+    const saved = localStorage.getItem('riot_journal');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   // --- SAVE TO STORAGE EFFECT ---
   useEffect(() => {
     localStorage.setItem('riot_accounts', JSON.stringify(accounts));
@@ -86,7 +102,8 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem('riot_projects', JSON.stringify(projects));
     localStorage.setItem('riot_burn', JSON.stringify(monthlyBurn));
     localStorage.setItem('riot_budget', JSON.stringify(budgetCategories));
-  }, [accounts, goals, transactions, projects, monthlyBurn, budgetCategories]);
+    localStorage.setItem('riot_journal', JSON.stringify(journalEntries));
+  }, [accounts, goals, transactions, projects, monthlyBurn, budgetCategories, journalEntries]);
 
   // --- ACTIONS ---
 
@@ -146,17 +163,12 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logExpense = (amount: number, categoryId: string, description: string) => {
-    // 1. Update the Category Spent Amount
     setBudgetCategories(prev => prev.map(cat => 
       cat.id === categoryId ? { ...cat, spent: cat.spent + amount } : cat
     ));
-
-    // 2. Deduct from Payroll Account (OpEx)
     setAccounts(prev => prev.map(acc => 
       acc.id === 'payroll' ? { ...acc, balance: acc.balance - amount } : acc
     ));
-
-    // 3. Log the Transaction
     addTransaction({
       id: crypto.randomUUID(),
       date: new Date().toISOString(),
@@ -172,19 +184,13 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     setBudgetCategories(prev => prev.map(cat => ({ ...cat, spent: 0 })));
   };
 
-  // --- NEW: UNDO LOGIC ---
   const deleteTransaction = (id: string) => {
     const tx = transactions.find(t => t.id === id);
     if (!tx) return;
-
-    // 1. REVERSE THE MONEY EFFECT
     if (tx.type === 'expense') {
-      // Refund Payroll (Money comes back to account)
       setAccounts(prev => prev.map(acc => 
         acc.id === 'payroll' ? { ...acc, balance: acc.balance + tx.amount } : acc
       ));
-      
-      // Fix Budget Category (Remove from 'Spent')
       if (tx.category) {
         setBudgetCategories(prev => prev.map(cat => 
           cat.id === tx.category ? { ...cat, spent: Math.max(0, cat.spent - tx.amount) } : cat
@@ -192,32 +198,43 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
       }
     } 
     else if (tx.type === 'allocation' && tx.relatedGoalId) {
-      // Remove money from Goal
       setGoals(prev => prev.map(g => 
         g.id === tx.relatedGoalId ? { 
           ...g, 
           currentAmount: Math.max(0, g.currentAmount - tx.amount),
-          isCompleted: false // Re-open goal if it was done
+          isCompleted: false 
         } : g
       ));
     }
     else if (tx.type === 'drop') {
-      // Remove money from Treasury (Oops, I didn't actually get paid)
       setAccounts(prev => prev.map(acc => 
         acc.id === 'treasury' ? { ...acc, balance: Math.max(0, acc.balance - tx.amount) } : acc
       ));
     }
-
-    // 2. DELETE THE RECORD
     setTransactions(prev => prev.filter(t => t.id !== id));
+  };
+
+  // --- NEW JOURNAL ACTIONS ---
+  const addJournalEntry = (content: string, tags: JournalTag[]) => {
+    const newEntry: JournalEntry = {
+      id: crypto.randomUUID(),
+      date: new Date().toISOString(),
+      content,
+      tags
+    };
+    setJournalEntries(prev => [newEntry, ...prev]);
+  };
+
+  const deleteJournalEntry = (id: string) => {
+    setJournalEntries(prev => prev.filter(e => e.id !== id));
   };
 
   return (
     <FinancialContext.Provider value={{ 
-      accounts, goals, transactions, projects, monthlyBurn, budgetCategories,
+      accounts, goals, transactions, projects, monthlyBurn, budgetCategories, journalEntries,
       updateAccountBalance, updateGoalAmount, addTransaction, addProject, updateProjectStatus, 
       updateMonthlyBurn, resetBalances, addBudgetCategory, logExpense, resetMonthlyBudget,
-      deleteTransaction // Exported
+      deleteTransaction, addJournalEntry, deleteJournalEntry
     }}>
       {children}
     </FinancialContext.Provider>

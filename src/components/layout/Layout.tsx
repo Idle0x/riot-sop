@@ -13,7 +13,7 @@ import {
   X,
   Shield,
   PieChart,
-  History // <--- Ensure this is imported
+  History
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
@@ -23,14 +23,18 @@ const NAV_ITEMS = [
   { icon: Wallet, label: 'Triage', path: '/triage' },
   { icon: Target, label: 'Roadmap', path: '/roadmap' },
   { icon: PieChart, label: 'Budget', path: '/budget' },
-  { icon: History, label: 'Ledger', path: '/ledger' }, // <--- THIS LINK WAS MISSING
+  { icon: History, label: 'Ledger', path: '/ledger' },
   { icon: Radio, label: 'Signals', path: '/signals' },
   { icon: BookOpen, label: 'Journal', path: '/journal' },
   { icon: Shield, label: 'Rules', path: '/constitution' },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
-export const Layout = () => {
+interface LayoutProps {
+  onLogout: () => void; // NEW PROP
+}
+
+export const Layout = ({ onLogout }: LayoutProps) => {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -87,7 +91,10 @@ export const Layout = () => {
 
         {/* User / Logout */}
         <div className="border-t border-glass-border p-4">
-          <button className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-gray-400 transition-colors hover:bg-red-500/10 hover:text-red-400">
+          <button 
+            onClick={onLogout} // ACTIVE BUTTON
+            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-gray-400 transition-colors hover:bg-red-500/10 hover:text-red-400"
+          >
             <LogOut className="h-5 w-5" />
             Disconnect
           </button>

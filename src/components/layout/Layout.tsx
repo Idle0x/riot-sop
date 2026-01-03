@@ -12,7 +12,8 @@ import {
   Bell,
   X,
   Shield,
-  PieChart // NEW ICON
+  PieChart,
+  History // <--- Ensure this is imported
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
@@ -21,7 +22,8 @@ const NAV_ITEMS = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { icon: Wallet, label: 'Triage', path: '/triage' },
   { icon: Target, label: 'Roadmap', path: '/roadmap' },
-  { icon: PieChart, label: 'Budget', path: '/budget' }, // NEW LINK
+  { icon: PieChart, label: 'Budget', path: '/budget' },
+  { icon: History, label: 'Ledger', path: '/ledger' }, // <--- THIS LINK WAS MISSING
   { icon: Radio, label: 'Signals', path: '/signals' },
   { icon: BookOpen, label: 'Journal', path: '/journal' },
   { icon: Shield, label: 'Rules', path: '/constitution' },

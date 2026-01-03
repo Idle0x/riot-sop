@@ -37,7 +37,7 @@ export interface Transaction {
   projectId?: string;
 }
 
-// --- BUDGET TYPES (NEW) ---
+// --- BUDGET TYPES ---
 export interface BudgetCategory {
   id: string;
   name: string;
@@ -63,4 +63,14 @@ export interface Project {
   createdAt: string;
   updatedAt: string;
   timeInvested: number; // in hours
+}
+
+// --- JOURNAL TYPES (NEW) ---
+export type JournalTag = 'win' | 'fail' | 'lesson' | 'idea' | 'note';
+
+export interface JournalEntry {
+  id: string;
+  date: string;
+  content: string;
+  tags: JournalTag[];
 }

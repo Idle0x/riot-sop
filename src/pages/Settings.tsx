@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings as SettingsIcon, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { Settings as SettingsIcon, ShieldAlert, AlertTriangle, Lock } from 'lucide-react';
 import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
@@ -16,6 +16,8 @@ export const Settings = () => {
   // --- NUCLEAR RESET STATE ---
   const [resetStep, setResetStep] = useState(0);
   const [resetInput, setResetInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState(''); // NEW STATE
+  const [passwordError, setPasswordError] = useState(''); // NEW STATE
 
   // --- HANDLERS ---
   const handleSaveBurn = () => {
@@ -25,10 +27,22 @@ export const Settings = () => {
     setBurnReason('');
   };
 
+  // NEW: Verify Master Password
+  const verifyPassword = () => {
+    const storedKey = localStorage.getItem('riot_access_key');
+    if (passwordInput === storedKey) {
+      setResetStep(5); // Move to Final Execution
+      setPasswordError('');
+    } else {
+      setPasswordError('Invalid Access Key');
+    }
+  };
+
   const handleNuke = () => {
     resetBalances();
     setResetStep(0);
     setResetInput('');
+    setPasswordInput('');
     alert("SYSTEM RESET COMPLETE. Balances are zero.");
   };
 
@@ -111,7 +125,7 @@ export const Settings = () => {
           </div>
         )}
 
-        {/* THE 7-STEP RITUAL */}
+        {/* THE RITUAL */}
         {resetStep > 0 && (
           <div className="p-6 bg-accent-danger/5 border border-accent-danger/30 rounded-xl space-y-4 text-center animate-fade-in">
             <div className="flex justify-center text-accent-danger mb-2">
@@ -138,7 +152,7 @@ export const Settings = () => {
               <>
                 <h3 className="font-bold text-lg text-white">Security Challenge 1/2</h3>
                 <p className="text-sm text-gray-400">Type the phrase below:</p>
-                <div className="font-mono text-xs bg-black/40 p-2 rounded select-all">I AM DEPLOYING CAPITAL</div>
+                <div className="font-mono text-xs bg-black/40 p-2 rounded select-all mb-2">I AM DEPLOYING CAPITAL</div>
                 <GlassInput 
                   className="text-center" 
                   value={resetInput} 
@@ -147,13 +161,41 @@ export const Settings = () => {
                 <GlassButton 
                   disabled={resetInput !== "I AM DEPLOYING CAPITAL"} 
                   onClick={() => { setResetStep(4); setResetInput(''); }}
+                  className="mt-2"
                 >
-                  Verify
+                  Verify Phrase
                 </GlassButton>
               </>
             )}
 
+            {/* NEW STEP 4: PASSWORD CHECK */}
             {resetStep === 4 && (
+              <>
+                <h3 className="font-bold text-lg text-white">Security Challenge 2/2</h3>
+                <p className="text-sm text-gray-400">Enter your Master Access Key to authorize.</p>
+                
+                <div className="max-w-xs mx-auto space-y-2">
+                  <GlassInput 
+                    type="password"
+                    icon={<Lock size={16} />}
+                    className="text-center" 
+                    placeholder="Master Password"
+                    value={passwordInput} 
+                    onChange={(e) => { setPasswordInput(e.target.value); setPasswordError(''); }} 
+                  />
+                  {passwordError && (
+                    <div className="text-xs text-accent-danger font-bold animate-pulse">{passwordError}</div>
+                  )}
+                </div>
+
+                <div className="flex gap-2 justify-center mt-2">
+                  <GlassButton variant="secondary" onClick={() => setResetStep(0)}>Cancel</GlassButton>
+                  <GlassButton onClick={verifyPassword}>Authorize</GlassButton>
+                </div>
+              </>
+            )}
+
+            {resetStep === 5 && (
               <>
                 <h3 className="font-bold text-lg text-white">Final Authorization</h3>
                 <p className="text-sm text-gray-400">Click the button 3 times to execute.</p>
@@ -170,7 +212,7 @@ export const Settings = () => {
       {/* APP INFO */}
       <div className="text-center pt-8">
         <p className="text-xs text-gray-600">
-          THE riot' SOP v1.6.0<br/>
+          THE riot' SOP v2.0.0<br/>
           Secure Local Storage Active
         </p>
       </div>

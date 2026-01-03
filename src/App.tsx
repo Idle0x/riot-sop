@@ -1,5 +1,7 @@
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
+import { LoginScreen } from './components/auth/LoginScreen';
 
 // Pages
 import { Dashboard } from './pages/Dashboard';
@@ -10,13 +12,41 @@ import { Constitution } from './pages/Constitution';
 import { Budget } from './pages/Budget';
 import { Settings } from './pages/Settings';
 import { Ledger } from './pages/Ledger';
-import { Journal } from './pages/Journal'; // NEW IMPORT
+import { Journal } from './pages/Journal';
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Check session storage (Temporary access for this tab only)
+    const sessionAuth = sessionStorage.getItem('riot_auth_session');
+    if (sessionAuth === 'active') {
+      setIsAuthenticated(true);
+    }
+    setIsLoading(false);
+  }, []);
+
+  const handleLogin = () => {
+    sessionStorage.setItem('riot_auth_session', 'active');
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('riot_auth_session');
+    setIsAuthenticated(false);
+  };
+
+  if (isLoading) return null; // Or a loading spinner
+
+  if (!isAuthenticated) {
+    return <LoginScreen onAuthenticated={handleLogin} />;
+  }
+
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<Layout />}>
+        <Route element={<Layout onLogout={handleLogout} />}> {/* Pass logout handler */}
           {/* Financial Engine */}
           <Route path="/" element={<Dashboard />} />
           <Route path="/triage" element={<Triage />} />
@@ -32,7 +62,7 @@ function App() {
           <Route path="/settings" element={<Settings />} />
           
           {/* Operational */}
-          <Route path="/journal" element={<Journal />} /> {/* UPDATED ROUTE */}
+          <Route path="/journal" element={<Journal />} />
           
           {/* Redirect unknown routes to Dashboard */}
           <Route path="*" element={<Navigate to="/" replace />} />

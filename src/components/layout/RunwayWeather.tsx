@@ -1,11 +1,11 @@
-import { ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { getFinancialState } from '../../utils/finance';
 
 interface Props { months: number; children: ReactNode; }
 
 export const RunwayWeather = ({ months, children }: Props) => {
   const state = getFinancialState(months);
-  
+
   const gradients = {
     dry: 'bg-gradient-to-br from-black via-red-950 to-black',
     critical: 'bg-gradient-to-br from-gray-900 via-orange-950/40 to-black',

@@ -13,18 +13,13 @@ interface Props {
 export const DrillModeModal = ({ onClose, onSave }: Props) => {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
-    // Step 4 (Identity) - Starts Empty
     title: '',
     sector: '',
     confidence: 5,
-    // Step 1 (Artifacts)
     links: { website: '', twitter: '', github: '', docs: '' },
-    // Step 2 (Token)
     token: { status: 'none', utility: '', tgeDate: '', launchPlan: '' },
-    // Step 3 (Findings)
     findings: '',
-    pickReason: '', // Seeds the Alpha
-    // Meta
+    pickReason: '',
     drillNotes: {} as Record<string, string>
   });
 
@@ -41,7 +36,6 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
       title: formData.title,
       sector: formData.sector,
       confidence: formData.confidence,
-      // Map the research object
       research: {
         links: formData.links,
         token: formData.token as any,
@@ -49,9 +43,8 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
         pickReason: formData.pickReason,
         drillNotes: formData.drillNotes
       },
-      // Seed the Thesis with the "Pick Reason" as Alpha
       thesis: {
-        alpha: formData.pickReason, // Auto-fill
+        alpha: formData.pickReason,
         catalyst: 'Pending',
         invalidation: 'Pending',
         expectedValue: 0
@@ -62,8 +55,6 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl p-4">
       <GlassCard className="w-full max-w-lg p-0 overflow-hidden flex flex-col max-h-[90vh]">
-        
-        {/* HEADER */}
         <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
           <div>
             <h2 className="text-xl font-bold text-white">Research Drill</h2>
@@ -76,10 +67,7 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
           <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={20}/></button>
         </div>
 
-        {/* BODY */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
-          
-          {/* STEP 1: ARTIFACTS */}
           {step === 1 && (
             <div className="space-y-4 animate-fade-in">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -87,20 +75,19 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
               </h3>
               <p className="text-xs text-gray-400">If it doesn't exist, leave it blank.</p>
               
-              <GlassInput icon={<LinkIcon size={14}/>} placeholder="Website URL" value={formData.links.website} onChange={e => updateLink('website', e.target.value)} />
-              <GlassInput icon={<LinkIcon size={14}/>} placeholder="Twitter/X Link" value={formData.links.twitter} onChange={e => updateLink('twitter', e.target.value)} />
+              <GlassInput icon={<LinkIcon size={14}/>} placeholder="Website URL" value={formData.links.website} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateLink('website', e.target.value)} />
+              <GlassInput icon={<LinkIcon size={14}/>} placeholder="Twitter/X Link" value={formData.links.twitter} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateLink('twitter', e.target.value)} />
               <div className="p-3 bg-white/5 rounded-xl border border-white/10">
-                <GlassInput icon={<Database size={14}/>} placeholder="GitHub / Codebase" value={formData.links.github} onChange={e => updateLink('github', e.target.value)} />
+                <GlassInput icon={<Database size={14}/>} placeholder="GitHub / Codebase" value={formData.links.github} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateLink('github', e.target.value)} />
                 <textarea 
                   className="w-full bg-black/20 border border-white/10 rounded-lg p-2 text-xs text-white mt-2 h-16 resize-none"
                   placeholder="Note: Is the repo active? When was last commit?"
-                  onChange={e => setFormData(p => ({...p, drillNotes: {...p.drillNotes, github: e.target.value}}))}
+                  onChange={(e) => setFormData(p => ({...p, drillNotes: {...p.drillNotes, github: e.target.value}}))}
                 />
               </div>
             </div>
           )}
 
-          {/* STEP 2: TOKEN LOGIC */}
           {step === 2 && (
             <div className="space-y-4 animate-fade-in">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -124,46 +111,42 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
               </div>
 
               {formData.token.status === 'live' && (
-                 <GlassInput label="Utility (Why hold it?)" value={formData.token.utility} onChange={e => updateToken('utility', e.target.value)} />
+                 <GlassInput label="Utility (Why hold it?)" value={formData.token.utility} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateToken('utility', e.target.value)} />
               )}
 
               {formData.token.status === 'pending' && (
                 <div className="space-y-3 p-4 bg-white/5 rounded-xl">
-                   <GlassInput label="Expected TGE Date" type="date" value={formData.token.tgeDate} onChange={e => updateToken('tgeDate', e.target.value)} />
-                   <GlassInput label="Launch Plans (L1? Fair launch?)" value={formData.token.launchPlan} onChange={e => updateToken('launchPlan', e.target.value)} />
+                   <GlassInput label="Expected TGE Date" type="date" value={formData.token.tgeDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateToken('tgeDate', e.target.value)} />
+                   <GlassInput label="Launch Plans (L1? Fair launch?)" value={formData.token.launchPlan} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateToken('launchPlan', e.target.value)} />
                 </div>
               )}
             </div>
           )}
 
-          {/* STEP 3: FINDINGS */}
           {step === 3 && (
             <div className="space-y-4 animate-fade-in">
               <h3 className="text-lg font-bold text-white">Deep Work</h3>
-              
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase">Why did you pick this?</label>
                 <textarea 
                   className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white mt-1 h-24"
                   placeholder="This becomes your 'Alpha' in the thesis..."
                   value={formData.pickReason}
-                  onChange={e => setFormData(p => ({...p, pickReason: e.target.value}))}
+                  onChange={(e) => setFormData(p => ({...p, pickReason: e.target.value}))}
                 />
               </div>
-
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase">Specific Findings</label>
                 <textarea 
                   className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white mt-1 h-32"
                   placeholder="Tech details, team background, unique mechanics..."
                   value={formData.findings}
-                  onChange={e => setFormData(p => ({...p, findings: e.target.value}))}
+                  onChange={(e) => setFormData(p => ({...p, findings: e.target.value}))}
                 />
               </div>
             </div>
           )}
 
-          {/* STEP 4: IDENTITY (The Reward) */}
           {step === 4 && (
             <div className="space-y-6 animate-fade-in text-center py-4">
               <div className="inline-flex p-4 rounded-full bg-green-500/10 text-green-500 mb-2">
@@ -173,8 +156,8 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
               <p className="text-sm text-gray-400">You have done the work. It is worthy of the board.</p>
               
               <div className="text-left space-y-4">
-                <GlassInput label="Project Name" value={formData.title} onChange={e => setFormData(p => ({...p, title: e.target.value}))} autoFocus />
-                <GlassInput label="Sector (e.g. DePin, L2)" value={formData.sector} onChange={e => setFormData(p => ({...p, sector: e.target.value}))} />
+                <GlassInput label="Project Name" value={formData.title} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(p => ({...p, title: e.target.value}))} autoFocus />
+                <GlassInput label="Sector (e.g. DePin, L2)" value={formData.sector} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(p => ({...p, sector: e.target.value}))} />
                 
                 <div>
                   <div className="flex justify-between mb-2">
@@ -184,17 +167,15 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
                   <input 
                     type="range" min="1" max="10" 
                     value={formData.confidence} 
-                    onChange={e => setFormData(p => ({...p, confidence: Number(e.target.value)}))} 
+                    onChange={(e) => setFormData(p => ({...p, confidence: Number(e.target.value)}))} 
                     className="w-full accent-green-500"
                   />
                 </div>
               </div>
             </div>
           )}
-
         </div>
 
-        {/* FOOTER */}
         <div className="p-6 border-t border-white/10 bg-black/20 flex justify-between">
           <button 
             onClick={() => setStep(s => Math.max(1, s - 1))}
@@ -213,7 +194,6 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
             </GlassButton>
           )}
         </div>
-
       </GlassCard>
     </div>
   );

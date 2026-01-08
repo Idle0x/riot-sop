@@ -28,7 +28,7 @@ export const Triage = () => {
   const [recipientTier, setRecipientTier] = useState('T3');
 
   const [allocations, setAllocations] = useState<Record<string, number>>({});
-  const [impulseLock, setImpulseLock] = useState(false);
+  // REMOVED: const [impulseLock, setImpulseLock] = useState(false);
 
   // Calculations
   const dropUSD = parseFloat(amountUSD) || 0;
@@ -104,7 +104,6 @@ export const Triage = () => {
     Object.entries(allocations).forEach(([goalId, amount]) => {
        if (amount > 0) {
           commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'GOAL_FUND', title: 'Goal Allocation', amount, linkedGoalId: goalId });
-          // Note: In real app, call updateGoal here to add to currentAmount
        }
     });
 

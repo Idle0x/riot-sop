@@ -7,7 +7,7 @@ import { Naira } from '../components/ui/Naira';
 import { Trash2, Calendar, RefreshCcw } from 'lucide-react';
 
 export const Budget = () => {
-  const { budgets, addBudget, dailyBurn, user } = useFinancials();
+  const { budgets, addBudget, user } = useFinancials();
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [freq, setFreq] = useState<'monthly'|'one-time'>('monthly');
@@ -47,7 +47,7 @@ export const Budget = () => {
           <div className="space-y-4">
             <GlassInput label="Name" value={name} onChange={e => setName(e.target.value)} />
             <GlassInput label="Amount (NGN)" type="number" value={amount} onChange={e => setAmount(e.target.value)} />
-            
+
             <div className="flex gap-2">
               <button 
                 onClick={() => setFreq('monthly')}
@@ -62,7 +62,7 @@ export const Budget = () => {
                 <Calendar size={12}/> One-Time
               </button>
             </div>
-            
+
             <GlassButton className="w-full" onClick={handleAdd} disabled={!name || !amount}>Add to Burn</GlassButton>
           </div>
         </GlassCard>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { GlassCard } from '../ui/GlassCard';
 import { GlassButton } from '../ui/GlassButton';
 import { type Signal } from '../../types';
-import { Skull, Trophy, Ban, AlertTriangle } from 'lucide-react';
+import { Skull, Trophy, Ban, AlertTriangle, X } from 'lucide-react';
 
 interface Props {
   signal: Signal;
@@ -19,13 +19,16 @@ export const ClosureModal = ({ signal, onConfirm, onClose }: Props) => {
     onConfirm({
       status: reason,
       reason: note,
-      finalRoi: signal.totalGenerated // Snapshot the ROI
+      finalRoi: signal.totalGenerated
     });
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl p-4">
-      <GlassCard className="w-full max-w-lg p-6">
+      <GlassCard className="w-full max-w-lg p-6 relative">
+        {/* Added Close Button to use the onClose prop */}
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X size={20}/></button>
+        
         <h2 className="text-2xl font-bold text-white mb-2">Project Closure</h2>
         <p className="text-gray-400 text-sm mb-6">Why is <span className="text-white font-bold">{signal.title}</span> ending?</p>
 

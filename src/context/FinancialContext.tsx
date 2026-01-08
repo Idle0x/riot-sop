@@ -20,22 +20,22 @@ interface FinancialContextType {
   history: HistoryLog[];
   journal: JournalEntry[];
 
-  // Computed
   totalLiquid: number;
   runwayMonths: number;
   unallocatedCash: number;
   dailyBurn: number;
   isGhostMode: boolean;
 
-  // Actions
   updateUser: (updates: Partial<UserProfile>) => void;
   updateAccount: (id: AccountType, amount: number) => void;
   addBudget: (budget: Budget) => void;
-  deleteBudget: (id: string) => void; // <--- ADDED THIS LINE
+  deleteBudget: (id: string) => void;
   logExpense: (budgetId: string | null, amount: number, note: string) => void;
   resetBudgetCycle: () => void;
   updateGoal: (goal: Goal) => void;
+  deleteGoal: (id: string) => void;
   updateSignal: (signal: Signal) => void;
+  logSignalTime: (id: string, hours: number) => void; // NEW: Quick Time Logging
   commitAction: (log: HistoryLog) => void;
   deleteTransaction: (id: string) => void;
   nuclearReset: (password: string) => boolean;
@@ -53,12 +53,11 @@ const INITIAL_USER: UserProfile = {
   pendingChanges: []
 };
 
-// UPDATE: Added 'vault'
 const INITIAL_ACCOUNTS: Account[] = [
   { id: 'treasury', name: 'Treasury (Redot)', balance: 0, currency: 'USD' },
   { id: 'payroll', name: 'Payroll (Opay)', balance: 0, currency: 'NGN' },
   { id: 'buffer', name: 'Buffer (Piggy)', balance: 0, currency: 'NGN', isLocked: true },
-  { id: 'vault', name: 'The Vault (Locked)', balance: 0, currency: 'NGN', isLocked: true }, // NEW
+  { id: 'vault', name: 'The Vault (Locked)', balance: 0, currency: 'NGN', isLocked: true },
   { id: 'holding', name: 'Holding Pen', balance: 0, currency: 'NGN' }
 ];
 
@@ -72,7 +71,6 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
   const [journal, setJournal] = useState<JournalEntry[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // --- Persistence Engine ---
   useEffect(() => {
     const savedData = localStorage.getItem('riot_financial_os');
     if (savedData) {
@@ -80,7 +78,6 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
         const parsed = JSON.parse(savedData);
         if (parsed.user) setUser(parsed.user);
         
-        // MIGRATION: Ensure Vault exists for old users
         if (parsed.accounts) {
            const hasVault = parsed.accounts.find((a: Account) => a.id === 'vault');
            if (!hasVault) {
@@ -107,16 +104,13 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!isInitialized) return;
 
-    // --- SIMULATION: Check Pending Changes (7-Day Cooldown) ---
     const now = new Date();
     if (user.pendingChanges.length > 0) {
       const activeChanges = user.pendingChanges.filter(c => new Date(c.effectiveDate) <= now);
       if (activeChanges.length > 0) {
-         // Apply changes
          activeChanges.forEach(change => {
             setUser(prev => ({ ...prev, [change.key]: change.value }));
          });
-         // Clean up queue
          setUser(prev => ({
            ...prev, 
            pendingChanges: prev.pendingChanges.filter(c => new Date(c.effectiveDate) > now)
@@ -128,8 +122,6 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem('riot_financial_os', JSON.stringify(currentState));
   }, [user, accounts, goals, signals, budgets, history, journal, isInitialized]);
 
-
-  // --- Computed Metrics ---
   const exchangeRate = 1500; 
   const totalLiquid = 
     (accounts.find(a => a.id === 'treasury')?.balance || 0) * exchangeRate +
@@ -141,7 +133,6 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
 
   const isGhostMode = (new Date().getTime() - new Date(user.lastSeen).getTime()) > (7 * 24 * 60 * 60 * 1000);
 
-  // --- Actions ---
   const updateUser = (updates: Partial<UserProfile>) => setUser(prev => ({ ...prev, ...updates }));
 
   const updateAccount = (id: AccountType, amount: number) => {
@@ -193,12 +184,23 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
+  const deleteGoal = (id: string) => {
+    setGoals(prev => prev.filter(g => g.id !== id));
+  };
+
   const updateSignal = (signal: Signal) => {
     setSignals(prev => {
       const exists = prev.find(s => s.id === signal.id);
       if (exists) return prev.map(s => s.id === signal.id ? signal : s);
       return [...prev, signal];
     });
+  };
+
+  // NEW: Quick Time Logging
+  const logSignalTime = (id: string, hours: number) => {
+    setSignals(prev => prev.map(s => 
+      s.id === id ? { ...s, hoursLogged: s.hoursLogged + hours } : s
+    ));
   };
 
   const commitAction = (log: HistoryLog) => {
@@ -232,7 +234,7 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
       user, accounts, goals, signals, budgets, history, journal,
       totalLiquid, runwayMonths, unallocatedCash, dailyBurn, isGhostMode,
       updateUser, updateAccount, addBudget, deleteBudget, logExpense, resetBudgetCycle,
-      updateGoal, updateSignal, commitAction, deleteTransaction, nuclearReset
+      updateGoal, deleteGoal, updateSignal, logSignalTime, commitAction, deleteTransaction, nuclearReset
     }}>
       {children}
     </FinancialContext.Provider>

@@ -7,7 +7,7 @@ import { DrillModeModal } from '../components/signals/DrillModeModal';
 import { TransitionWizard } from '../components/signals/TransitionWizard';
 import { ClosureModal } from '../components/signals/ClosureModal';
 import { type Signal, type SignalPhase } from '../types';
-import { Clock, ArrowRight, Zap, Trophy, X, AlertTriangle, ScrollText, PenLine, Scale, BrainCircuit, Globe, Twitter, Github, BookOpen } from 'lucide-react';
+import { Clock, ArrowRight, Zap, Trophy, X, PenLine, Scale, BrainCircuit, Globe, Twitter, Github, BookOpen } from 'lucide-react';
 
 export const Signals = () => {
   const { signals, updateSignal, commitAction, logSignalTime } = useFinancials();
@@ -88,9 +88,6 @@ export const Signals = () => {
   // Intercept Moves for Post-Mortem or Wizard
   const initiateMove = (signal: Signal, phase: SignalPhase) => {
     if (phase === 'graveyard' || phase === 'harvested') {
-      // These need closure modal, but handled via buttons usually. 
-      // If drag/drop logic calls this, we redirect to PostMortem or Closure.
-      // For simple "Next" button logic:
       setTransitionSignal({ signal, target: phase });
     } else {
       setTransitionSignal({ signal, target: phase });
@@ -187,10 +184,10 @@ export const Signals = () => {
             <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><PenLine size={20}/> Investment Thesis</h2>
             
             <div className="space-y-4">
-              <GlassInput label="The Alpha" value={editingSignal.thesis.alpha} onChange={e => setEditingSignal({...editingSignal, thesis: {...editingSignal.thesis, alpha: e.target.value}})} />
-              <GlassInput label="The Catalyst" value={editingSignal.thesis.catalyst} onChange={e => setEditingSignal({...editingSignal, thesis: {...editingSignal.thesis, catalyst: e.target.value}})} />
-              <GlassInput label="The Invalidation" className="text-red-300" value={editingSignal.thesis.invalidation} onChange={e => setEditingSignal({...editingSignal, thesis: {...editingSignal.thesis, invalidation: e.target.value}})} />
-              <GlassInput label="Expected Value (USD)" type="number" className="text-green-400 font-mono" value={editingSignal.thesis.expectedValue} onChange={e => setEditingSignal({...editingSignal, thesis: {...editingSignal.thesis, expectedValue: Number(e.target.value)}})} />
+              <GlassInput label="The Alpha" value={editingSignal.thesis.alpha} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingSignal({...editingSignal, thesis: {...editingSignal.thesis, alpha: e.target.value}})} />
+              <GlassInput label="The Catalyst" value={editingSignal.thesis.catalyst} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingSignal({...editingSignal, thesis: {...editingSignal.thesis, catalyst: e.target.value}})} />
+              <GlassInput label="The Invalidation" className="text-red-300" value={editingSignal.thesis.invalidation} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingSignal({...editingSignal, thesis: {...editingSignal.thesis, invalidation: e.target.value}})} />
+              <GlassInput label="Expected Value (USD)" type="number" className="text-green-400 font-mono" value={editingSignal.thesis.expectedValue} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingSignal({...editingSignal, thesis: {...editingSignal.thesis, expectedValue: Number(e.target.value)}})} />
               <GlassButton className="w-full" onClick={saveThesis}>Lock Thesis</GlassButton>
             </div>
           </GlassCard>
@@ -245,7 +242,7 @@ export const Signals = () => {
 
                   <div className="space-y-3 cursor-pointer" onClick={() => setEditingSignal(selectedSignal)}>
                      <div className="p-3 bg-blue-900/10 border border-blue-500/20 rounded-xl hover:border-blue-500/50 transition-colors">
-                        <div className="text-[10px] font-bold text-blue-400 mb-1 flex justify-between">ALPHA (WHY?) <Pencil size={10}/></div>
+                        <div className="text-[10px] font-bold text-blue-400 mb-1 flex justify-between">ALPHA (WHY?) <PenLine size={10}/></div>
                         <p className="text-xs text-gray-300 leading-relaxed">{selectedSignal.thesis.alpha || 'Pending...'}</p>
                      </div>
                      <div className="p-3 bg-white/5 border border-white/10 rounded-xl">

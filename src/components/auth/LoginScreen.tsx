@@ -15,7 +15,6 @@ export const LoginScreen = ({ onAuthenticated }: LoginScreenProps) => {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    // Check if a key already exists
     const storedKey = localStorage.getItem('riot_access_key');
     if (!storedKey) {
       setIsSetupMode(true);
@@ -47,7 +46,6 @@ export const LoginScreen = ({ onAuthenticated }: LoginScreenProps) => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-bg-primary p-4 relative overflow-hidden">
-      {/* Background Ambience */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-accent-success/10 rounded-full blur-[100px]" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-accent-info/10 rounded-full blur-[100px]" />
@@ -72,9 +70,9 @@ export const LoginScreen = ({ onAuthenticated }: LoginScreenProps) => {
             placeholder={isSetupMode ? "Create Key" : "Enter Access Key"}
             icon={<Key size={16} />}
             value={password}
-            onChange={(e) => { setPassword(e.target.value); setError(''); }}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setPassword(e.target.value); setError(''); }}
             autoFocus
-            onKeyDown={(e) => e.key === 'Enter' && (isSetupMode ? null : handleLogin())}
+            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && (isSetupMode ? null : handleLogin())}
           />
 
           {isSetupMode && (
@@ -83,8 +81,8 @@ export const LoginScreen = ({ onAuthenticated }: LoginScreenProps) => {
               placeholder="Confirm Key"
               icon={<Key size={16} />}
               value={confirmPassword}
-              onChange={(e) => { setConfirmPassword(e.target.value); setError(''); }}
-              onKeyDown={(e) => e.key === 'Enter' && handleSetup()}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setConfirmPassword(e.target.value); setError(''); }}
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleSetup()}
             />
           )}
 

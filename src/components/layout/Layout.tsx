@@ -13,7 +13,8 @@ import {
   X,
   Shield,
   PieChart,
-  History
+  History,
+  TrendingUp // NEW IMPORT
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
@@ -24,6 +25,7 @@ const NAV_ITEMS = [
   { icon: Target, label: 'Roadmap', path: '/roadmap' },
   { icon: PieChart, label: 'Budget', path: '/budget' },
   { icon: History, label: 'Ledger', path: '/ledger' },
+  { icon: TrendingUp, label: 'Analytics', path: '/analytics' }, // NEW ITEM
   { icon: Radio, label: 'Signals', path: '/signals' },
   { icon: BookOpen, label: 'Journal', path: '/journal' },
   { icon: Shield, label: 'Rules', path: '/constitution' },
@@ -31,7 +33,7 @@ const NAV_ITEMS = [
 ];
 
 interface LayoutProps {
-  onLogout: () => void; // NEW PROP
+  onLogout: () => void;
 }
 
 export const Layout = ({ onLogout }: LayoutProps) => {
@@ -42,7 +44,7 @@ export const Layout = ({ onLogout }: LayoutProps) => {
 
   return (
     <div className="flex min-h-screen bg-bg-primary font-sans text-white">
-      
+
       {/* MOBILE OVERLAY */}
       {isMobileMenuOpen && (
         <div 
@@ -67,7 +69,7 @@ export const Layout = ({ onLogout }: LayoutProps) => {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-2 px-4 py-8">
+        <nav className="flex-1 space-y-2 px-4 py-8 overflow-y-auto">
           {NAV_ITEMS.map((item) => {
             const isActive = location.pathname === item.path;
             return (
@@ -92,7 +94,7 @@ export const Layout = ({ onLogout }: LayoutProps) => {
         {/* User / Logout */}
         <div className="border-t border-glass-border p-4">
           <button 
-            onClick={onLogout} // ACTIVE BUTTON
+            onClick={onLogout}
             className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-gray-400 transition-colors hover:bg-red-500/10 hover:text-red-400"
           >
             <LogOut className="h-5 w-5" />

@@ -24,7 +24,7 @@ export const BufferAccessModal = ({ isOpen, onClose, onConfirm }: Props) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
       <GlassCard className="w-full max-w-md p-6 border-red-500/50 relative">
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X size={20}/></button>
-        
+
         <div className="text-center mb-6">
           <div className="inline-block p-4 bg-red-500/10 rounded-full text-red-500 mb-3 animate-pulse">
             <AlertTriangle size={32}/>
@@ -45,8 +45,8 @@ export const BufferAccessModal = ({ isOpen, onClose, onConfirm }: Props) => {
 
         {step === 2 && (
           <div className="space-y-4">
-            <GlassInput label="Amount Needed" type="number" value={amount} onChange={e => setAmount(e.target.value)} />
-            <GlassInput label="Justification Log" placeholder="Describe the crisis..." value={reason} onChange={e => setReason(e.target.value)} />
+            <GlassInput label="Amount Needed" type="number" value={amount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)} />
+            <GlassInput label="Justification Log" placeholder="Describe the crisis..." value={reason} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReason(e.target.value)} />
             <GlassButton className="w-full mt-4" disabled={!amount || !reason} onClick={() => setStep(3)}>Proceed</GlassButton>
           </div>
         )}
@@ -58,7 +58,7 @@ export const BufferAccessModal = ({ isOpen, onClose, onConfirm }: Props) => {
             <div className="bg-black/40 p-2 rounded text-center font-mono text-xs text-red-500 select-all">{phrase}</div>
             <GlassInput 
               value={confirmPhrase} 
-              onChange={e => setConfirmPhrase(e.target.value)} 
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPhrase(e.target.value)} 
               placeholder="Type phrase here..."
               className="text-center border-red-500/50"
             />

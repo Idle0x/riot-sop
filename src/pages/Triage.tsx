@@ -3,7 +3,6 @@ import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
-import { GlassProgressBar } from '../components/ui/GlassProgressBar';
 import { Naira } from '../components/ui/Naira';
 import { getFinancialState } from '../utils/finance';
 import { ArrowRight, Flame, Heart, AlertTriangle, CheckCircle2 } from 'lucide-react';
@@ -28,7 +27,7 @@ export const Triage = () => {
   const dropUSD = parseFloat(amountUSD) || 0;
   const rateVal = parseFloat(rate) || 0;
   const grossNGN = dropUSD * rateVal;
-  
+
   // Logic: Use Unallocated cash if drop is 0 (processing existing funds)
   const sourceFunds = dropUSD > 0 ? grossNGN : unallocatedCash;
 
@@ -37,7 +36,7 @@ export const Triage = () => {
   const bufferAmount = netFunds * 0.10;
   const genAmount = parseFloat(generosity) || 0;
   const availableForGoals = netFunds - bufferAmount - genAmount;
-  
+
   const allocatedSum = Object.values(allocations).reduce((a, b) => a + b, 0);
   const remaining = availableForGoals - allocatedSum;
 
@@ -52,7 +51,7 @@ export const Triage = () => {
 
   const handleCommit = () => {
     const timestamp = new Date().toISOString();
-    
+
     // 1. If new drop, add to Holding
     if (dropUSD > 0) {
       updateAccount('holding', grossNGN);
@@ -60,7 +59,7 @@ export const Triage = () => {
 
     // 2. Execute Triage (Move from Holding)
     updateAccount('holding', -sourceFunds); // Remove total
-    
+
     // Burn Tax
     if (taxAmount > 0) {
       commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'SPEND', title: 'Venture Tax Burned', amount: taxAmount, tags: ['risk'] });
@@ -68,14 +67,14 @@ export const Triage = () => {
 
     // Buffer
     updateAccount('buffer', bufferAmount);
-    
+
     // Generosity (to Payroll for spending)
     if (genAmount > 0) updateAccount('payroll', genAmount);
 
     // Goals (to Goals locked)
     // Note: In real app, you'd add to goal.currentAmount here. 
     // For MVP we assume goals are tracked via logs or separate state update
-    
+
     // Remainder to Payroll/Runway
     if (remaining > 0) updateAccount('payroll', remaining);
 
@@ -115,7 +114,7 @@ export const Triage = () => {
               <GlassInput label="Drop (USD)" type="number" value={amountUSD} onChange={e => setAmountUSD(e.target.value)} autoFocus />
               <GlassInput label="Rate" type="number" value={rate} onChange={e => setRate(e.target.value)} />
             </div>
-            
+
             {/* Source Recognition */}
             <div>
               <label className="text-xs font-bold text-gray-500 uppercase">Signal Source</label>

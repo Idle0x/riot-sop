@@ -14,7 +14,8 @@ import {
   Shield,
   PieChart,
   History,
-  TrendingUp // NEW IMPORT
+  TrendingUp,
+  Heart // NEW IMPORT
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
@@ -25,7 +26,8 @@ const NAV_ITEMS = [
   { icon: Target, label: 'Roadmap', path: '/roadmap' },
   { icon: PieChart, label: 'Budget', path: '/budget' },
   { icon: History, label: 'Ledger', path: '/ledger' },
-  { icon: TrendingUp, label: 'Analytics', path: '/analytics' }, // NEW ITEM
+  { icon: TrendingUp, label: 'Analytics', path: '/analytics' },
+  { icon: Heart, label: 'Generosity', path: '/generosity' }, // NEW ITEM
   { icon: Radio, label: 'Signals', path: '/signals' },
   { icon: BookOpen, label: 'Journal', path: '/journal' },
   { icon: Shield, label: 'Rules', path: '/constitution' },

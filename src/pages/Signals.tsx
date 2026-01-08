@@ -6,7 +6,7 @@ import { GlassInput } from '../components/ui/GlassInput';
 import { DrillModeModal } from '../components/signals/DrillModeModal'; 
 import { type Signal, type SignalPhase } from '../types';
 import { Clock, DollarSign, ArrowRight, Zap, Archive, Trophy, X, AlertTriangle, ScrollText, PenLine, Scale, BrainCircuit } from 'lucide-react';
-import { Naira } from '../components/ui/Naira';
+// REMOVED: import { Naira } from '../components/ui/Naira'; 
 
 export const Signals = () => {
   const { signals, updateSignal, commitAction } = useFinancials();

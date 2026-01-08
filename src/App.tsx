@@ -13,7 +13,8 @@ import { Budget } from './pages/Budget';
 import { Settings } from './pages/Settings';
 import { Ledger } from './pages/Ledger';
 import { Journal } from './pages/Journal';
-import { Analytics } from './pages/Analytics'; // NEW IMPORT
+import { Analytics } from './pages/Analytics';
+import { Generosity } from './pages/Generosity'; // NEW IMPORT
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -54,7 +55,8 @@ function App() {
           <Route path="/roadmap" element={<Roadmap />} />
           <Route path="/budget" element={<Budget />} />
           <Route path="/ledger" element={<Ledger />} />
-          <Route path="/analytics" element={<Analytics />} /> {/* NEW ROUTE */}
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/generosity" element={<Generosity />} /> {/* NEW ROUTE */}
 
           {/* Research Engine */}
           <Route path="/signals" element={<Signals />} />

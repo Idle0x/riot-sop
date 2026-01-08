@@ -1,161 +1,183 @@
-import { Wallet, CreditCard, ShieldCheck } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { useFinancials } from '../context/FinancialContext';
 import { MetricCard } from '../components/ui/MetricCard';
-import { GlassProgressBar } from '../components/ui/GlassProgressBar';
 import { GlassCard } from '../components/ui/GlassCard';
+import { GlassProgressBar } from '../components/ui/GlassProgressBar';
+import { GlassButton } from '../components/ui/GlassButton';
 import { Naira } from '../components/ui/Naira';
+import { 
+  Wallet, ShieldCheck, Lock, AlertTriangle, 
+  Clock, ArrowRight, Activity 
+} from 'lucide-react';
+import { RunwayWeather } from '../components/layout/RunwayWeather';
 
 export const Dashboard = () => {
-  const { accounts, goals, monthlyBurn, budgetCategories } = useFinancials();
+  const { 
+    accounts, goals, runwayMonths, totalLiquid, 
+    budgets, history, isGhostMode 
+  } = useFinancials();
 
-  // 1. Get Real Account Balances
-  const treasury = accounts.find(a => a.id === 'treasury');
-  const payroll = accounts.find(a => a.id === 'payroll');
-  const buffer = accounts.find(a => a.id === 'buffer');
+  // --- INFINITE CLOCK ---
+  const [time, setTime] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-  // 2. Calculate Real Runway 
-  const treasuryBalance = treasury?.balance || 0;
-  const runwayMonths = monthlyBurn > 0 ? treasuryBalance / monthlyBurn : 0;
+  // --- DERIVED METRICS ---
+  const bufferBalance = accounts.find(a => a.id === 'buffer')?.balance || 0;
+  const lockedInGoals = goals.reduce((sum, g) => sum + g.currentAmount, 0);
+  const totalLocked = bufferBalance + lockedInGoals;
   
-  const runwayColor = runwayMonths < 3 ? 'danger' : runwayMonths < 6 ? 'warning' : 'success';
-  const runwayLabel = runwayMonths < 3 ? 'CRITICAL' : runwayMonths < 6 ? 'CAUTION' : 'SECURE';
+  // UNALLOCATED LOGIC (The Leaky Bucket)
+  // Assuming 'Holding Pen' is where unallocated money sits
+  const unallocated = accounts.find(a => a.id === 'holding')?.balance || 0;
 
-  // 3. Get Active Goals
-  const activeGoals = goals
-    .filter(g => !g.isCompleted)
-    .sort((a, b) => a.priority - b.priority)
-    .slice(0, 3);
-
-  const formatUSD = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+  // FORMATTERS
   const formatNum = (val: number) => new Intl.NumberFormat('en-US').format(val);
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        
-        {/* Treasury (USD) */}
-        <MetricCard 
-          title="Treasury"
-          value={formatUSD(treasury?.balance || 0)}
-          subValue={
-            <div className="flex items-center text-sm text-gray-500">
-              <span>≈</span>
-              <Naira className="mx-1" />
-              <span>(Rate x Bal)</span>
-            </div>
-          }
-          icon={<Wallet size={20} />}
-          trend={{ value: 0, isPositive: true }} 
-          isPrivate={true} 
-        />
+    <RunwayWeather months={runwayMonths}>
+      <div className="space-y-8 animate-fade-in pb-20 p-4 md:p-8">
 
-        {/* Payroll (NGN) */}
-        <MetricCard 
-          title="Payroll"
-          value={
-            <div className="flex items-center gap-1">
-              <Naira />
-              <span>{formatNum(payroll?.balance || 0)}</span>
-            </div>
-          }
-          subValue="OpEx / Living"
-          icon={<CreditCard size={20} />}
-        />
-
-        {/* Buffer (Locked) */}
-        <MetricCard 
-          title="Buffer Vault"
-          value={
-            <div className="flex items-center gap-1">
-              <Naira />
-              <span>{formatNum(buffer?.balance || 0)}</span>
-            </div>
-          }
-          subValue="Emergency Only"
-          icon={<ShieldCheck size={20} />}
-        />
-      </div>
-
-      <GlassCard className="p-8">
-        <div className="flex items-center justify-between mb-6">
+        {/* --- HEADER: CLOCK & STATUS --- */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
           <div>
-            <h3 className="text-xl font-bold text-white">Financial Runway</h3>
-            <p className="text-sm text-gray-400">Based on fixed burn rate of ${monthlyBurn}/mo</p>
-          </div>
-          <div className="text-right">
-            <div className={`text-3xl font-mono font-bold text-accent-${runwayColor}`}>
-              {runwayMonths.toFixed(1)} Months
+            <div className="flex items-center gap-2 text-gray-400 text-xs font-mono mb-1">
+              <Clock size={12} />
+              <span>{time.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
             </div>
-            <div className="text-xs text-gray-500 uppercase tracking-wider">{runwayLabel}</div>
+            <h1 className="text-4xl font-bold text-white tracking-tight tabular-nums">
+              {time.toLocaleTimeString()}
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className={`h-2 w-2 rounded-full animate-pulse ${runwayMonths < 3 ? 'bg-accent-danger' : 'bg-accent-success'}`} />
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
+              System {isGhostMode ? 'DORMANT' : 'ONLINE'}
+            </span>
           </div>
         </div>
 
-        <GlassProgressBar 
-          value={runwayMonths} 
-          max={12} 
-          label="Target: 12 Months" 
-          color={runwayColor} 
-          size="lg"
-          showPercentage={false}
-        />
-        
-        <div className="mt-4 flex justify-between text-xs text-gray-500 font-mono">
-          <span>0 Months</span>
-          <span>6 Months (Safety)</span>
-          <span>12 Months (Freedom)</span>
-        </div>
-      </GlassCard>
+        {/* --- ALERT: UNALLOCATED CAPITAL --- */}
+        {unallocated > 0 && (
+          <div className="bg-accent-warning/10 border border-accent-warning/30 p-4 rounded-xl flex items-center justify-between animate-pulse">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="text-accent-warning" size={24} />
+              <div>
+                <h3 className="font-bold text-white">Unallocated Capital Detected</h3>
+                <p className="text-xs text-gray-400">You have idle money in the Holding Pen.</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="font-mono font-bold text-accent-warning text-lg">
+                ${formatNum(unallocated)}
+              </div>
+              <GlassButton size="sm" variant="ghost" className="text-accent-warning hover:text-white">
+                Triange Now <ArrowRight size={14} className="ml-1"/>
+              </GlassButton>
+            </div>
+          </div>
+        )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <GlassCard className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-white">Active Goals (Top 3)</h3>
-            <span className="text-xs font-bold px-2 py-1 rounded bg-accent-info/10 text-accent-info">PRIORITY</span>
+        {/* --- ASSET CLASS BREAKDOWN --- */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          {/* 1. LIQUID RUNWAY (The Real Number) */}
+          <MetricCard 
+            title="Liquid Runway"
+            value={<div className="flex items-center gap-1"><Naira />{formatNum(totalLiquid)}</div>}
+            subValue={`${runwayMonths.toFixed(1)} Months Survival`}
+            icon={<Activity size={20} />}
+            trend={{ value: 0, isPositive: true }} // TODO: Add real trend logic
+          />
+
+          {/* 2. LOCKED ASSETS (Buffer + Goals) */}
+          <MetricCard 
+            title="Locked Assets"
+            value={<div className="flex items-center gap-1"><Naira />{formatNum(totalLocked)}</div>}
+            subValue="Buffer & Funded Goals"
+            icon={<Lock size={20} />}
+          />
+
+          {/* 3. BUFFER VAULT (Specific Focus) */}
+          <MetricCard 
+            title="Buffer Vault"
+            value={<div className="flex items-center gap-1"><Naira />{formatNum(bufferBalance)}</div>}
+            subValue="Emergency Use Only"
+            icon={<ShieldCheck size={20} />}
+            isPrivate
+          />
+        </div>
+
+        {/* --- RUNWAY VISUALIZER --- */}
+        <GlassCard className="p-8 relative overflow-hidden">
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-xl font-bold text-white">Runway Health</h3>
+                <p className="text-sm text-gray-400">Based on active budgets (Auto-Burn Active)</p>
+              </div>
+              <div className="text-right">
+                <div className={`text-4xl font-mono font-bold ${
+                  runwayMonths < 3 ? 'text-accent-danger' : 
+                  runwayMonths < 6 ? 'text-accent-warning' : 'text-accent-success'
+                }`}>
+                  {runwayMonths.toFixed(2)} Mo
+                </div>
+              </div>
+            </div>
+
+            <GlassProgressBar 
+              value={runwayMonths} 
+              max={12} 
+              label="Freedom Target: 12 Months" 
+              color={runwayMonths < 3 ? 'danger' : runwayMonths < 6 ? 'warning' : 'success'} 
+              size="lg"
+              showPercentage={false}
+            />
+
+            <div className="mt-6 grid grid-cols-4 text-center text-xs text-gray-500 font-mono">
+              <div className="border-t border-gray-800 pt-2">CRITICAL<br/>(0-3 mo)</div>
+              <div className="border-t border-gray-800 pt-2">BUILDING<br/>(3-6 mo)</div>
+              <div className="border-t border-gray-800 pt-2">SECURE<br/>(6-12 mo)</div>
+              <div className="border-t border-gray-800 pt-2">FREEDOM<br/>(12+ mo)</div>
+            </div>
+          </div>
+        </GlassCard>
+
+        {/* --- RECENT ACTIVITY (The Black Box Preview) --- */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-gray-400 uppercase tracking-wider text-xs">Recent System Events</h3>
+            <button className="text-xs text-accent-info hover:text-white transition-colors">View Universal Log</button>
           </div>
           
-          <div className="space-y-6">
-            {activeGoals.length === 0 ? (
-              <div className="text-center text-gray-500 py-4">No active goals. Time to set new ones!</div>
-            ) : (
-              activeGoals.map(goal => (
-                <GlassProgressBar 
-                  key={goal.id}
-                  value={goal.currentAmount} 
-                  max={goal.targetAmount} 
-                  label={goal.title} 
-                  color={goal.phase === 'P1' ? 'warning' : 'info'} 
-                />
-              ))
+          <div className="space-y-2">
+            {history.slice(0, 3).map((log) => (
+              <div key={log.id} className="flex items-center justify-between p-4 bg-glass border border-glass-border rounded-xl">
+                <div className="flex items-center gap-4">
+                  <div className={`p-2 rounded-lg bg-white/5 text-gray-400`}>
+                    <Clock size={16} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-white">{log.title}</div>
+                    <div className="text-xs text-gray-500">{new Date(log.date).toLocaleString()}</div>
+                  </div>
+                </div>
+                <div className="font-mono text-sm text-white">
+                  {log.amount ? <><Naira />{formatNum(log.amount)}</> : ''}
+                </div>
+              </div>
+            ))}
+            {history.length === 0 && (
+              <div className="text-center py-8 text-gray-600 text-sm">System initialized. Waiting for events...</div>
             )}
           </div>
-        </GlassCard>
+        </div>
 
-        {/* BUDGET MODULE (REAL DATA) */}
-        <GlassCard className="p-6">
-           <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-white">Monthly Budget</h3>
-            <span className="text-xs text-gray-400">Status</span>
-          </div>
-          <div className="space-y-4">
-            {budgetCategories.slice(0, 3).map(cat => (
-               <div key={cat.id} className="space-y-1">
-                 <div className="flex justify-between text-xs text-gray-400">
-                   <span>{cat.name}</span>
-                   <span>{Math.round((cat.spent/cat.limit)*100)}%</span>
-                 </div>
-                 <div className="h-1 bg-white/10 rounded-full overflow-hidden">
-                   <div className={`h-full bg-accent-${cat.color}`} style={{width: `${Math.min(100, (cat.spent/cat.limit)*100)}%`}}></div>
-                 </div>
-               </div>
-            ))}
-            <div className="pt-2">
-               <a href="/budget" className="text-xs text-accent-info hover:underline">View All Categories →</a>
-            </div>
-          </div>
-        </GlassCard>
       </div>
-
-    </div>
+    </RunwayWeather>
   );
 };

@@ -4,8 +4,8 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
 import { Naira } from '../components/ui/Naira';
-import { getFinancialState } from '../utils/finance';
-import { ArrowRight, Flame, Heart, AlertTriangle, CheckCircle2, Lock, Wand2 } from 'lucide-react';
+import { getFinancialState, calculateGenerosityCap } from '../utils/finance';
+import { ArrowRight, Flame, Heart, AlertTriangle, CheckCircle2, Lock, Wand2, Landmark } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Triage = () => {
@@ -19,8 +19,14 @@ export const Triage = () => {
   const [amountUSD, setAmountUSD] = useState('');
   const [rate, setRate] = useState('1500');
   const [selectedSignalId, setSelectedSignalId] = useState('');
+  
+  // NEW STATES
   const [ventureTax, setVentureTax] = useState(0);
+  const [vaultTax, setVaultTax] = useState(10); // Default 10%
   const [generosity, setGenerosity] = useState('0');
+  const [recipientName, setRecipientName] = useState(''); 
+  const [recipientTier, setRecipientTier] = useState('T3');
+
   const [allocations, setAllocations] = useState<Record<string, number>>({});
   const [impulseLock, setImpulseLock] = useState(false);
 
@@ -30,22 +36,32 @@ export const Triage = () => {
   const grossNGN = dropUSD * rateVal;
   const sourceFunds = dropUSD > 0 ? grossNGN : unallocatedCash;
 
+  // 1. Taxes (Off the top)
   const taxAmount = sourceFunds * (ventureTax / 100);
-  const netFunds = sourceFunds - taxAmount;
+  const vaultAmount = sourceFunds * (vaultTax / 100);
+  
+  // 2. Net Funds
+  const netFunds = sourceFunds - taxAmount - vaultAmount;
+  
+  // 3. Allocations
   const bufferAmount = netFunds * 0.10;
   const genAmount = parseFloat(generosity) || 0;
   const availableForGoals = netFunds - bufferAmount - genAmount;
+  
   const allocatedSum = Object.values(allocations).reduce((a, b) => a + b, 0);
   const remaining = availableForGoals - allocatedSum;
 
   const state = getFinancialState(runwayMonths);
-  const isCritical = runwayMonths < 3; // GUARDRAIL LOGIC
+  const isCritical = runwayMonths < 3; 
+
+  // Generosity Logic
+  const dynamicGenCap = calculateGenerosityCap(runwayMonths);
+  const isGenerosityLocked = dynamicGenCap === 0;
+  const isOverCap = genAmount > dynamicGenCap;
 
   const autoDistribute = () => {
-    // Distribute weighted by priority (Simplified: Equal split for MVP)
     const activeGoals = goals.filter(g => !g.isCompleted);
     if (activeGoals.length === 0) return;
-    
     const split = Math.floor(availableForGoals / activeGoals.length);
     const newAlloc: Record<string, number> = {};
     activeGoals.forEach(g => newAlloc[g.id] = split);
@@ -58,25 +74,42 @@ export const Triage = () => {
     if (dropUSD > 0) updateAccount('holding', grossNGN);
     updateAccount('holding', -sourceFunds);
 
+    // 1. Burn Venture Tax
     if (taxAmount > 0) commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'SPEND', title: 'Venture Tax Burned', amount: taxAmount, tags: ['risk'] });
-    
-    // Buffer & Generosity
-    updateAccount('buffer', bufferAmount);
-    if (genAmount > 0) updateAccount('payroll', genAmount);
 
-    // Goal Processing (In real app, update Goal objects. Here we log it)
+    // 2. Stash Vault
+    if (vaultAmount > 0) {
+      updateAccount('vault', vaultAmount);
+      commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'TRANSFER', title: 'Vault Deposit', amount: vaultAmount, tags: ['wealth_defense'] });
+    }
+
+    // 3. Buffer
+    updateAccount('buffer', bufferAmount);
+
+    // 4. Generosity (With Detail)
+    if (genAmount > 0) {
+        updateAccount('payroll', genAmount);
+        commitAction({ 
+            id: crypto.randomUUID(), 
+            date: timestamp, 
+            type: 'SPEND', 
+            title: 'Generosity', 
+            amount: genAmount, 
+            description: `${recipientName || 'Unknown'} | [${recipientTier}]`, 
+            tags: ['generosity'] 
+        });
+    }
+
+    // 5. Goals
     Object.entries(allocations).forEach(([goalId, amount]) => {
        if (amount > 0) {
-          // In a full implementation, you'd call updateGoal() to increment currentAmount
           commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'GOAL_FUND', title: 'Goal Allocation', amount, linkedGoalId: goalId });
+          // Note: In real app, call updateGoal here to add to currentAmount
        }
     });
 
-    // Remainder handling
-    if (impulseLock) {
-       // Lock logic would go here (e.g., move to 'Locked Holding' account)
-       commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'SYSTEM_EVENT', title: 'Funds Locked (72h)', amount: remaining, description: 'Impulse Protocol Active' });
-    } else if (remaining > 0) {
+    // 6. Remainder
+    if (remaining > 0) {
        updateAccount('payroll', remaining);
     }
 
@@ -110,7 +143,7 @@ export const Triage = () => {
               <GlassInput label="Drop (USD)" type="number" value={amountUSD} onChange={e => setAmountUSD(e.target.value)} autoFocus />
               <GlassInput label="Rate" type="number" value={rate} onChange={e => setRate(e.target.value)} />
             </div>
-            
+
             <div>
               <label className="text-xs font-bold text-gray-500 uppercase">Signal Source</label>
               <select className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white" value={selectedSignalId} onChange={e => setSelectedSignalId(e.target.value)}>
@@ -119,12 +152,25 @@ export const Triage = () => {
               </select>
             </div>
 
-            <div className="p-4 bg-white/5 rounded-xl border border-white/10">
-              <div className="flex justify-between mb-2">
-                <span className="flex items-center gap-2 font-bold text-red-500"><Flame size={16}/> Venture Tax</span>
-                <span className="font-mono text-red-500">{ventureTax}%</span>
-              </div>
-              <input type="range" min="0" max="20" value={ventureTax} onChange={e => setVentureTax(Number(e.target.value))} className="w-full accent-red-500"/>
+            <div className="space-y-4">
+                {/* Venture Tax */}
+                <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex justify-between mb-2">
+                        <span className="flex items-center gap-2 font-bold text-red-500"><Flame size={16}/> Venture Tax (Burn)</span>
+                        <span className="font-mono text-red-500">{ventureTax}%</span>
+                    </div>
+                    <input type="range" min="0" max="20" value={ventureTax} onChange={e => setVentureTax(Number(e.target.value))} className="w-full accent-red-500"/>
+                </div>
+
+                {/* Vault Tax */}
+                <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                    <div className="flex justify-between mb-2">
+                        <span className="flex items-center gap-2 font-bold text-blue-400"><Landmark size={16}/> The Vault (Wealth)</span>
+                        <span className="font-mono text-blue-400">{vaultTax}%</span>
+                    </div>
+                    <input type="range" min="0" max="50" value={vaultTax} onChange={e => setVaultTax(Number(e.target.value))} className="w-full accent-blue-500"/>
+                    <p className="text-[10px] text-gray-500 mt-2">Money that never sleeps. It leaves the ecosystem.</p>
+                </div>
             </div>
 
             <GlassButton className="w-full" onClick={() => setStep(2)}>Next: Allocation <ArrowRight size={16} className="ml-2"/></GlassButton>
@@ -138,18 +184,43 @@ export const Triage = () => {
                 <div className="text-xs text-gray-500 uppercase">Net Deployable</div>
                 <div className="font-mono font-bold text-white"><Naira/>{new Intl.NumberFormat().format(netFunds)}</div>
               </div>
-              <div className="p-3 bg-yellow-500/10 rounded-xl border border-yellow-500/20">
-                <div className="text-xs text-yellow-500 uppercase">Buffer (10%)</div>
-                <div className="font-mono font-bold text-white"><Naira/>{new Intl.NumberFormat().format(bufferAmount)}</div>
+              <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                <div className="text-xs text-blue-500 uppercase">Vault Stashed</div>
+                <div className="font-mono font-bold text-white"><Naira/>{new Intl.NumberFormat().format(vaultAmount)}</div>
               </div>
             </div>
 
-            <div className={`p-4 rounded-xl border ${genAmount > 300000 ? 'bg-red-500/10 border-red-500' : 'bg-white/5 border-white/10'}`}>
+            {/* DYNAMIC GENEROSITY */}
+            <div className={`p-4 rounded-xl border transition-colors ${isGenerosityLocked ? 'bg-red-500/5 border-red-500/30' : isOverCap ? 'bg-red-500/10 border-red-500' : 'bg-white/5 border-white/10'}`}>
               <div className="flex justify-between mb-2">
-                <span className="flex items-center gap-2 font-bold text-white"><Heart size={16}/> Generosity</span>
-                {genAmount > 300000 && <span className="text-xs font-bold text-red-500 flex items-center gap-1"><AlertTriangle size={12}/> CAP EXCEEDED</span>}
+                <span className="flex items-center gap-2 font-bold text-white"><Heart size={16} className={isGenerosityLocked ? 'text-gray-500' : 'text-accent-info'}/> Generosity</span>
+                {isGenerosityLocked ? (
+                    <span className="text-xs font-bold text-red-500 flex items-center gap-1"><Lock size={12}/> LOCKED</span>
+                ) : (
+                    <span className={`text-xs font-bold ${isOverCap ? 'text-red-500' : 'text-gray-500'}`}>Cap: <Naira/>{new Intl.NumberFormat().format(dynamicGenCap)}</span>
+                )}
               </div>
-              <GlassInput value={generosity} onChange={e => setGenerosity(e.target.value)} className="text-right" placeholder="0" />
+
+              {isGenerosityLocked ? (
+                  <div className="text-xs text-red-400 italic text-center py-2">"My security comes first." (Runway &lt; 3mo)</div>
+              ) : (
+                  <>
+                      <GlassInput value={generosity} onChange={e => setGenerosity(e.target.value)} className="text-right mb-3" placeholder="0" />
+                      {genAmount > 0 && (
+                          <div className="grid grid-cols-3 gap-2 animate-fade-in">
+                              <div className="col-span-2">
+                                  <input className="w-full bg-black/20 border border-white/10 rounded-lg p-2 text-xs text-white" placeholder="Recipient Name" value={recipientName} onChange={e => setRecipientName(e.target.value)} />
+                              </div>
+                              <select className="bg-black/20 border border-white/10 rounded-lg p-2 text-xs text-white" value={recipientTier} onChange={e => setRecipientTier(e.target.value)}>
+                                  <option value="T1">T1 (Family)</option>
+                                  <option value="T2">T2 (Close)</option>
+                                  <option value="T3">T3 (One-off)</option>
+                              </select>
+                          </div>
+                      )}
+                      {isOverCap && <div className="mt-2 text-[10px] text-red-400 flex items-center gap-1"><AlertTriangle size={10}/> Exceeds Cap</div>}
+                  </>
+              )}
             </div>
 
             {/* GOAL ALLOCATOR */}
@@ -158,10 +229,10 @@ export const Triage = () => {
                 <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center text-center p-4">
                   <Lock className="text-red-500 mb-2" size={32}/>
                   <h3 className="font-bold text-white">Allocation Locked</h3>
-                  <p className="text-sm text-red-400">Runway is Critical (&lt;3 Months). All funds must go to Buffer/Survival.</p>
+                  <p className="text-sm text-red-400">Runway is Critical (&lt;3 Months).</p>
                 </div>
               )}
-              
+
               <div className="flex justify-between items-center mb-4">
                  <h3 className="text-xs font-bold text-gray-400 uppercase">Goals</h3>
                  <button onClick={autoDistribute} className="text-xs text-accent-success flex items-center gap-1 hover:underline"><Wand2 size={12}/> Auto-Fill</button>
@@ -183,14 +254,6 @@ export const Triage = () => {
                   />
                 </div>
               ))}
-            </div>
-
-            <div className="flex items-center gap-2 p-3 bg-white/5 rounded-xl">
-               <input type="checkbox" checked={impulseLock} onChange={e => setImpulseLock(e.target.checked)} className="accent-blue-500 w-5 h-5"/>
-               <div className="text-sm">
-                 <span className="text-white font-bold">Impulse Lock Protocol</span>
-                 <p className="text-xs text-gray-500">Lock remaining funds for 72 hours.</p>
-               </div>
             </div>
 
             <div className="flex justify-between items-center pt-4 border-t border-white/10">

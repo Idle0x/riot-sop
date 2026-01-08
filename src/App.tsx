@@ -13,6 +13,7 @@ import { Budget } from './pages/Budget';
 import { Settings } from './pages/Settings';
 import { Ledger } from './pages/Ledger';
 import { Journal } from './pages/Journal';
+import { Analytics } from './pages/Analytics'; // NEW IMPORT
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -53,17 +54,18 @@ function App() {
           <Route path="/roadmap" element={<Roadmap />} />
           <Route path="/budget" element={<Budget />} />
           <Route path="/ledger" element={<Ledger />} />
-          
+          <Route path="/analytics" element={<Analytics />} /> {/* NEW ROUTE */}
+
           {/* Research Engine */}
           <Route path="/signals" element={<Signals />} />
-          
+
           {/* Principles */}
           <Route path="/constitution" element={<Constitution />} />
           <Route path="/settings" element={<Settings />} />
-          
+
           {/* Operational */}
           <Route path="/journal" element={<Journal />} />
-          
+
           {/* Redirect unknown routes to Dashboard */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

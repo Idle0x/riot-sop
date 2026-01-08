@@ -3,13 +3,11 @@ import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
 import { Signal, SignalPhase } from '../types';
-import { Plus, ExternalLink, Clock, DollarSign, AlertTriangle } from 'lucide-react';
-import { cn } from '../utils/cn';
+import { Plus, Clock, DollarSign, AlertTriangle, ArrowRight } from 'lucide-react';
 
 export const Signals = () => {
   const { signals, updateSignal, commitAction } = useFinancials();
   
-  // COLUMNS CONFIG
   const columns: { id: SignalPhase; label: string; color: string }[] = [
     { id: 'discovery', label: 'Discovery', color: 'bg-blue-500' },
     { id: 'validation', label: 'Validation', color: 'bg-yellow-500' },
@@ -17,112 +15,56 @@ export const Signals = () => {
     { id: 'delivered', label: 'Delivered', color: 'bg-green-500' },
   ];
 
-  // --- ACTIONS ---
-  const handleMove = (signal: Signal, newPhase: SignalPhase) => {
-    const updated = { ...signal, phase: newPhase, updatedAt: new Date().toISOString() };
-    updateSignal(updated);
+  const moveSignal = (signal: Signal, phase: SignalPhase) => {
+    updateSignal({ ...signal, phase, updatedAt: new Date().toISOString() });
     commitAction({
-      id: crypto.randomUUID(),
-      date: new Date().toISOString(),
-      type: 'SIGNAL_UPDATE',
-      title: `Moved ${signal.title} to ${newPhase}`,
-      linkedSignalId: signal.id
+      id: crypto.randomUUID(), date: new Date().toISOString(), type: 'SIGNAL_UPDATE',
+      title: `Signal moved: ${signal.title}`, description: `Moved to ${phase}`, linkedSignalId: signal.id
     });
   };
 
   return (
-    <div className="h-[calc(100vh-80px)] overflow-x-auto p-4 md:p-8 animate-fade-in pb-20">
-      <div className="flex justify-between items-center mb-6 min-w-[1000px]">
-        <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Signal Radar</h1>
-          <p className="text-gray-400">Hunter-Creator Deal Flow</p>
-        </div>
-        <GlassButton>
-          <Plus size={16} className="mr-2" /> New Signal
-        </GlassButton>
+    <div className="h-[calc(100vh-100px)] flex flex-col p-4 md:p-8 pb-20">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-white">Hunter-Creator Radar</h1>
+        <GlassButton size="sm"><Plus size={16} className="mr-2"/> New Signal</GlassButton>
       </div>
 
-      <div className="flex gap-6 min-w-[1000px] h-full">
+      <div className="flex-1 flex gap-4 overflow-x-auto pb-4">
         {columns.map(col => (
-          <div key={col.id} className="w-80 flex flex-col gap-4">
-            {/* Column Header */}
-            <div className="flex items-center gap-2 pb-2 border-b border-glass-border">
-              <div className={`w-3 h-3 rounded-full ${col.color}`} />
-              <span className="font-bold text-sm text-gray-300 uppercase tracking-wider">{col.label}</span>
-              <span className="ml-auto text-xs text-gray-500">
-                {signals.filter(s => s.phase === col.id).length}
-              </span>
+          <div key={col.id} className="min-w-[300px] flex flex-col gap-3">
+            <div className="flex items-center gap-2 pb-2 border-b border-white/10">
+              <div className={`w-2 h-2 rounded-full ${col.color}`}/>
+              <span className="font-bold text-xs uppercase text-gray-400">{col.label}</span>
             </div>
-
-            {/* Cards */}
-            <div className="flex-1 space-y-3 overflow-y-auto pr-2">
-              {signals.filter(s => s.phase === col.id).map(signal => (
-                <GlassCard key={signal.id} className="p-4 hover:border-white/20 cursor-pointer group relative">
-                  {/* Sector Tag */}
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded text-gray-300 font-mono">
-                      {signal.sector}
-                    </span>
-                    {signal.hoursLogged > 0 && (
-                      <span className="flex items-center gap-1 text-[10px] text-gray-500">
-                        <Clock size={10} /> {signal.hoursLogged}h
-                      </span>
-                    )}
+            
+            <div className="flex-1 space-y-3 overflow-y-auto">
+              {signals.filter(s => s.phase === col.id).map(s => (
+                <GlassCard key={s.id} className="p-4 hover:border-white/30 cursor-pointer group">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-gray-300">{s.sector}</span>
+                    <span className="text-[10px] text-gray-500 flex items-center gap-1"><Clock size={10}/> {s.hoursLogged}h</span>
                   </div>
-
-                  <h4 className="font-bold text-white mb-1">{signal.title}</h4>
+                  <h4 className="font-bold text-white text-sm mb-2">{s.title}</h4>
                   
-                  {/* Stats Row */}
-                  <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
-                    <span className={cn(
-                      "font-bold", 
-                      signal.confidence > 7 ? "text-accent-success" : 
-                      signal.confidence > 4 ? "text-accent-warning" : "text-accent-danger"
-                    )}>
-                      {signal.confidence}/10 Conf
-                    </span>
-                    <span className="capitalize">{signal.effort} Effort</span>
+                  <div className="flex gap-2 text-[10px] mb-2">
+                    <span className={`${s.confidence > 7 ? 'text-green-500' : 'text-orange-500'}`}>{s.confidence}/10 Conf</span>
+                    <span className="text-gray-500 capitalize">{s.effort} Effort</span>
                   </div>
 
-                  {/* Red Flags Warning */}
-                  {signal.redFlags.length > 0 && (
-                    <div className="flex items-center gap-1 text-[10px] text-accent-danger bg-accent-danger/10 p-1.5 rounded mb-3">
-                      <AlertTriangle size={10} />
-                      {signal.redFlags.length} Red Flags Logged
+                  {s.totalGenerated > 0 && (
+                    <div className="bg-green-500/10 text-green-500 text-xs font-bold p-2 rounded flex items-center gap-1 justify-center mb-2">
+                      <DollarSign size={12}/> ${s.totalGenerated}
                     </div>
                   )}
 
-                  {/* ROI / Generated */}
-                  {signal.totalGenerated > 0 && (
-                    <div className="flex items-center gap-1 text-xs text-accent-success font-bold bg-accent-success/10 p-2 rounded justify-center mb-2">
-                      <DollarSign size={12} />
-                      Total: ${signal.totalGenerated}
-                    </div>
-                  )}
-
-                  {/* Hover Actions (Simple Phase Move) */}
-                  <div className="pt-2 border-t border-glass-border flex justify-between opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
-                      className="text-[10px] text-gray-400 hover:text-white"
-                      onClick={() => handleMove(signal, 'graveyard')} // Simplified
-                    >
-                      Archive
-                    </button>
-                    {/* Next Phase Logic would go here */}
-                    <button className="text-[10px] text-accent-info hover:text-white flex items-center gap-1">
-                      Details <ExternalLink size={10} />
-                    </button>
+                  {/* Quick Move (Mock) */}
+                  <div className="pt-2 border-t border-white/10 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                     <button onClick={() => moveSignal(s, 'graveyard')} className="text-[10px] text-gray-500 hover:text-red-500 mr-auto">Archive</button>
+                     <button onClick={() => moveSignal(s, 'contribution')} className="text-[10px] text-white hover:underline flex items-center gap-1">Next <ArrowRight size={10}/></button>
                   </div>
-
                 </GlassCard>
               ))}
-              
-              {/* Empty State */}
-              {signals.filter(s => s.phase === col.id).length === 0 && (
-                <div className="h-24 rounded-xl border border-dashed border-glass-border flex items-center justify-center text-xs text-gray-600">
-                  Empty
-                </div>
-              )}
             </div>
           </div>
         ))}

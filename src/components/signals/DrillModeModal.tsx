@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { GlassCard } from '../ui/GlassCard';
-import { GlassButton } from '../ui/GlassButton';
-import { CheckCircle2, X, ArrowRight, ShieldAlert, Timer } from 'lucide-react';
+import { CheckCircle2, X, Timer } from 'lucide-react';
 import { type Signal } from '../../types';
 
 interface Props {

@@ -2,11 +2,11 @@ import { useState, useMemo } from 'react';
 import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
-import { Download, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Download, TrendingUp } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export const Analytics = () => {
-  const { history, user, budgets, nuclearReset } = useFinancials();
+  const { history, user, budgets } = useFinancials(); // Removed nuclearReset
   const [viewRange, setViewRange] = useState<'1Y' | '5Y' | 'ALL'>('1Y');
 
   // --- 1. DATA SOVEREIGNTY (JSON Export) ---
@@ -93,20 +93,8 @@ export const Analytics = () => {
           {/* ROI Logic would go here */}
           <div className="text-center text-gray-500 py-8">Insufficient data for efficiency calculation.</div>
         </GlassCard>
-
-        {/* DANGER ZONE */}
-        <GlassCard className="p-6 border-red-900/30">
-          <h3 className="font-bold text-red-500 mb-2 flex items-center gap-2">
-            <AlertTriangle size={16}/> Danger Zone
-          </h3>
-          <p className="text-xs text-gray-500 mb-4">Irreversible actions.</p>
-          <button 
-            onClick={() => { if(confirm("NUCLEAR RESET: Are you sure?")) nuclearReset() }}
-            className="w-full py-3 border border-red-500/50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl text-sm font-bold transition-all"
-          >
-            Initiate Nuclear Reset
-          </button>
-        </GlassCard>
+        
+        {/* Note: Nuclear Reset was moved to Settings Page */}
       </div>
     </div>
   );

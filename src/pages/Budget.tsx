@@ -8,7 +8,7 @@ import { Naira } from '../components/ui/Naira';
 import { Trash2, Calendar, RefreshCcw, Plus, X } from 'lucide-react';
 
 export const Budget = () => {
-  const { budgets, addBudget, user, logExpense, resetBudgetCycle } = useFinancials(); // Added new actions
+  const { budgets, addBudget, logExpense, resetBudgetCycle } = useFinancials(); // Removed unused 'user'
   
   // State for Add Budget
   const [name, setName] = useState('');

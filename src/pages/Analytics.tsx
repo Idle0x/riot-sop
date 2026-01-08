@@ -2,8 +2,7 @@ import { useState, useMemo } from 'react';
 import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
-import { Naira } from '../components/ui/Naira';
-import { Download, TrendingUp, Calendar, AlertTriangle } from 'lucide-react';
+import { Download, TrendingUp, AlertTriangle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export const Analytics = () => {
@@ -94,7 +93,7 @@ export const Analytics = () => {
           {/* ROI Logic would go here */}
           <div className="text-center text-gray-500 py-8">Insufficient data for efficiency calculation.</div>
         </GlassCard>
-        
+
         {/* DANGER ZONE */}
         <GlassCard className="p-6 border-red-900/30">
           <h3 className="font-bold text-red-500 mb-2 flex items-center gap-2">

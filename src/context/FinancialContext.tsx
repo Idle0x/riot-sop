@@ -63,6 +63,46 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [history, setHistory] = useState<HistoryLog[]>([]);
   const [journal, setJournal] = useState<JournalEntry[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // --- Persistence Engine (Fixes unused useEffect & setJournal) ---
+  
+  // 1. Hydrate from LocalStorage on mount
+  useEffect(() => {
+    const savedData = localStorage.getItem('riot_financial_os');
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        if (parsed.user) setUser(parsed.user);
+        if (parsed.accounts) setAccounts(parsed.accounts);
+        if (parsed.goals) setGoals(parsed.goals);
+        if (parsed.signals) setSignals(parsed.signals);
+        if (parsed.budgets) setBudgets(parsed.budgets);
+        if (parsed.history) setHistory(parsed.history);
+        if (parsed.journal) setJournal(parsed.journal);
+      } catch (e) {
+        console.error("Failed to load financial data", e);
+      }
+    }
+    setIsInitialized(true);
+  }, []);
+
+  // 2. Auto-save when state changes (only after initialization)
+  useEffect(() => {
+    if (!isInitialized) return;
+    
+    const currentState = {
+      user,
+      accounts,
+      goals,
+      signals,
+      budgets,
+      history,
+      journal
+    };
+    localStorage.setItem('riot_financial_os', JSON.stringify(currentState));
+  }, [user, accounts, goals, signals, budgets, history, journal, isInitialized]);
+
 
   // --- Computed Metrics ---
   const exchangeRate = 1500; // Static for MVP, usually fetched
@@ -114,10 +154,11 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     setAccounts(prev => prev.map(a => ({ ...a, balance: 0 })));
     setHistory([]);
     setGoals([]);
+    setSignals([]);
+    setBudgets([]);
+    setJournal([]);
     // Keep user settings, wipe data
   };
-
-  // Persist Load/Save would go here (useEffect)
 
   return (
     <FinancialContext.Provider value={{

@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useFinancials } from '../context/FinancialContext';
+import { useSimulation } from '../hooks/useSimulation'; // NEW
 import { MetricCard } from '../components/ui/MetricCard';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassProgressBar } from '../components/ui/GlassProgressBar';
 import { GlassButton } from '../components/ui/GlassButton';
+import { ActiveGoalsWidget } from '../components/dashboard/ActiveGoalsWidget'; // NEW
+import { BudgetBurnWidget } from '../components/dashboard/BudgetBurnWidget'; // NEW
 import { Naira } from '../components/ui/Naira';
-import { Clock, AlertTriangle, ArrowRight, Lock, Activity, ShieldCheck } from 'lucide-react';
+import { Clock, AlertTriangle, ArrowRight, Lock, Activity, ShieldCheck, Power } from 'lucide-react';
 import { RunwayWeather } from '../components/layout/RunwayWeather';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,11 +17,13 @@ export const Dashboard = () => {
     accounts, goals, runwayMonths, totalLiquid, 
     unallocatedCash, isGhostMode, history 
   } = useFinancials();
-  const navigate = useNavigate();
-
-  // Infinite Clock
-  const [time, setTime] = useState(new Date());
   
+  // Initialize Simulation Engine
+  const { showWelcomeBack, daysMissed, decayAmount, confirmReconciliation } = useSimulation();
+  
+  const navigate = useNavigate();
+  const [time, setTime] = useState(new Date());
+
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
@@ -28,14 +33,30 @@ export const Dashboard = () => {
   const lockedGoals = goals.reduce((sum, g) => sum + g.currentAmount, 0);
   const totalLocked = buffer + lockedGoals;
   const netWorth = totalLiquid + totalLocked + unallocatedCash;
-
   const fmt = (n: number) => new Intl.NumberFormat('en-US').format(n);
 
   return (
     <RunwayWeather months={runwayMonths}>
-      <div className="p-4 md:p-8 space-y-8 pb-20 max-w-7xl mx-auto">
+      <div className={`p-4 md:p-8 space-y-8 pb-20 max-w-7xl mx-auto transition-all duration-1000 ${isGhostMode ? 'grayscale contrast-125' : ''}`}>
 
-        {/* HEADER: CLOCK & STATUS */}
+        {/* WELCOME BACK MODAL */}
+        {showWelcomeBack && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl p-6">
+            <div className="max-w-md w-full space-y-6 text-center animate-fade-in">
+               <Power size={48} className="mx-auto text-accent-success animate-pulse"/>
+               <h1 className="text-3xl font-bold text-white">System Restoration</h1>
+               <p className="text-gray-400">
+                 You were offline for <span className="text-white font-bold">{daysMissed} days</span>. 
+                 The protocol estimates you burned <span className="text-red-500 font-mono"><Naira/>{fmt(decayAmount)}</span> on survival.
+               </p>
+               <GlassButton className="w-full" onClick={confirmReconciliation}>
+                 Confirm & Reconcile
+               </GlassButton>
+            </div>
+          </div>
+        )}
+
+        {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
           <div>
             <div className="flex items-center gap-2 text-gray-500 font-mono text-xs mb-1">
@@ -54,9 +75,9 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        {/* UNALLOCATED CAPITAL WARNING */}
+        {/* UNALLOCATED CAPITAL (Pulsing) */}
         {unallocatedCash > 0 && (
-          <div className="bg-yellow-500/10 border border-yellow-500/50 p-6 rounded-2xl flex items-center justify-between animate-pulse">
+          <div className="bg-yellow-500/10 border border-yellow-500/50 p-6 rounded-2xl flex items-center justify-between animate-pulse shadow-[0_0_20px_rgba(234,179,8,0.2)]">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-yellow-500/20 rounded-xl text-yellow-500"><AlertTriangle size={24}/></div>
               <div>
@@ -65,7 +86,7 @@ export const Dashboard = () => {
               </div>
             </div>
             <div className="text-right">
-              <div className="font-mono font-bold text-yellow-500 text-xl">${fmt(unallocatedCash)}</div>
+              <div className="font-mono font-bold text-yellow-500 text-xl"><Naira/>{fmt(unallocatedCash)}</div>
               <GlassButton size="sm" onClick={() => navigate('/triage')} className="mt-2 border-yellow-500/50 text-yellow-500 hover:bg-yellow-500 hover:text-black">
                 Triange Now <ArrowRight size={14} className="ml-1"/>
               </GlassButton>
@@ -73,30 +94,14 @@ export const Dashboard = () => {
           </div>
         )}
 
-        {/* ASSET BREAKDOWN */}
+        {/* ASSETS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <MetricCard 
-            title="Liquid Runway" 
-            value={<><Naira/>{fmt(totalLiquid)}</>} 
-            subValue={`${runwayMonths.toFixed(1)} Months`} 
-            icon={<Activity size={20}/>} 
-          />
-          <MetricCard 
-            title="Locked Assets" 
-            value={<><Naira/>{fmt(totalLocked)}</>} 
-            subValue="Buffer & Goals" 
-            icon={<Lock size={20}/>} 
-          />
-          <MetricCard 
-            title="Net Worth" 
-            value={<><Naira/>{fmt(netWorth)}</>} 
-            subValue="Total System Value" 
-            icon={<ShieldCheck size={20}/>} 
-            isPrivate 
-          />
+          <MetricCard title="Liquid Runway" value={<><Naira/>{fmt(totalLiquid)}</>} subValue={`${runwayMonths.toFixed(1)} Months`} icon={<Activity size={20}/>} />
+          <MetricCard title="Locked Assets" value={<><Naira/>{fmt(totalLocked)}</>} subValue="Buffer & Goals" icon={<Lock size={20}/>} />
+          <MetricCard title="Net Worth" value={<><Naira/>{fmt(netWorth)}</>} subValue="Total System Value" icon={<ShieldCheck size={20}/>} isPrivate />
         </div>
 
-        {/* RUNWAY VISUALIZER */}
+        {/* MAIN VISUALIZER */}
         <GlassCard className="p-8">
           <div className="flex justify-between items-end mb-4">
             <div>
@@ -108,15 +113,15 @@ export const Dashboard = () => {
             </div>
           </div>
           <GlassProgressBar value={runwayMonths} max={12} color={runwayMonths < 3 ? 'danger' : runwayMonths < 6 ? 'warning' : 'success'} size="lg" showPercentage={false} />
-          <div className="mt-4 grid grid-cols-4 text-center text-[10px] text-gray-600 font-mono tracking-widest uppercase">
-            <div className="border-t border-gray-800 pt-2">Critical</div>
-            <div className="border-t border-gray-800 pt-2">Building</div>
-            <div className="border-t border-gray-800 pt-2">Secure</div>
-            <div className="border-t border-gray-800 pt-2">Freedom</div>
-          </div>
         </GlassCard>
 
-        {/* RECENT HISTORY PREVIEW */}
+        {/* WIDGET GRID */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-64">
+           <ActiveGoalsWidget />
+           <BudgetBurnWidget />
+        </div>
+
+        {/* RECENT HISTORY */}
         <div>
           <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Recent System Events</h3>
           <div className="space-y-3">

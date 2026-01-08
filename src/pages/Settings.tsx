@@ -3,19 +3,24 @@ import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
-import { Settings as Gear, Clock, ShieldAlert } from 'lucide-react';
+import { Settings as Gear, Clock, ShieldAlert, CloudUpload } from 'lucide-react';
 
 export const Settings = () => {
-  const { user, updateUser, history, nuclearReset } = useFinancials();
+  // Get the sync function from context along with other actions
+  const { user, updateUser, history, nuclearReset, syncLocalData } = useFinancials();
+  
   const [newBurn, setNewBurn] = useState(user.burnCap.toString());
   const [reason, setReason] = useState('');
 
+  // Nuclear State
   const [nuclearStep, setNuclearStep] = useState(0);
   const [masterPass, setMasterPass] = useState('');
 
+  // Filter history for System Events
   const evolutionLog = history.filter(h => h.type === 'SYSTEM_EVENT');
 
   const handleUpdate = () => {
+    // Queue the change for 7 days later
     const effectiveDate = new Date();
     effectiveDate.setDate(effectiveDate.getDate() + 7);
 
@@ -48,6 +53,7 @@ export const Settings = () => {
     <div className="max-w-3xl mx-auto p-4 md:p-8 space-y-8 pb-20 animate-fade-in">
       <h1 className="text-3xl font-bold text-white">System Configuration</h1>
 
+      {/* CORE SETTINGS */}
       <GlassCard className="p-6">
         <div className="flex items-center gap-3 mb-6">
           <Gear className="text-gray-400" />
@@ -55,15 +61,31 @@ export const Settings = () => {
         </div>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <GlassInput label="Monthly Burn Cap (₦)" type="number" value={newBurn} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewBurn(e.target.value)} />
-            <GlassInput label="Inflation Rate" value={user.inflationRate} readOnly className="opacity-50" />
+            <GlassInput 
+              label="Monthly Burn Cap (₦)" 
+              type="number" 
+              value={newBurn} 
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewBurn(e.target.value)} 
+            />
+            <GlassInput 
+              label="Inflation Rate" 
+              value={user.inflationRate} 
+              readOnly 
+              className="opacity-50" 
+            />
           </div>
-          <GlassInput label="Reason for Change" placeholder="Required for audit..." value={reason} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReason(e.target.value)} />
+          <GlassInput 
+            label="Reason for Change" 
+            placeholder="Required for audit..." 
+            value={reason} 
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReason(e.target.value)} 
+          />
 
           <GlassButton disabled={!reason || newBurn === user.burnCap.toString()} onClick={handleUpdate}>
             Queue Update (7 Days)
           </GlassButton>
 
+          {/* Pending Changes Display */}
           {user.pendingChanges.length > 0 && (
             <div className="mt-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
               <h4 className="text-xs font-bold text-yellow-500 uppercase mb-2">Pending Cooldowns</h4>
@@ -78,6 +100,27 @@ export const Settings = () => {
         </div>
       </GlassCard>
 
+      {/* DATA MIGRATION CARD (New) */}
+      <GlassCard className="p-6 border-blue-500/30">
+        <h3 className="font-bold text-blue-400 mb-2 flex items-center gap-2">
+          <CloudUpload size={18}/> Data Migration
+        </h3>
+        <p className="text-sm text-gray-400 mb-4">
+          Detected transition to Cloud V3. If you have data from the Local V2 version on this device, upload it now.
+        </p>
+        <button 
+          onClick={() => {
+            if(confirm("Upload local data to this cloud account? This prevents data loss.")) {
+              syncLocalData();
+            }
+          }}
+          className="w-full py-3 border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 rounded-xl text-sm font-bold transition-all"
+        >
+          Sync Local Data to Cloud
+        </button>
+      </GlassCard>
+
+      {/* NUCLEAR ZONE */}
       <GlassCard className="p-6 border-red-900/30">
           <h3 className="font-bold text-red-500 mb-2 flex items-center gap-2">
             <ShieldAlert size={18}/> Danger Zone
@@ -107,6 +150,7 @@ export const Settings = () => {
           )}
       </GlassCard>
 
+      {/* EVOLUTION LOG */}
       <div className="space-y-4">
         <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest">Evolution Log</h3>
         {evolutionLog.map(log => (

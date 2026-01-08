@@ -3,7 +3,7 @@ import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassProgressBar } from '../components/ui/GlassProgressBar';
 import { Naira } from '../components/ui/Naira';
-import { Target, ChevronDown, ChevronRight, CheckCircle2, Lock } from 'lucide-react';
+import { Target, CheckCircle2 } from 'lucide-react';
 
 export const Roadmap = () => {
   const { goals } = useFinancials();
@@ -41,7 +41,6 @@ export const Roadmap = () => {
         {phases.map(phase => {
           const phaseGoals = goals.filter(g => g.phase === phase);
           // Focus View Logic: Hide future phases if previous not mostly done
-          // (Simplified for MVP: Focus shows P0-P2, Roadmap shows all)
           if (viewMode === 'FOCUS' && !['P0','P1','P2'].includes(phase)) return null;
           if (phaseGoals.length === 0) return null;
 
@@ -76,7 +75,7 @@ export const Roadmap = () => {
                           <div className="text-xs text-gray-500">of <Naira/>{new Intl.NumberFormat().format(goal.targetAmount)}</div>
                         </div>
                       </div>
-                      
+
                       <GlassProgressBar 
                         value={goal.currentAmount} 
                         max={goal.targetAmount} 

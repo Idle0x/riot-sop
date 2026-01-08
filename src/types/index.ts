@@ -12,14 +12,13 @@ export interface UserProfile {
   burnCap: number;           
   inflationRate: number;     
   lastSeen: string;          
-  lastReconciliationDate: string; // NEW: For "Welcome Back" Logic
+  lastReconciliationDate: string; 
   runwayEmptySince: string | null;
   systemVersion: string;     
-  pendingChanges: PendingChange[]; // NEW: 7-Day Cooldown Queue
+  pendingChanges: PendingChange[]; 
 }
 
 // --- ACCOUNTING ---
-// UPDATE: Added 'vault'
 export type AccountType = 'treasury' | 'payroll' | 'buffer' | 'holding' | 'vault';
 
 export interface Account {
@@ -30,16 +29,16 @@ export interface Account {
   isLocked?: boolean;
 }
 
-// --- BUDGETING (Spending Engine) ---
+// --- BUDGETING ---
 export type BudgetFrequency = 'monthly' | 'one-time';
 
 export interface Budget {
   id: string;
   name: string;
-  amount: number;       // The Limit
-  spent: number;        // NEW: Actual spent this cycle
+  amount: number;       
+  spent: number;        
   frequency: BudgetFrequency;
-  expiryDate?: string;  // For auto-delete
+  expiryDate?: string;  
   category: string;
   autoDeduct?: boolean;
 }
@@ -59,16 +58,25 @@ export interface Goal {
   id: string;
   title: string;
   phase: Phase;
-  targetAmount: number;
+  targetAmount: number; 
   currentAmount: number;
   isCompleted: boolean;
   priority: number;
-  subGoals?: SubGoal[];      
+  type: 'single' | 'container'; 
+  subGoals: SubGoal[];          
   isHidden?: boolean;        
 }
 
-// --- SIGNALS (Hunter-Creator) ---
+// --- SIGNALS (The Research Engine) ---
 export type SignalPhase = 'discovery' | 'validation' | 'contribution' | 'delivered' | 'harvested' | 'graveyard';
+
+// NEW: Timeline Entry for Context-Aware History
+export interface SignalTimelineEntry {
+  date: string;
+  phase: SignalPhase;
+  context: string; // "Passed 5-min filter", "Entry Strategy: Node", etc.
+  meta?: Record<string, any>; // Flexible storage for specific questions answers
+}
 
 export interface Signal {
   id: string;
@@ -78,13 +86,42 @@ export interface Signal {
   confidence: number;        
   effort: 'low' | 'med' | 'high';
   
-  // NEW: Investor Thesis (The Memo)
+  // THE INVESTOR MEMO
   thesis: {
-    alpha: string;        // "Why is this unique?"
-    catalyst: string;     // "What triggers the payout?"
-    invalidation: string; // "When do I quit?"
-    expectedValue: number;// "Target Price/Amount"
+    alpha: string;        
+    catalyst: string;     
+    invalidation: string; 
+    expectedValue: number;
   };
+
+  // THE INTELLIGENCE DOSSIER
+  research: {
+    links: {
+      website?: string;
+      github?: string;
+      twitter?: string;
+      docs?: string;
+    };
+    token: {
+      status: 'live' | 'pending' | 'none';
+      utility?: string;       
+      tgeDate?: string;       
+      launchPlan?: string;    
+    };
+    findings: string;         
+    pickReason: string;       
+    drillNotes: Record<string, string>; 
+  };
+
+  // NEW: OUTCOME TRACKING (Context-Aware Death)
+  outcome?: {
+    status: 'active' | 'retired_winner' | 'failure' | 'rejected';
+    reason: string; // "Rugged", "No Seasons", "Failed Filter"
+    finalRoi?: number;
+  };
+
+  // NEW: NARRATIVE HISTORY
+  timeline: SignalTimelineEntry[];
 
   hoursLogged: number;       
   totalGenerated: number;    
@@ -92,11 +129,6 @@ export interface Signal {
   proofOfWork: string[];     
   createdAt: string;
   updatedAt: string;
-  checklist?: {
-    hasTeam: boolean;
-    hasProduct: boolean;
-    hasToken: boolean;
-  };
 }
 
 // --- HISTORY ---

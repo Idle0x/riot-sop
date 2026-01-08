@@ -10,6 +10,7 @@ export interface PendingChange {
 
 export interface UserProfile {
   burnCap: number;           
+  annualRent: number; // NEW: For Tax Relief (NTA 2026)
   inflationRate: number;     
   lastSeen: string;          
   lastReconciliationDate: string; 
@@ -67,15 +68,14 @@ export interface Goal {
   isHidden?: boolean;        
 }
 
-// --- SIGNALS (The Research Engine) ---
+// --- SIGNALS ---
 export type SignalPhase = 'discovery' | 'validation' | 'contribution' | 'delivered' | 'harvested' | 'graveyard';
 
-// NEW: Timeline Entry for Context-Aware History
 export interface SignalTimelineEntry {
   date: string;
   phase: SignalPhase;
-  context: string; // "Passed 5-min filter", "Entry Strategy: Node", etc.
-  meta?: Record<string, any>; // Flexible storage for specific questions answers
+  context: string; 
+  meta?: Record<string, any>; 
 }
 
 export interface Signal {
@@ -86,7 +86,6 @@ export interface Signal {
   confidence: number;        
   effort: 'low' | 'med' | 'high';
   
-  // THE INVESTOR MEMO
   thesis: {
     alpha: string;        
     catalyst: string;     
@@ -94,7 +93,6 @@ export interface Signal {
     expectedValue: number;
   };
 
-  // THE INTELLIGENCE DOSSIER
   research: {
     links: {
       website?: string;
@@ -113,14 +111,12 @@ export interface Signal {
     drillNotes: Record<string, string>; 
   };
 
-  // NEW: OUTCOME TRACKING (Context-Aware Death)
   outcome?: {
     status: 'active' | 'retired_winner' | 'failure' | 'rejected';
-    reason: string; // "Rugged", "No Seasons", "Failed Filter"
+    reason: string;
     finalRoi?: number;
   };
 
-  // NEW: NARRATIVE HISTORY
   timeline: SignalTimelineEntry[];
 
   hoursLogged: number;       

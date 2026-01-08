@@ -18,7 +18,11 @@ export const Dashboard = () => {
 
   // Infinite Clock
   const [time, setTime] = useState(new Date());
-  useEffect(() => setInterval(() => setTime(new Date()), 1000), []);
+  
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const buffer = accounts.find(a => a.id === 'buffer')?.balance || 0;
   const lockedGoals = goals.reduce((sum, g) => sum + g.currentAmount, 0);
@@ -30,7 +34,7 @@ export const Dashboard = () => {
   return (
     <RunwayWeather months={runwayMonths}>
       <div className="p-4 md:p-8 space-y-8 pb-20 max-w-7xl mx-auto">
-        
+
         {/* HEADER: CLOCK & STATUS */}
         <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
           <div>

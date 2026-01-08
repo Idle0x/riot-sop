@@ -31,6 +31,7 @@ interface FinancialContextType {
   updateUser: (updates: Partial<UserProfile>) => void;
   updateAccount: (id: AccountType, amount: number) => void;
   addBudget: (budget: Budget) => void;
+  deleteBudget: (id: string) => void; // <--- ADDED THIS LINE
   logExpense: (budgetId: string | null, amount: number, note: string) => void;
   resetBudgetCycle: () => void;
   updateGoal: (goal: Goal) => void;
@@ -48,7 +49,7 @@ const INITIAL_USER: UserProfile = {
   lastSeen: new Date().toISOString(),
   lastReconciliationDate: new Date().toISOString(),
   runwayEmptySince: null,
-  systemVersion: 'v2.0 (Alive)',
+  systemVersion: 'v2.3 (Alive)',
   pendingChanges: []
 };
 
@@ -75,8 +76,7 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
-        // FIX: Safe Merging to prevent crashes from old data schemas
-        if (parsed.user) setUser({ ...INITIAL_USER, ...parsed.user });
+        if (parsed.user) setUser(parsed.user);
         if (parsed.accounts) setAccounts(parsed.accounts);
         if (parsed.goals) setGoals(parsed.goals);
         if (parsed.signals) setSignals(parsed.signals);
@@ -94,13 +94,9 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     if (!isInitialized) return;
     
     // --- SIMULATION: Check Pending Changes (7-Day Cooldown) ---
-    // Safe check: ensure pendingChanges exists (it might be undefined if hydration failed slightly)
-    const pendingQueue = user.pendingChanges || []; 
-    
-    if (pendingQueue.length > 0) {
-      const now = new Date();
-      const activeChanges = pendingQueue.filter(c => new Date(c.effectiveDate) <= now);
-      
+    const now = new Date();
+    if (user.pendingChanges.length > 0) {
+      const activeChanges = user.pendingChanges.filter(c => new Date(c.effectiveDate) <= now);
       if (activeChanges.length > 0) {
          // Apply changes
          activeChanges.forEach(change => {
@@ -109,7 +105,7 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
          // Clean up queue
          setUser(prev => ({
            ...prev, 
-           pendingChanges: (prev.pendingChanges || []).filter(c => new Date(c.effectiveDate) > now)
+           pendingChanges: prev.pendingChanges.filter(c => new Date(c.effectiveDate) > now)
          }));
       }
     }
@@ -141,6 +137,10 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addBudget = (budget: Budget) => setBudgets(prev => [...prev, budget]);
+  
+  const deleteBudget = (id: string) => {
+    setBudgets(prev => prev.filter(b => b.id !== id));
+  };
 
   const logExpense = (budgetId: string | null, amount: number, note: string) => {
     updateAccount('payroll', -amount);
@@ -217,7 +217,7 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     <FinancialContext.Provider value={{
       user, accounts, goals, signals, budgets, history, journal,
       totalLiquid, runwayMonths, unallocatedCash, dailyBurn, isGhostMode,
-      updateUser, updateAccount, addBudget, logExpense, resetBudgetCycle,
+      updateUser, updateAccount, addBudget, deleteBudget, logExpense, resetBudgetCycle,
       updateGoal, updateSignal, commitAction, deleteTransaction, nuclearReset
     }}>
       {children}

@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
-import { Hash, Calendar, Tag } from 'lucide-react';
+import { Hash, Calendar } from 'lucide-react';
 
 const AVAILABLE_TAGS = ['Win', 'Fail', 'Lesson', 'Idea', 'Note', 'System'];
 
 export const Journal = () => {
-  const { journal, commitAction } = useFinancials(); // Now accessing 'journal' state
+  const { commitAction } = useFinancials(); // Removed unused 'journal'
   const [content, setContent] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
@@ -28,19 +28,12 @@ export const Journal = () => {
       description: content,
       tags: selectedTags
     });
-    // In a real app with backend, we'd sync this to a separate Journal DB table.
-    // For MVP context, commitAction adds it to History, but we should also update the local journal state if we want a dedicated view.
-    // Ideally, the Context should have a specialized 'addJournalEntry' action, but for now we rely on the History log or we can patch the context to save to 'journal' array.
-    // Note: The previous Context code didn't export 'addJournalEntry', so for this specific view to work 100% as a dedicated journal, 
-    // we assume 'history' filters for 'JOURNAL' type, OR we assume the context was updated to populate 'journal'. 
-    // Let's rely on filtering 'history' for JOURNAL types for the view below, which is safer given the current context.
     
     setContent('');
     setSelectedTags([]);
   };
 
-  // Filter history for Journal entries to display the timeline
-  // This ensures data consistency without needing a separate 'addJournalEntry' function right now.
+  // Filter history for Journal entries
   const { history } = useFinancials();
   const journalEntries = history.filter(h => h.type === 'JOURNAL');
 

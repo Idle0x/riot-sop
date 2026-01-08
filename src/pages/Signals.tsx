@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
-import { DrillModeModal } from '../components/signals/DrillModeModal'; // Import the new component
+import { DrillModeModal } from '../components/signals/DrillModeModal'; 
 import { type Signal, type SignalPhase } from '../types';
-import { Plus, Clock, DollarSign, ArrowRight, Copy, Zap } from 'lucide-react';
+import { Clock, DollarSign, ArrowRight, Copy, Zap } from 'lucide-react';
 
 export const Signals = () => {
   const { signals, updateSignal, commitAction } = useFinancials();

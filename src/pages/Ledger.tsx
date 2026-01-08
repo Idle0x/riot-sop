@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
-import { GlassInput } from '../components/ui/GlassInput';
 import { Naira } from '../components/ui/Naira';
 import { Clock, Undo2, Search, Filter, ArrowDown } from 'lucide-react';
 

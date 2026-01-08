@@ -9,16 +9,13 @@ export const Settings = () => {
   const { user, updateUser, history, nuclearReset } = useFinancials();
   const [newBurn, setNewBurn] = useState(user.burnCap.toString());
   const [reason, setReason] = useState('');
-  
-  // Nuclear State
+
   const [nuclearStep, setNuclearStep] = useState(0);
   const [masterPass, setMasterPass] = useState('');
 
-  // Filter history for System Events
   const evolutionLog = history.filter(h => h.type === 'SYSTEM_EVENT');
 
   const handleUpdate = () => {
-    // Queue the change for 7 days later
     const effectiveDate = new Date();
     effectiveDate.setDate(effectiveDate.getDate() + 7);
 
@@ -51,7 +48,6 @@ export const Settings = () => {
     <div className="max-w-3xl mx-auto p-4 md:p-8 space-y-8 pb-20 animate-fade-in">
       <h1 className="text-3xl font-bold text-white">System Configuration</h1>
 
-      {/* CORE SETTINGS */}
       <GlassCard className="p-6">
         <div className="flex items-center gap-3 mb-6">
           <Gear className="text-gray-400" />
@@ -59,16 +55,15 @@ export const Settings = () => {
         </div>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <GlassInput label="Monthly Burn Cap (₦)" type="number" value={newBurn} onChange={e => setNewBurn(e.target.value)} />
+            <GlassInput label="Monthly Burn Cap (₦)" type="number" value={newBurn} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewBurn(e.target.value)} />
             <GlassInput label="Inflation Rate" value={user.inflationRate} readOnly className="opacity-50" />
           </div>
-          <GlassInput label="Reason for Change" placeholder="Required for audit..." value={reason} onChange={e => setReason(e.target.value)} />
-          
+          <GlassInput label="Reason for Change" placeholder="Required for audit..." value={reason} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReason(e.target.value)} />
+
           <GlassButton disabled={!reason || newBurn === user.burnCap.toString()} onClick={handleUpdate}>
             Queue Update (7 Days)
           </GlassButton>
 
-          {/* Pending Changes Display */}
           {user.pendingChanges.length > 0 && (
             <div className="mt-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
               <h4 className="text-xs font-bold text-yellow-500 uppercase mb-2">Pending Cooldowns</h4>
@@ -83,12 +78,11 @@ export const Settings = () => {
         </div>
       </GlassCard>
 
-      {/* NUCLEAR ZONE */}
       <GlassCard className="p-6 border-red-900/30">
           <h3 className="font-bold text-red-500 mb-2 flex items-center gap-2">
             <ShieldAlert size={18}/> Danger Zone
           </h3>
-          
+
           {nuclearStep === 0 ? (
              <button 
                onClick={() => setNuclearStep(1)}
@@ -103,7 +97,7 @@ export const Settings = () => {
                 type="password" 
                 placeholder="Enter Master Key to Confirm" 
                 value={masterPass} 
-                onChange={e => setMasterPass(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMasterPass(e.target.value)}
               />
               <div className="flex gap-2">
                 <GlassButton variant="ghost" onClick={() => setNuclearStep(0)} className="flex-1">Cancel</GlassButton>
@@ -113,7 +107,6 @@ export const Settings = () => {
           )}
       </GlassCard>
 
-      {/* EVOLUTION LOG */}
       <div className="space-y-4">
         <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest">Evolution Log</h3>
         {evolutionLog.map(log => (

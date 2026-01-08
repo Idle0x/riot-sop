@@ -1,13 +1,24 @@
 export type Currency = 'USD' | 'NGN';
 
-export interface UserProfile {
-  burnCap: number;
-  inflationRate: number;
-  lastSeen: string;
-  runwayEmptySince: string | null;
-  systemVersion: string;
+// --- USER & SYSTEM STATE ---
+export interface PendingChange {
+  id: string;
+  key: keyof UserProfile;
+  value: any;
+  effectiveDate: string; // ISO String
 }
 
+export interface UserProfile {
+  burnCap: number;           
+  inflationRate: number;     
+  lastSeen: string;          
+  lastReconciliationDate: string; // NEW: For "Welcome Back" Logic
+  runwayEmptySince: string | null;
+  systemVersion: string;     
+  pendingChanges: PendingChange[]; // NEW: 7-Day Cooldown Queue
+}
+
+// --- ACCOUNTING ---
 export type AccountType = 'treasury' | 'payroll' | 'buffer' | 'holding';
 
 export interface Account {
@@ -18,18 +29,21 @@ export interface Account {
   isLocked?: boolean;
 }
 
+// --- BUDGETING (Spending Engine) ---
 export type BudgetFrequency = 'monthly' | 'one-time';
 
 export interface Budget {
   id: string;
   name: string;
-  amount: number;
+  amount: number;       // The Limit
+  spent: number;        // NEW: Actual spent this cycle
   frequency: BudgetFrequency;
-  expiryDate?: string;
+  expiryDate?: string;  // For auto-delete
   category: string;
   autoDeduct?: boolean;
 }
 
+// --- GOALS ---
 export type Phase = 'P0' | 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | 'P6+';
 
 export interface SubGoal {
@@ -48,27 +62,35 @@ export interface Goal {
   currentAmount: number;
   isCompleted: boolean;
   priority: number;
-  subGoals?: SubGoal[];
-  isHidden?: boolean;
+  subGoals?: SubGoal[];      
+  isHidden?: boolean;        
 }
 
+// --- SIGNALS (Hunter-Creator) ---
 export type SignalPhase = 'discovery' | 'validation' | 'contribution' | 'delivered' | 'harvested' | 'graveyard';
 
 export interface Signal {
   id: string;
   title: string;
-  sector: string;
+  sector: string;            
   phase: SignalPhase;
-  confidence: number;
+  confidence: number;        
   effort: 'low' | 'med' | 'high';
-  hoursLogged: number;
-  totalGenerated: number;
+  hoursLogged: number;       
+  totalGenerated: number;    
   redFlags: string[];
-  proofOfWork: string[];
+  proofOfWork: string[];     
   createdAt: string;
   updatedAt: string;
+  // NEW: Drill Mode Checklist (Simple boolean flags)
+  checklist?: {
+    hasTeam: boolean;
+    hasProduct: boolean;
+    hasToken: boolean;
+  };
 }
 
+// --- HISTORY ---
 export type LogType = 'DROP' | 'SPEND' | 'TRANSFER' | 'TRIAGE' | 'SIGNAL_UPDATE' | 'GOAL_FUND' | 'SYSTEM_EVENT' | 'JOURNAL' | 'EMERGENCY_ACCESS';
 
 export interface HistoryLog {

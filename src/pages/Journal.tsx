@@ -2,16 +2,15 @@ import { useState } from 'react';
 import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
-import { PenTool, Hash, Link } from 'lucide-react';
+import { Hash, Link } from 'lucide-react';
 
 export const Journal = () => {
-  const { journal, commitAction } = useFinancials();
+  const { commitAction } = useFinancials();
   const [content, setContent] = useState('');
-  const [tags, setTags] = useState<string[]>([]);
+  // In real app use setTags for UI, keeping tags in state for now
+  const [tags] = useState<string[]>([]);
 
   const handleSave = () => {
-    // In real app, update 'journal' state in context. 
-    // Here we use commitAction to log it to history for MVP.
     commitAction({
       id: crypto.randomUUID(),
       date: new Date().toISOString(),
@@ -20,7 +19,7 @@ export const Journal = () => {
       description: content,
       tags: tags
     });
-    setContent(''); setTags([]);
+    setContent(''); 
   };
 
   return (

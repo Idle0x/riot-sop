@@ -1,12 +1,12 @@
-// --- CORE IDENTITY ---
 export type Currency = 'USD' | 'NGN';
 
+// --- USER & SYSTEM STATE ---
 export interface UserProfile {
-  burnCap: number;         // The setting limit (e.g., 200k)
-  inflationRate: number;   // e.g., 1.15 (15%)
-  lastSeen: string;        // ISO Timestamp
-  runwayEmptySince: string | null; // Track duration at zero
-  systemVersion: string;   // "v1.6"
+  burnCap: number;           // The setting limit (e.g., 200k)
+  inflationRate: number;     // e.g., 1.15
+  lastSeen: string;          // ISO Timestamp for Ghost Mode
+  runwayEmptySince: string | null;
+  systemVersion: string;     // e.g., "v1.6"
 }
 
 // --- ACCOUNTING ---
@@ -28,9 +28,8 @@ export interface Budget {
   name: string;
   amount: number;
   frequency: BudgetFrequency;
-  expiryDate?: string;     // For one-time budgets (e.g., Wedding)
-  autoDeduct: boolean;     // If true, auto-burns from runway
-  category: string;        // Food, Data, etc.
+  expiryDate?: string;       // For one-time budgets (auto-delete)
+  category: string;
 }
 
 // --- GOALS (Focus vs Roadmap) ---
@@ -50,56 +49,32 @@ export interface Goal {
   phase: Phase;
   targetAmount: number;
   currentAmount: number;
-  currency: Currency;
   isCompleted: boolean;
   priority: number;
-  subGoals?: SubGoal[];    // Chunking support
-  isFocused?: boolean;     // For "Focus View"
+  subGoals?: SubGoal[];      // Chunking
+  isHidden?: boolean;        // For Focus View
 }
 
-// --- SIGNALS (Hunter-Creator Engine) ---
+// --- SIGNALS (Hunter-Creator) ---
 export type SignalPhase = 'discovery' | 'validation' | 'contribution' | 'delivered' | 'harvested' | 'graveyard';
-export type SignalEffort = 'low' | 'med' | 'high';
-export type SignalConfidence = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 export interface Signal {
   id: string;
   title: string;
-  sector: string;          // #DePin, #AI, #L2
+  sector: string;            // #DePin, #AI
   phase: SignalPhase;
-  confidence: SignalConfidence;
-  effort: SignalEffort;
-  hoursLogged: number;     // For ROT (Return on Time)
-  totalGenerated: number;  // $ USD generated from this
-  redFlags: string[];      // List of skepticism notes
-  proofOfWork: string[];   // URLs to assets
+  confidence: number;        // 1-10
+  effort: 'low' | 'med' | 'high';
+  hoursLogged: number;       // ROI on Time
+  totalGenerated: number;    // $ generated
+  redFlags: string[];
+  proofOfWork: string[];     // URLs
   createdAt: string;
   updatedAt: string;
 }
 
-// --- GENEROSITY (The Firewall) ---
-export type RelationshipTier = 'T1' | 'T2' | 'T3' | 'T4';
-
-export interface Beneficiary {
-  id: string;
-  name: string;
-  tier: RelationshipTier;
-  totalReceived: number;
-  lastHelpDate: string;
-  notes: string;
-}
-
 // --- HISTORY (The Black Box) ---
-export type LogType = 
-  | 'DROP' 
-  | 'SPEND' 
-  | 'TRANSFER' 
-  | 'TRIAGE' 
-  | 'SIGNAL_UPDATE' 
-  | 'GOAL_FUND' 
-  | 'SYSTEM_EVENT' 
-  | 'JOURNAL'
-  | 'EMERGENCY_ACCESS';
+export type LogType = 'DROP' | 'SPEND' | 'TRANSFER' | 'TRIAGE' | 'SIGNAL_UPDATE' | 'GOAL_FUND' | 'SYSTEM_EVENT' | 'JOURNAL' | 'EMERGENCY_ACCESS';
 
 export interface HistoryLog {
   id: string;
@@ -109,7 +84,7 @@ export interface HistoryLog {
   amount?: number;
   currency?: Currency;
   description?: string;
-  linkedSignalId?: string; // Context Linking
+  linkedSignalId?: string;
   linkedGoalId?: string;
   tags?: string[];
 }
@@ -118,6 +93,6 @@ export interface JournalEntry {
   id: string;
   date: string;
   content: string;
-  mood: 'win' | 'fail' | 'neutral' | 'panic';
-  linkedLogId?: string;    // Connect narrative to transaction
+  tags: string[];
+  linkedLogId?: string;
 }

@@ -3,7 +3,6 @@ import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
-import { HistoryLog } from '../types';
 import { Settings as Gear, Clock } from 'lucide-react';
 
 export const Settings = () => {

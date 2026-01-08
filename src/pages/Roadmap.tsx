@@ -6,10 +6,10 @@ import { GlassProgressBar } from '../components/ui/GlassProgressBar';
 import { Naira } from '../components/ui/Naira';
 import { GoalArchitect } from '../components/roadmap/GoalArchitect';
 import { type Goal, type Phase } from '../types';
-import { Target, CheckCircle2, ChevronDown, ChevronUp, Plus, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { Target, CheckCircle2, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 
 export const Roadmap = () => {
-  const { goals, updateGoal, deleteGoal, addBudget } = useFinancials(); // Note: addBudget needed for auto-budgeting logic if extended later
+  const { goals, updateGoal, deleteGoal } = useFinancials();
   const [viewMode, setViewMode] = useState<'FOCUS' | 'ROADMAP'>('FOCUS');
   const [expandedGoals, setExpandedGoals] = useState<Record<string, boolean>>({});
   const [isArchitectOpen, setIsArchitectOpen] = useState(false);
@@ -19,18 +19,14 @@ export const Roadmap = () => {
   };
 
   const handleCreateGoal = (goalData: Partial<Goal>) => {
-    // In a real app, you'd use a UUID generator. Using crypto.randomUUID for now.
+    // FIX: Spread goalData first, then overwrite/set system defaults to avoid "Specified more than once" error
     const newGoal: Goal = {
+      ...goalData as Goal,
       id: crypto.randomUUID(),
-      title: 'New Goal',
-      phase: 'P1',
-      type: 'single',
-      targetAmount: 0,
       currentAmount: 0,
       isCompleted: false,
       priority: 99,
-      subGoals: [],
-      ...goalData as Goal
+      subGoals: goalData.subGoals || []
     };
     updateGoal(newGoal);
     setIsArchitectOpen(false);
@@ -42,7 +38,6 @@ export const Roadmap = () => {
     }
   };
 
-  // Group goals by Phase
   const phases: Phase[] = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6+'];
 
   return (
@@ -81,10 +76,9 @@ export const Roadmap = () => {
         {phases.map(phase => {
           const phaseGoals = goals
             .filter(g => g.phase === phase)
-            .sort((a, b) => a.priority - b.priority); // Sort logic would be here
+            .sort((a, b) => a.priority - b.priority);
 
           if (viewMode === 'FOCUS' && !['P0','P1','P2'].includes(phase) && phaseGoals.every(g => g.isCompleted)) return null;
-          // Show phase if it has goals OR if it's the next empty phase
           if (phaseGoals.length === 0 && viewMode === 'FOCUS') return null;
 
           return (
@@ -100,7 +94,6 @@ export const Roadmap = () => {
                    <div className="text-center py-4 text-xs text-gray-600 italic">No blueprints for this phase yet.</div>
                 ) : phaseGoals.map(goal => (
                   <GlassCard key={goal.id} className="p-0 overflow-hidden">
-                    {/* MAIN CARD */}
                     <div 
                       className="p-6 cursor-pointer hover:bg-white/5 transition-colors relative group"
                       onClick={() => toggleExpand(goal.id)}
@@ -131,13 +124,11 @@ export const Roadmap = () => {
                         size="md" 
                       />
 
-                      {/* Expand Icon */}
                       <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity">
                          {expandedGoals[goal.id] ? <ChevronUp size={20} className="text-gray-400"/> : <ChevronDown size={20} className="text-gray-400"/>}
                       </div>
                     </div>
 
-                    {/* NESTED ACCORDION (Sub-Goals) */}
                     {expandedGoals[goal.id] && (
                       <div className="bg-black/20 border-t border-white/10 p-4 space-y-3 animate-slide-down">
                         {goal.subGoals.length > 0 ? (

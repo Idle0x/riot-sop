@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
-import { LoginScreen } from './components/auth/LoginScreen';
+import { AuthScreen } from './components/auth/AuthScreen'; // NEW
+import { supabase } from './lib/supabase'; // NEW
 
 // Pages
 import { Dashboard } from './pages/Dashboard';
@@ -14,61 +15,48 @@ import { Settings } from './pages/Settings';
 import { Ledger } from './pages/Ledger';
 import { Journal } from './pages/Journal';
 import { Analytics } from './pages/Analytics';
-import { Generosity } from './pages/Generosity'; // NEW IMPORT
+import { Generosity } from './pages/Generosity';
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [session, setSession] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check session storage (Temporary access for this tab only)
-    const sessionAuth = sessionStorage.getItem('riot_auth_session');
-    if (sessionAuth === 'active') {
-      setIsAuthenticated(true);
-    }
-    setIsLoading(false);
+    // Check active session on load
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setIsLoading(false);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const handleLogin = () => {
-    sessionStorage.setItem('riot_auth_session', 'active');
-    setIsAuthenticated(true);
-  };
+  if (isLoading) return <div className="min-h-screen bg-black flex items-center justify-center text-gray-500">Initializing Uplink...</div>;
 
-  const handleLogout = () => {
-    sessionStorage.removeItem('riot_auth_session');
-    setIsAuthenticated(false);
-  };
-
-  if (isLoading) return null; // Or a loading spinner
-
-  if (!isAuthenticated) {
-    return <LoginScreen onAuthenticated={handleLogin} />;
+  if (!session) {
+    return <AuthScreen onAuthenticated={() => {}} />; // The listener handles the state update
   }
 
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<Layout onLogout={handleLogout} />}> {/* Pass logout handler */}
-          {/* Financial Engine */}
+        <Route element={<Layout onLogout={() => supabase.auth.signOut()} />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/triage" element={<Triage />} />
           <Route path="/roadmap" element={<Roadmap />} />
           <Route path="/budget" element={<Budget />} />
           <Route path="/ledger" element={<Ledger />} />
           <Route path="/analytics" element={<Analytics />} />
-          <Route path="/generosity" element={<Generosity />} /> {/* NEW ROUTE */}
-
-          {/* Research Engine */}
+          <Route path="/generosity" element={<Generosity />} />
           <Route path="/signals" element={<Signals />} />
-
-          {/* Principles */}
           <Route path="/constitution" element={<Constitution />} />
           <Route path="/settings" element={<Settings />} />
-
-          {/* Operational */}
           <Route path="/journal" element={<Journal />} />
-
-          {/* Redirect unknown routes to Dashboard */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

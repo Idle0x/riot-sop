@@ -5,175 +5,131 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { GlassProgressBar } from '../components/ui/GlassProgressBar';
 import { GlassButton } from '../components/ui/GlassButton';
 import { Naira } from '../components/ui/Naira';
-import { 
-  Wallet, ShieldCheck, Lock, AlertTriangle, 
-  Clock, ArrowRight, Activity 
-} from 'lucide-react';
+import { Clock, AlertTriangle, ArrowRight, Lock, Activity, ShieldCheck } from 'lucide-react';
 import { RunwayWeather } from '../components/layout/RunwayWeather';
+import { useNavigate } from 'react-router-dom';
 
 export const Dashboard = () => {
   const { 
     accounts, goals, runwayMonths, totalLiquid, 
-    budgets, history, isGhostMode 
+    unallocatedCash, isGhostMode, history 
   } = useFinancials();
+  const navigate = useNavigate();
 
-  // --- INFINITE CLOCK ---
+  // Infinite Clock
   const [time, setTime] = useState(new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  useEffect(() => setInterval(() => setTime(new Date()), 1000), []);
 
-  // --- DERIVED METRICS ---
-  const bufferBalance = accounts.find(a => a.id === 'buffer')?.balance || 0;
-  const lockedInGoals = goals.reduce((sum, g) => sum + g.currentAmount, 0);
-  const totalLocked = bufferBalance + lockedInGoals;
-  
-  // UNALLOCATED LOGIC (The Leaky Bucket)
-  // Assuming 'Holding Pen' is where unallocated money sits
-  const unallocated = accounts.find(a => a.id === 'holding')?.balance || 0;
+  const buffer = accounts.find(a => a.id === 'buffer')?.balance || 0;
+  const lockedGoals = goals.reduce((sum, g) => sum + g.currentAmount, 0);
+  const totalLocked = buffer + lockedGoals;
+  const netWorth = totalLiquid + totalLocked + unallocatedCash;
 
-  // FORMATTERS
-  const formatNum = (val: number) => new Intl.NumberFormat('en-US').format(val);
+  const fmt = (n: number) => new Intl.NumberFormat('en-US').format(n);
 
   return (
     <RunwayWeather months={runwayMonths}>
-      <div className="space-y-8 animate-fade-in pb-20 p-4 md:p-8">
-
-        {/* --- HEADER: CLOCK & STATUS --- */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      <div className="p-4 md:p-8 space-y-8 pb-20 max-w-7xl mx-auto">
+        
+        {/* HEADER: CLOCK & STATUS */}
+        <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
           <div>
-            <div className="flex items-center gap-2 text-gray-400 text-xs font-mono mb-1">
+            <div className="flex items-center gap-2 text-gray-500 font-mono text-xs mb-1">
               <Clock size={12} />
-              <span>{time.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+              {time.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </div>
-            <h1 className="text-4xl font-bold text-white tracking-tight tabular-nums">
+            <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tighter tabular-nums">
               {time.toLocaleTimeString()}
             </h1>
           </div>
-
-          <div className="flex items-center gap-2">
-            <div className={`h-2 w-2 rounded-full animate-pulse ${runwayMonths < 3 ? 'bg-accent-danger' : 'bg-accent-success'}`} />
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
-              System {isGhostMode ? 'DORMANT' : 'ONLINE'}
+          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10">
+            <div className={`h-2 w-2 rounded-full animate-pulse ${isGhostMode ? 'bg-red-500' : 'bg-green-500'}`} />
+            <span className="text-xs font-bold uppercase tracking-widest text-gray-400">
+              {isGhostMode ? 'GHOST MODE' : 'SYSTEM ONLINE'}
             </span>
           </div>
         </div>
 
-        {/* --- ALERT: UNALLOCATED CAPITAL --- */}
-        {unallocated > 0 && (
-          <div className="bg-accent-warning/10 border border-accent-warning/30 p-4 rounded-xl flex items-center justify-between animate-pulse">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="text-accent-warning" size={24} />
+        {/* UNALLOCATED CAPITAL WARNING */}
+        {unallocatedCash > 0 && (
+          <div className="bg-yellow-500/10 border border-yellow-500/50 p-6 rounded-2xl flex items-center justify-between animate-pulse">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-yellow-500/20 rounded-xl text-yellow-500"><AlertTriangle size={24}/></div>
               <div>
-                <h3 className="font-bold text-white">Unallocated Capital Detected</h3>
-                <p className="text-xs text-gray-400">You have idle money in the Holding Pen.</p>
+                <h3 className="font-bold text-white text-lg">Unallocated Capital Detected</h3>
+                <p className="text-sm text-yellow-500/80">Money is sitting idle in the Holding Pen.</p>
               </div>
             </div>
             <div className="text-right">
-              <div className="font-mono font-bold text-accent-warning text-lg">
-                ${formatNum(unallocated)}
-              </div>
-              <GlassButton size="sm" variant="ghost" className="text-accent-warning hover:text-white">
+              <div className="font-mono font-bold text-yellow-500 text-xl">${fmt(unallocatedCash)}</div>
+              <GlassButton size="sm" onClick={() => navigate('/triage')} className="mt-2 border-yellow-500/50 text-yellow-500 hover:bg-yellow-500 hover:text-black">
                 Triange Now <ArrowRight size={14} className="ml-1"/>
               </GlassButton>
             </div>
           </div>
         )}
 
-        {/* --- ASSET CLASS BREAKDOWN --- */}
+        {/* ASSET BREAKDOWN */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          
-          {/* 1. LIQUID RUNWAY (The Real Number) */}
           <MetricCard 
-            title="Liquid Runway"
-            value={<div className="flex items-center gap-1"><Naira />{formatNum(totalLiquid)}</div>}
-            subValue={`${runwayMonths.toFixed(1)} Months Survival`}
-            icon={<Activity size={20} />}
-            trend={{ value: 0, isPositive: true }} // TODO: Add real trend logic
+            title="Liquid Runway" 
+            value={<><Naira/>{fmt(totalLiquid)}</>} 
+            subValue={`${runwayMonths.toFixed(1)} Months`} 
+            icon={<Activity size={20}/>} 
           />
-
-          {/* 2. LOCKED ASSETS (Buffer + Goals) */}
           <MetricCard 
-            title="Locked Assets"
-            value={<div className="flex items-center gap-1"><Naira />{formatNum(totalLocked)}</div>}
-            subValue="Buffer & Funded Goals"
-            icon={<Lock size={20} />}
+            title="Locked Assets" 
+            value={<><Naira/>{fmt(totalLocked)}</>} 
+            subValue="Buffer & Goals" 
+            icon={<Lock size={20}/>} 
           />
-
-          {/* 3. BUFFER VAULT (Specific Focus) */}
           <MetricCard 
-            title="Buffer Vault"
-            value={<div className="flex items-center gap-1"><Naira />{formatNum(bufferBalance)}</div>}
-            subValue="Emergency Use Only"
-            icon={<ShieldCheck size={20} />}
-            isPrivate
+            title="Net Worth" 
+            value={<><Naira/>{fmt(netWorth)}</>} 
+            subValue="Total System Value" 
+            icon={<ShieldCheck size={20}/>} 
+            isPrivate 
           />
         </div>
 
-        {/* --- RUNWAY VISUALIZER --- */}
-        <GlassCard className="p-8 relative overflow-hidden">
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h3 className="text-xl font-bold text-white">Runway Health</h3>
-                <p className="text-sm text-gray-400">Based on active budgets (Auto-Burn Active)</p>
-              </div>
-              <div className="text-right">
-                <div className={`text-4xl font-mono font-bold ${
-                  runwayMonths < 3 ? 'text-accent-danger' : 
-                  runwayMonths < 6 ? 'text-accent-warning' : 'text-accent-success'
-                }`}>
-                  {runwayMonths.toFixed(2)} Mo
-                </div>
-              </div>
+        {/* RUNWAY VISUALIZER */}
+        <GlassCard className="p-8">
+          <div className="flex justify-between items-end mb-4">
+            <div>
+              <h3 className="font-bold text-white text-lg">Runway Health</h3>
+              <p className="text-sm text-gray-400">Based on Active Budgets</p>
             </div>
-
-            <GlassProgressBar 
-              value={runwayMonths} 
-              max={12} 
-              label="Freedom Target: 12 Months" 
-              color={runwayMonths < 3 ? 'danger' : runwayMonths < 6 ? 'warning' : 'success'} 
-              size="lg"
-              showPercentage={false}
-            />
-
-            <div className="mt-6 grid grid-cols-4 text-center text-xs text-gray-500 font-mono">
-              <div className="border-t border-gray-800 pt-2">CRITICAL<br/>(0-3 mo)</div>
-              <div className="border-t border-gray-800 pt-2">BUILDING<br/>(3-6 mo)</div>
-              <div className="border-t border-gray-800 pt-2">SECURE<br/>(6-12 mo)</div>
-              <div className="border-t border-gray-800 pt-2">FREEDOM<br/>(12+ mo)</div>
+            <div className={`text-4xl font-mono font-bold ${runwayMonths < 3 ? 'text-red-500' : runwayMonths < 6 ? 'text-orange-500' : 'text-green-500'}`}>
+              {runwayMonths.toFixed(2)} Mo
             </div>
+          </div>
+          <GlassProgressBar value={runwayMonths} max={12} color={runwayMonths < 3 ? 'danger' : runwayMonths < 6 ? 'warning' : 'success'} size="lg" showPercentage={false} />
+          <div className="mt-4 grid grid-cols-4 text-center text-[10px] text-gray-600 font-mono tracking-widest uppercase">
+            <div className="border-t border-gray-800 pt-2">Critical</div>
+            <div className="border-t border-gray-800 pt-2">Building</div>
+            <div className="border-t border-gray-800 pt-2">Secure</div>
+            <div className="border-t border-gray-800 pt-2">Freedom</div>
           </div>
         </GlassCard>
 
-        {/* --- RECENT ACTIVITY (The Black Box Preview) --- */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-gray-400 uppercase tracking-wider text-xs">Recent System Events</h3>
-            <button className="text-xs text-accent-info hover:text-white transition-colors">View Universal Log</button>
-          </div>
-          
-          <div className="space-y-2">
-            {history.slice(0, 3).map((log) => (
-              <div key={log.id} className="flex items-center justify-between p-4 bg-glass border border-glass-border rounded-xl">
-                <div className="flex items-center gap-4">
-                  <div className={`p-2 rounded-lg bg-white/5 text-gray-400`}>
-                    <Clock size={16} />
-                  </div>
+        {/* RECENT HISTORY PREVIEW */}
+        <div>
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Recent System Events</h3>
+          <div className="space-y-3">
+            {history.slice(0, 3).map(log => (
+              <div key={log.id} className="flex justify-between items-center p-4 bg-white/5 border border-white/5 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white/5 rounded-lg text-gray-400"><Clock size={16}/></div>
                   <div>
-                    <div className="text-sm font-bold text-white">{log.title}</div>
-                    <div className="text-xs text-gray-500">{new Date(log.date).toLocaleString()}</div>
+                    <div className="font-bold text-white text-sm">{log.title}</div>
+                    <div className="text-xs text-gray-500">{new Date(log.date).toLocaleDateString()}</div>
                   </div>
                 </div>
                 <div className="font-mono text-sm text-white">
-                  {log.amount ? <><Naira />{formatNum(log.amount)}</> : ''}
+                  {log.amount && <><Naira/>{fmt(log.amount)}</>}
                 </div>
               </div>
             ))}
-            {history.length === 0 && (
-              <div className="text-center py-8 text-gray-600 text-sm">System initialized. Waiting for events...</div>
-            )}
           </div>
         </div>
 

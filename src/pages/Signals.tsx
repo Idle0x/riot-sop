@@ -1,13 +1,12 @@
-import { useState } from 'react';
 import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
-import { Signal, SignalPhase } from '../types';
-import { Plus, Clock, DollarSign, AlertTriangle, ArrowRight } from 'lucide-react';
+import { type Signal, type SignalPhase } from '../types';
+import { Plus, Clock, DollarSign, ArrowRight } from 'lucide-react';
 
 export const Signals = () => {
   const { signals, updateSignal, commitAction } = useFinancials();
-  
+
   const columns: { id: SignalPhase; label: string; color: string }[] = [
     { id: 'discovery', label: 'Discovery', color: 'bg-blue-500' },
     { id: 'validation', label: 'Validation', color: 'bg-yellow-500' },
@@ -37,7 +36,7 @@ export const Signals = () => {
               <div className={`w-2 h-2 rounded-full ${col.color}`}/>
               <span className="font-bold text-xs uppercase text-gray-400">{col.label}</span>
             </div>
-            
+
             <div className="flex-1 space-y-3 overflow-y-auto">
               {signals.filter(s => s.phase === col.id).map(s => (
                 <GlassCard key={s.id} className="p-4 hover:border-white/30 cursor-pointer group">
@@ -46,7 +45,7 @@ export const Signals = () => {
                     <span className="text-[10px] text-gray-500 flex items-center gap-1"><Clock size={10}/> {s.hoursLogged}h</span>
                   </div>
                   <h4 className="font-bold text-white text-sm mb-2">{s.title}</h4>
-                  
+
                   <div className="flex gap-2 text-[10px] mb-2">
                     <span className={`${s.confidence > 7 ? 'text-green-500' : 'text-orange-500'}`}>{s.confidence}/10 Conf</span>
                     <span className="text-gray-500 capitalize">{s.effort} Effort</span>

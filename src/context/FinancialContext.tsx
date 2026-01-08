@@ -31,13 +31,13 @@ interface FinancialContextType {
   updateUser: (updates: Partial<UserProfile>) => void;
   updateAccount: (id: AccountType, amount: number) => void;
   addBudget: (budget: Budget) => void;
-  logExpense: (budgetId: string | null, amount: number, note: string) => void; // NEW
-  resetBudgetCycle: () => void; // NEW
-  updateGoal: (goal: Goal) => void; // NEW
+  logExpense: (budgetId: string | null, amount: number, note: string) => void;
+  resetBudgetCycle: () => void;
+  updateGoal: (goal: Goal) => void;
   updateSignal: (signal: Signal) => void;
   commitAction: (log: HistoryLog) => void;
   deleteTransaction: (id: string) => void;
-  nuclearReset: (password: string) => boolean; // Updated signature
+  nuclearReset: (password: string) => boolean;
 }
 
 const FinancialContext = createContext<FinancialContextType | undefined>(undefined);
@@ -75,7 +75,8 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
-        if (parsed.user) setUser(parsed.user);
+        // FIX: Safe Merging to prevent crashes from old data schemas
+        if (parsed.user) setUser({ ...INITIAL_USER, ...parsed.user });
         if (parsed.accounts) setAccounts(parsed.accounts);
         if (parsed.goals) setGoals(parsed.goals);
         if (parsed.signals) setSignals(parsed.signals);
@@ -93,9 +94,13 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     if (!isInitialized) return;
     
     // --- SIMULATION: Check Pending Changes (7-Day Cooldown) ---
-    const now = new Date();
-    if (user.pendingChanges.length > 0) {
-      const activeChanges = user.pendingChanges.filter(c => new Date(c.effectiveDate) <= now);
+    // Safe check: ensure pendingChanges exists (it might be undefined if hydration failed slightly)
+    const pendingQueue = user.pendingChanges || []; 
+    
+    if (pendingQueue.length > 0) {
+      const now = new Date();
+      const activeChanges = pendingQueue.filter(c => new Date(c.effectiveDate) <= now);
+      
       if (activeChanges.length > 0) {
          // Apply changes
          activeChanges.forEach(change => {
@@ -104,7 +109,7 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
          // Clean up queue
          setUser(prev => ({
            ...prev, 
-           pendingChanges: prev.pendingChanges.filter(c => new Date(c.effectiveDate) > now)
+           pendingChanges: (prev.pendingChanges || []).filter(c => new Date(c.effectiveDate) > now)
          }));
       }
     }
@@ -124,7 +129,6 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
   const monthlyBurn = dailyBurn * 30;
   const runwayMonths = monthlyBurn > 0 ? totalLiquid / monthlyBurn : 0;
   
-  // Ghost Mode: > 7 days inactivity
   const isGhostMode = (new Date().getTime() - new Date(user.lastSeen).getTime()) > (7 * 24 * 60 * 60 * 1000);
 
   // --- Actions ---
@@ -138,19 +142,13 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
 
   const addBudget = (budget: Budget) => setBudgets(prev => [...prev, budget]);
 
-  // NEW: The Logic missing from the original build
   const logExpense = (budgetId: string | null, amount: number, note: string) => {
-    // 1. Deduct from Payroll
     updateAccount('payroll', -amount);
-    
-    // 2. Update Budget 'Spent'
     if (budgetId) {
       setBudgets(prev => prev.map(b => 
         b.id === budgetId ? { ...b, spent: (b.spent || 0) + amount } : b
       ));
     }
-
-    // 3. Log to History
     commitAction({
       id: crypto.randomUUID(),
       date: new Date().toISOString(),
@@ -195,10 +193,9 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteTransaction = (id: string) => {
-    // Basic undo logic: Find log, reverse money effect (simplified for MVP)
     const log = history.find(h => h.id === id);
     if (log && log.type === 'SPEND' && log.amount) {
-        updateAccount('payroll', log.amount); // Refund
+        updateAccount('payroll', log.amount); 
     }
     setHistory(prev => prev.filter(h => h.id !== id));
   };

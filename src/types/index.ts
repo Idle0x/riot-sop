@@ -1,15 +1,13 @@
 export type Currency = 'USD' | 'NGN';
 
-// --- USER & SYSTEM STATE ---
 export interface UserProfile {
-  burnCap: number;           // The setting limit (e.g., 200k)
-  inflationRate: number;     // e.g., 1.15
-  lastSeen: string;          // ISO Timestamp for Ghost Mode
+  burnCap: number;
+  inflationRate: number;
+  lastSeen: string;
   runwayEmptySince: string | null;
-  systemVersion: string;     // e.g., "v1.6"
+  systemVersion: string;
 }
 
-// --- ACCOUNTING ---
 export type AccountType = 'treasury' | 'payroll' | 'buffer' | 'holding';
 
 export interface Account {
@@ -20,7 +18,6 @@ export interface Account {
   isLocked?: boolean;
 }
 
-// --- BUDGETING (The "Alive" Engine) ---
 export type BudgetFrequency = 'monthly' | 'one-time';
 
 export interface Budget {
@@ -28,11 +25,11 @@ export interface Budget {
   name: string;
   amount: number;
   frequency: BudgetFrequency;
-  expiryDate?: string;       // For one-time budgets (auto-delete)
+  expiryDate?: string;
   category: string;
+  autoDeduct?: boolean;
 }
 
-// --- GOALS (Focus vs Roadmap) ---
 export type Phase = 'P0' | 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | 'P6+';
 
 export interface SubGoal {
@@ -51,29 +48,27 @@ export interface Goal {
   currentAmount: number;
   isCompleted: boolean;
   priority: number;
-  subGoals?: SubGoal[];      // Chunking
-  isHidden?: boolean;        // For Focus View
+  subGoals?: SubGoal[];
+  isHidden?: boolean;
 }
 
-// --- SIGNALS (Hunter-Creator) ---
 export type SignalPhase = 'discovery' | 'validation' | 'contribution' | 'delivered' | 'harvested' | 'graveyard';
 
 export interface Signal {
   id: string;
   title: string;
-  sector: string;            // #DePin, #AI
+  sector: string;
   phase: SignalPhase;
-  confidence: number;        // 1-10
+  confidence: number;
   effort: 'low' | 'med' | 'high';
-  hoursLogged: number;       // ROI on Time
-  totalGenerated: number;    // $ generated
+  hoursLogged: number;
+  totalGenerated: number;
   redFlags: string[];
-  proofOfWork: string[];     // URLs
+  proofOfWork: string[];
   createdAt: string;
   updatedAt: string;
 }
 
-// --- HISTORY (The Black Box) ---
 export type LogType = 'DROP' | 'SPEND' | 'TRANSFER' | 'TRIAGE' | 'SIGNAL_UPDATE' | 'GOAL_FUND' | 'SYSTEM_EVENT' | 'JOURNAL' | 'EMERGENCY_ACCESS';
 
 export interface HistoryLog {

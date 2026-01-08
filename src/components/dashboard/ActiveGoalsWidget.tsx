@@ -2,7 +2,7 @@ import { useFinancials } from '../../context/FinancialContext';
 import { GlassCard } from '../ui/GlassCard';
 import { GlassProgressBar } from '../ui/GlassProgressBar';
 import { Naira } from '../ui/Naira';
-import { Target, ArrowRight } from 'lucide-react';
+import { Target } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const ActiveGoalsWidget = () => {

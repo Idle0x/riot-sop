@@ -12,8 +12,7 @@ export const Signals = () => {
   // UI States
   const [isDrillOpen, setIsDrillOpen] = useState(false);
   const [viewModal, setViewModal] = useState<'HARVESTED' | 'GRAVEYARD' | null>(null);
-  const [selectedSignal, setSelectedSignal] = useState<Signal | null>(null);
-
+  
   // --- ANALYTICS ENGINE ---
   const analytics = useMemo(() => {
     const totalSignals = signals.length;

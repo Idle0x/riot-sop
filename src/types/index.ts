@@ -19,7 +19,8 @@ export interface UserProfile {
 }
 
 // --- ACCOUNTING ---
-export type AccountType = 'treasury' | 'payroll' | 'buffer' | 'holding';
+// UPDATE: Added 'vault'
+export type AccountType = 'treasury' | 'payroll' | 'buffer' | 'holding' | 'vault';
 
 export interface Account {
   id: AccountType;
@@ -76,13 +77,21 @@ export interface Signal {
   phase: SignalPhase;
   confidence: number;        
   effort: 'low' | 'med' | 'high';
+  
+  // NEW: Investor Thesis (The Memo)
+  thesis: {
+    alpha: string;        // "Why is this unique?"
+    catalyst: string;     // "What triggers the payout?"
+    invalidation: string; // "When do I quit?"
+    expectedValue: number;// "Target Price/Amount"
+  };
+
   hoursLogged: number;       
   totalGenerated: number;    
   redFlags: string[];
   proofOfWork: string[];     
   createdAt: string;
   updatedAt: string;
-  // NEW: Drill Mode Checklist (Simple boolean flags)
   checklist?: {
     hasTeam: boolean;
     hasProduct: boolean;

@@ -2,34 +2,55 @@ import { useState, useMemo } from 'react';
 import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
+import { GlassInput } from '../components/ui/GlassInput';
 import { DrillModeModal } from '../components/signals/DrillModeModal'; 
 import { TransitionWizard } from '../components/signals/TransitionWizard';
 import { ClosureModal } from '../components/signals/ClosureModal';
 import { type Signal, type SignalPhase } from '../types';
-import { Clock, DollarSign, ArrowRight, Zap, Archive, Trophy, X, AlertTriangle, ScrollText, Github, Globe, Twitter, BookOpen, AlertCircle, Scale, Pencil } from 'lucide-react';
+import { Clock, ArrowRight, Zap, Trophy, X, AlertTriangle, ScrollText, PenLine, Scale, BrainCircuit, Globe, Twitter, Github, BookOpen } from 'lucide-react';
 
 export const Signals = () => {
   const { signals, updateSignal, commitAction, logSignalTime } = useFinancials();
 
   // --- UI STATES ---
   const [isDrillOpen, setIsDrillOpen] = useState(false);
-  const [selectedSignal, setSelectedSignal] = useState<Signal | null>(null); // For Dossier View
+  const [selectedSignal, setSelectedSignal] = useState<Signal | null>(null); // For Dossier
   const [transitionSignal, setTransitionSignal] = useState<{signal: Signal, target: SignalPhase} | null>(null);
   const [closureSignal, setClosureSignal] = useState<Signal | null>(null);
-  const [showHarvestedOnly, setShowHarvestedOnly] = useState(false); // The Trophy Room Toggle
+  const [showHarvestedOnly, setShowHarvestedOnly] = useState(false);
+  
+  // Thesis Edit State
+  const [editingSignal, setEditingSignal] = useState<Signal | null>(null);
+  
+  // Post-Mortem State
+  const [postMortemSignal, setPostMortemSignal] = useState<{ signal: Signal, targetPhase: SignalPhase } | null>(null);
+  const [postMortemAnswers, setPostMortemAnswers] = useState({ plan: '', luck: '' });
 
   // --- ANALYTICS ---
   const analytics = useMemo(() => {
     const total = signals.length;
     const wins = signals.filter(s => s.outcome?.status === 'retired_winner').length;
     const winRate = total > 0 ? (wins / total) * 100 : 0;
-    // ... sector logic remains same
-    return { winRate };
+    
+    const sectors: Record<string, { count: number, value: number }> = {};
+    signals.forEach(s => {
+      if (!sectors[s.sector]) sectors[s.sector] = { count: 0, value: 0 };
+      sectors[s.sector].count++;
+      sectors[s.sector].value += s.totalGenerated;
+    });
+
+    const bestSector = Object.entries(sectors).sort((a, b) => b[1].value - a[1].value)[0];
+    return { winRate, bestSector };
   }, [signals]);
 
   // --- HELPERS ---
+  const getHourlyRate = (s: Signal) => {
+    if (s.hoursLogged === 0) return 0;
+    return (s.totalGenerated / s.hoursLogged).toFixed(0);
+  };
+
   const getRMultiple = (s: Signal) => {
-    const cost = Math.max(1, s.hoursLogged * 20); // $20/hr base rate
+    const cost = Math.max(1, s.hoursLogged * 20); 
     const ev = s.thesis.expectedValue || 0;
     return (ev / cost).toFixed(1);
   };
@@ -58,20 +79,30 @@ export const Signals = () => {
         pickReason: '', 
         drillNotes: {} 
       },
-      ...data as any // Merge drill data
+      ...data as any
     };
     updateSignal(newSignal);
     setIsDrillOpen(false);
+  };
+
+  // Intercept Moves for Post-Mortem or Wizard
+  const initiateMove = (signal: Signal, phase: SignalPhase) => {
+    if (phase === 'graveyard' || phase === 'harvested') {
+      // These need closure modal, but handled via buttons usually. 
+      // If drag/drop logic calls this, we redirect to PostMortem or Closure.
+      // For simple "Next" button logic:
+      setTransitionSignal({ signal, target: phase });
+    } else {
+      setTransitionSignal({ signal, target: phase });
+    }
   };
 
   const handleMoveConfirm = (notes: string, addedHours: number) => {
     if (!transitionSignal) return;
     const { signal, target } = transitionSignal;
     
-    // Log time if added
     if (addedHours > 0) logSignalTime(signal.id, addedHours);
 
-    // Update Phase & Timeline
     const updated: Signal = {
       ...signal,
       phase: target,
@@ -105,7 +136,14 @@ export const Signals = () => {
       title: `Project Closed: ${closureSignal.title}`, description: `Outcome: ${outcome.status}`, linkedSignalId: closureSignal.id
     });
     setClosureSignal(null);
-    setSelectedSignal(null); // Close dossier if open
+    setSelectedSignal(null);
+  };
+
+  const saveThesis = () => {
+    if (editingSignal) {
+      updateSignal(editingSignal);
+      setEditingSignal(null);
+    }
   };
 
   const activeColumns: { id: SignalPhase; label: string; color: string }[] = [
@@ -115,7 +153,6 @@ export const Signals = () => {
     { id: 'delivered', label: 'Delivered (Waiting)', color: 'bg-green-500' },
   ];
 
-  // Filter Logic: If Trophy Room is ON, show only winners. Else show active board.
   const displayedSignals = showHarvestedOnly 
     ? signals.filter(s => s.totalGenerated > 0)
     : signals.filter(s => !['harvested', 'graveyard'].includes(s.phase));
@@ -123,7 +160,6 @@ export const Signals = () => {
   return (
     <div className="h-[calc(100vh-100px)] flex flex-col p-4 md:p-8 pb-20">
       
-      {/* MODALS */}
       {isDrillOpen && <DrillModeModal onClose={() => setIsDrillOpen(false)} onSave={handleCreate} />}
       
       {transitionSignal && (
@@ -143,12 +179,29 @@ export const Signals = () => {
         />
       )}
 
-      {/* DOSSIER VIEW (Intelligence Report) */}
+      {/* THESIS EDITOR */}
+      {editingSignal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl p-6">
+          <GlassCard className="w-full max-w-lg p-6 relative">
+            <button onClick={() => setEditingSignal(null)} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X size={20}/></button>
+            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><PenLine size={20}/> Investment Thesis</h2>
+            
+            <div className="space-y-4">
+              <GlassInput label="The Alpha" value={editingSignal.thesis.alpha} onChange={e => setEditingSignal({...editingSignal, thesis: {...editingSignal.thesis, alpha: e.target.value}})} />
+              <GlassInput label="The Catalyst" value={editingSignal.thesis.catalyst} onChange={e => setEditingSignal({...editingSignal, thesis: {...editingSignal.thesis, catalyst: e.target.value}})} />
+              <GlassInput label="The Invalidation" className="text-red-300" value={editingSignal.thesis.invalidation} onChange={e => setEditingSignal({...editingSignal, thesis: {...editingSignal.thesis, invalidation: e.target.value}})} />
+              <GlassInput label="Expected Value (USD)" type="number" className="text-green-400 font-mono" value={editingSignal.thesis.expectedValue} onChange={e => setEditingSignal({...editingSignal, thesis: {...editingSignal.thesis, expectedValue: Number(e.target.value)}})} />
+              <GlassButton className="w-full" onClick={saveThesis}>Lock Thesis</GlassButton>
+            </div>
+          </GlassCard>
+        </div>
+      )}
+
+      {/* DOSSIER VIEW */}
       {selectedSignal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl p-6">
           <GlassCard className="w-full max-w-4xl h-[85vh] flex flex-col relative overflow-hidden">
             
-            {/* DOSSIER HEADER */}
             <div className="p-6 border-b border-white/10 flex justify-between items-start bg-white/5">
               <div>
                 <div className="flex items-center gap-3 mb-1">
@@ -157,9 +210,9 @@ export const Signals = () => {
                   {selectedSignal.research.token.status === 'live' && <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded border border-green-500/30">Token Live</span>}
                 </div>
                 <div className="flex gap-4 text-xs text-gray-400">
-                   <a href={selectedSignal.research.links.website} target="_blank" className="hover:text-white flex items-center gap-1"><Globe size={12}/> Website</a>
-                   <a href={selectedSignal.research.links.twitter} target="_blank" className="hover:text-blue-400 flex items-center gap-1"><Twitter size={12}/> Twitter</a>
-                   <a href={selectedSignal.research.links.github} target="_blank" className="hover:text-white flex items-center gap-1"><Github size={12}/> Code</a>
+                   {selectedSignal.research.links.website && <a href={selectedSignal.research.links.website} target="_blank" className="hover:text-white flex items-center gap-1"><Globe size={12}/> Website</a>}
+                   {selectedSignal.research.links.twitter && <a href={selectedSignal.research.links.twitter} target="_blank" className="hover:text-blue-400 flex items-center gap-1"><Twitter size={12}/> Twitter</a>}
+                   {selectedSignal.research.links.github && <a href={selectedSignal.research.links.github} target="_blank" className="hover:text-white flex items-center gap-1"><Github size={12}/> Code</a>}
                 </div>
               </div>
               <div className="flex gap-2">
@@ -170,12 +223,8 @@ export const Signals = () => {
               </div>
             </div>
 
-            {/* DOSSIER BODY */}
             <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-               
-               {/* LEFT COL: THESIS & FINANCIALS */}
                <div className="space-y-6">
-                  {/* Financials Card */}
                   <div className="p-4 bg-black/20 rounded-xl border border-white/10">
                      <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2"><Scale size={12}/> Financials</h3>
                      <div className="grid grid-cols-2 gap-4 mb-4">
@@ -194,26 +243,23 @@ export const Signals = () => {
                      </div>
                   </div>
 
-                  {/* Thesis Card */}
-                  <div className="space-y-3">
-                     <div className="p-3 bg-blue-900/10 border border-blue-500/20 rounded-xl">
-                        <div className="text-[10px] font-bold text-blue-400 mb-1">ALPHA (WHY?)</div>
-                        <p className="text-xs text-gray-300 leading-relaxed">{selectedSignal.thesis.alpha}</p>
+                  <div className="space-y-3 cursor-pointer" onClick={() => setEditingSignal(selectedSignal)}>
+                     <div className="p-3 bg-blue-900/10 border border-blue-500/20 rounded-xl hover:border-blue-500/50 transition-colors">
+                        <div className="text-[10px] font-bold text-blue-400 mb-1 flex justify-between">ALPHA (WHY?) <Pencil size={10}/></div>
+                        <p className="text-xs text-gray-300 leading-relaxed">{selectedSignal.thesis.alpha || 'Pending...'}</p>
                      </div>
                      <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
                         <div className="text-[10px] font-bold text-gray-400 mb-1">CATALYST (WHEN?)</div>
-                        <p className="text-xs text-gray-300">{selectedSignal.thesis.catalyst}</p>
+                        <p className="text-xs text-gray-300">{selectedSignal.thesis.catalyst || 'Pending...'}</p>
                      </div>
                      <div className="p-3 bg-red-900/10 border border-red-500/20 rounded-xl">
                         <div className="text-[10px] font-bold text-red-400 mb-1">INVALIDATION (STOP LOSS)</div>
-                        <p className="text-xs text-gray-300">{selectedSignal.thesis.invalidation}</p>
+                        <p className="text-xs text-gray-300">{selectedSignal.thesis.invalidation || 'Pending...'}</p>
                      </div>
                   </div>
                </div>
 
-               {/* MIDDLE/RIGHT COL: INTELLIGENCE & HISTORY */}
                <div className="md:col-span-2 space-y-6">
-                  {/* Findings */}
                   <div>
                      <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2"><BookOpen size={14}/> Deep Findings</h3>
                      <div className="p-4 bg-white/5 rounded-xl border border-white/10 min-h-[100px] text-sm text-gray-300 whitespace-pre-wrap">
@@ -221,7 +267,6 @@ export const Signals = () => {
                      </div>
                   </div>
 
-                  {/* Token Logic Result */}
                   <div className="grid grid-cols-2 gap-4">
                      <div className="p-3 bg-white/5 rounded-xl border border-white/10">
                         <div className="text-xs font-bold text-gray-500 uppercase mb-1">Token Status</div>
@@ -236,7 +281,6 @@ export const Signals = () => {
                      </div>
                   </div>
 
-                  {/* Timeline / History (The Grayed Out Logic) */}
                   <div>
                      <h3 className="text-sm font-bold text-white mb-3">Narrative History</h3>
                      <div className="space-y-4 pl-4 border-l border-white/10">
@@ -262,6 +306,7 @@ export const Signals = () => {
            <h1 className="text-3xl font-bold text-white mb-2">Deal Flow</h1>
            <div className="flex gap-4 text-xs text-gray-400">
               <span>Win Rate: <span className="text-green-400 font-bold">{analytics.winRate.toFixed(0)}%</span></span>
+              {analytics.bestSector && <span>Top: <span className="text-blue-400 font-bold">{analytics.bestSector[0]}</span></span>}
            </div>
         </div>
         
@@ -291,58 +336,60 @@ export const Signals = () => {
               </div>
 
               <div className="flex-1 space-y-3 overflow-y-auto">
-                {displayedSignals.filter(s => s.phase === col.id).map(s => (
-                  <GlassCard 
-                    key={s.id} 
-                    className="p-4 hover:border-white/30 cursor-pointer group relative"
-                    onClick={() => setSelectedSignal(s)} // OPEN DOSSIER
-                  >
-                    <div className="flex justify-between mb-2">
-                      <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-gray-300 font-mono">{s.sector}</span>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); logSignalTime(s.id, 1); }} // QUICK LOG
-                        className="text-[10px] text-gray-500 hover:text-white flex items-center gap-1"
-                      >
-                        <Clock size={10}/> {s.hoursLogged}h <span className="text-accent-success ml-1 opacity-0 group-hover:opacity-100">+1h</span>
-                      </button>
-                    </div>
+                {displayedSignals.filter(s => s.phase === col.id).map(s => {
+                  const rMultiple = getRMultiple(s);
+                  const isBadBet = Number(rMultiple) < 10;
+                  
+                  return (
+                    <GlassCard 
+                      key={s.id} 
+                      className="p-4 hover:border-white/30 cursor-pointer group relative"
+                      onClick={() => setSelectedSignal(s)} 
+                    >
+                      <div className="flex justify-between mb-2">
+                        <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-gray-300 font-mono">{s.sector}</span>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); logSignalTime(s.id, 1); }} 
+                          className="text-[10px] text-gray-500 hover:text-white flex items-center gap-1"
+                        >
+                          <Clock size={10}/> {s.hoursLogged}h <span className="text-accent-success ml-1 opacity-0 group-hover:opacity-100">+1h</span>
+                        </button>
+                      </div>
 
-                    <h4 className="font-bold text-white text-sm mb-2">{s.title}</h4>
+                      <h4 className="font-bold text-white text-sm mb-2">{s.title}</h4>
 
-                    {/* Thesis Preview */}
-                    <div className="text-[10px] text-gray-400 bg-black/20 p-2 rounded mb-2 line-clamp-2">
-                       <span className="text-blue-400 font-bold">ALPHA:</span> {s.thesis.alpha}
-                    </div>
+                      <div className="text-[10px] text-gray-400 bg-black/20 p-2 rounded mb-2 line-clamp-2">
+                         <span className="text-blue-400 font-bold">ALPHA:</span> {s.thesis.alpha}
+                      </div>
 
-                    {/* ACTIONS (Only visible on hover) */}
-                    <div className="pt-2 border-t border-white/10 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                       <button 
-                         onClick={(e) => { e.stopPropagation(); setClosureSignal(s); }} 
-                         className="text-[10px] text-gray-500 hover:text-red-500 mr-auto"
-                       >
-                         Kill
-                       </button>
-                       <button 
-                         onClick={(e) => { 
-                           e.stopPropagation(); 
-                           const nextIdx = activeColumns.findIndex(c => c.id === col.id) + 1;
-                           if (nextIdx < activeColumns.length) {
-                             setTransitionSignal({ signal: s, target: activeColumns[nextIdx].id });
-                           }
-                         }} 
-                         className="text-[10px] text-white hover:underline flex items-center gap-1"
-                       >
-                         Next <ArrowRight size={10}/>
-                       </button>
-                    </div>
-                  </GlassCard>
-                ))}
+                      <div className="pt-2 border-t border-white/10 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                         <button 
+                           onClick={(e) => { e.stopPropagation(); setClosureSignal(s); }} 
+                           className="text-[10px] text-gray-500 hover:text-red-500 mr-auto"
+                         >
+                           Kill
+                         </button>
+                         <button 
+                           onClick={(e) => { 
+                             e.stopPropagation(); 
+                             const nextIdx = activeColumns.findIndex(c => c.id === col.id) + 1;
+                             if (nextIdx < activeColumns.length) {
+                               initiateMove(s, activeColumns[nextIdx].id as SignalPhase);
+                             }
+                           }} 
+                           className="text-[10px] text-white hover:underline flex items-center gap-1"
+                         >
+                           Next <ArrowRight size={10}/>
+                         </button>
+                      </div>
+                    </GlassCard>
+                  );
+                })}
               </div>
             </div>
           ))}
         </div>
       ) : (
-        /* TROPHY ROOM VIEW */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
            {displayedSignals.map(s => (
              <GlassCard key={s.id} className="p-6 border-yellow-500/20 bg-yellow-900/5 cursor-pointer" onClick={() => setSelectedSignal(s)}>

@@ -1,17 +1,17 @@
-// src/utils/finance.ts
-
 import { type Budget } from '../types';
 
 export const calculateDailyBurn = (budgets: Budget[]): number => {
-  // ... (Keep existing code)
   const now = new Date();
+
   const activeTotal = budgets.reduce((sum, budget) => {
+    // Skip expired one-time budgets
     if (budget.frequency === 'one-time' && budget.expiryDate) {
       if (new Date(budget.expiryDate) < now) return sum;
     }
     return sum + budget.amount;
   }, 0);
-  return activeTotal / 30;
+
+  return activeTotal / 30; // Daily burn rate
 };
 
 export const getFinancialState = (months: number) => {

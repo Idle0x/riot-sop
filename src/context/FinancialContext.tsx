@@ -19,7 +19,7 @@ interface FinancialContextType {
   budgets: Budget[];
   history: HistoryLog[];
   journal: JournalEntry[];
-  
+
   // Computed
   totalLiquid: number;
   runwayMonths: number;
@@ -53,10 +53,12 @@ const INITIAL_USER: UserProfile = {
   pendingChanges: []
 };
 
+// UPDATE: Added 'vault'
 const INITIAL_ACCOUNTS: Account[] = [
   { id: 'treasury', name: 'Treasury (Redot)', balance: 0, currency: 'USD' },
   { id: 'payroll', name: 'Payroll (Opay)', balance: 0, currency: 'NGN' },
   { id: 'buffer', name: 'Buffer (Piggy)', balance: 0, currency: 'NGN', isLocked: true },
+  { id: 'vault', name: 'The Vault (Locked)', balance: 0, currency: 'NGN', isLocked: true }, // NEW
   { id: 'holding', name: 'Holding Pen', balance: 0, currency: 'NGN' }
 ];
 
@@ -77,7 +79,19 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
       try {
         const parsed = JSON.parse(savedData);
         if (parsed.user) setUser(parsed.user);
-        if (parsed.accounts) setAccounts(parsed.accounts);
+        
+        // MIGRATION: Ensure Vault exists for old users
+        if (parsed.accounts) {
+           const hasVault = parsed.accounts.find((a: Account) => a.id === 'vault');
+           if (!hasVault) {
+             setAccounts([...parsed.accounts, { id: 'vault', name: 'The Vault (Locked)', balance: 0, currency: 'NGN', isLocked: true }]);
+           } else {
+             setAccounts(parsed.accounts);
+           }
+        } else {
+          setAccounts(INITIAL_ACCOUNTS);
+        }
+
         if (parsed.goals) setGoals(parsed.goals);
         if (parsed.signals) setSignals(parsed.signals);
         if (parsed.budgets) setBudgets(parsed.budgets);
@@ -92,7 +106,7 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (!isInitialized) return;
-    
+
     // --- SIMULATION: Check Pending Changes (7-Day Cooldown) ---
     const now = new Date();
     if (user.pendingChanges.length > 0) {
@@ -124,7 +138,7 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
   const dailyBurn = calculateDailyBurn(budgets);
   const monthlyBurn = dailyBurn * 30;
   const runwayMonths = monthlyBurn > 0 ? totalLiquid / monthlyBurn : 0;
-  
+
   const isGhostMode = (new Date().getTime() - new Date(user.lastSeen).getTime()) > (7 * 24 * 60 * 60 * 1000);
 
   // --- Actions ---
@@ -137,7 +151,7 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addBudget = (budget: Budget) => setBudgets(prev => [...prev, budget]);
-  
+
   const deleteBudget = (id: string) => {
     setBudgets(prev => prev.filter(b => b.id !== id));
   };
@@ -170,7 +184,7 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
       description: 'Monthly spend counters reset to zero.'
     });
   };
-  
+
   const updateGoal = (goal: Goal) => {
     setGoals(prev => {
       const exists = prev.find(g => g.id === goal.id);

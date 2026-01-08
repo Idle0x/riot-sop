@@ -1,8 +1,8 @@
-import { Budget } from '../types';
+import { type Budget } from '../types';
 
 export const calculateDailyBurn = (budgets: Budget[]): number => {
   const now = new Date();
-  
+
   const activeTotal = budgets.reduce((sum, budget) => {
     // Skip expired one-time budgets
     if (budget.frequency === 'one-time' && budget.expiryDate) {

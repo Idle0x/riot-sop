@@ -3,40 +3,42 @@ import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
-import { Settings as Gear, Clock, ShieldAlert, CloudUpload } from 'lucide-react';
+import { Settings as Gear, Clock, ShieldAlert, CloudUpload, Landmark } from 'lucide-react';
 
 export const Settings = () => {
-  // Get the sync function from context along with other actions
   const { user, updateUser, history, nuclearReset, syncLocalData } = useFinancials();
   
+  // Existing States
   const [newBurn, setNewBurn] = useState(user.burnCap.toString());
   const [reason, setReason] = useState('');
+  
+  // NEW: Tax Profile State (Synced with User Profile)
+  const [rent, setRent] = useState(user.annualRent?.toString() || '0');
 
   // Nuclear State
   const [nuclearStep, setNuclearStep] = useState(0);
   const [masterPass, setMasterPass] = useState('');
 
-  // Filter history for System Events
   const evolutionLog = history.filter(h => h.type === 'SYSTEM_EVENT');
 
   const handleUpdate = () => {
-    // Queue the change for 7 days later
     const effectiveDate = new Date();
     effectiveDate.setDate(effectiveDate.getDate() + 7);
 
-    const pending = [
-      ...user.pendingChanges, 
-      { 
-        id: crypto.randomUUID(), 
-        key: 'burnCap' as any, 
-        value: parseFloat(newBurn), 
-        effectiveDate: effectiveDate.toISOString() 
-      }
-    ];
-
-    updateUser({ pendingChanges: pending });
+    updateUser({ 
+      annualRent: parseFloat(rent), // Save Rent for Tax Logic
+      pendingChanges: [
+        ...user.pendingChanges, 
+        { 
+          id: crypto.randomUUID(), 
+          key: 'burnCap' as any, 
+          value: parseFloat(newBurn), 
+          effectiveDate: effectiveDate.toISOString() 
+        }
+      ] 
+    });
     setReason('');
-    alert("Change Queued: Will apply in 7 days.");
+    alert("Profile Updated: Cooldowns applied where necessary.");
   };
 
   const executeNuclear = () => {
@@ -80,40 +82,42 @@ export const Settings = () => {
             value={reason} 
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReason(e.target.value)} 
           />
-
-          <GlassButton disabled={!reason || newBurn === user.burnCap.toString()} onClick={handleUpdate}>
-            Queue Update (7 Days)
-          </GlassButton>
-
-          {/* Pending Changes Display */}
-          {user.pendingChanges.length > 0 && (
-            <div className="mt-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
-              <h4 className="text-xs font-bold text-yellow-500 uppercase mb-2">Pending Cooldowns</h4>
-              {user.pendingChanges.map(c => (
-                <div key={c.id} className="text-xs text-gray-300 flex justify-between">
-                  <span>Change {c.key} to {c.value}</span>
-                  <span className="font-mono text-gray-500">{new Date(c.effectiveDate).toLocaleDateString()}</span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </GlassCard>
 
-      {/* DATA MIGRATION CARD (New) */}
+      {/* NEW: TAX PROFILE CARD (NTA 2026) */}
+      <GlassCard className="p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <Landmark className="text-accent-info" />
+          <h3 className="font-bold text-white">Tax Profile (NTA 2026)</h3>
+        </div>
+        <div className="space-y-4">
+           <GlassInput 
+              label="Your Annual Rent (₦)" 
+              type="number" 
+              placeholder="e.g. 1,500,000"
+              value={rent} 
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRent(e.target.value)} 
+           />
+           <div className="p-3 bg-accent-info/5 border border-accent-info/20 rounded-xl">
+              <div className="text-[10px] text-gray-500 uppercase font-bold mb-1">Legal Rent Shield</div>
+              <div className="text-xs text-blue-300">
+                You are eligible for 20% relief on this amount (capped at ₦500k).
+              </div>
+           </div>
+           <GlassButton className="w-full" onClick={handleUpdate}>
+             Save Tax Profile
+           </GlassButton>
+        </div>
+      </GlassCard>
+
+      {/* DATA MIGRATION */}
       <GlassCard className="p-6 border-blue-500/30">
         <h3 className="font-bold text-blue-400 mb-2 flex items-center gap-2">
           <CloudUpload size={18}/> Data Migration
         </h3>
-        <p className="text-sm text-gray-400 mb-4">
-          Detected transition to Cloud V3. If you have data from the Local V2 version on this device, upload it now.
-        </p>
         <button 
-          onClick={() => {
-            if(confirm("Upload local data to this cloud account? This prevents data loss.")) {
-              syncLocalData();
-            }
-          }}
+          onClick={() => syncLocalData()}
           className="w-full py-3 border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 rounded-xl text-sm font-bold transition-all"
         >
           Sync Local Data to Cloud
@@ -125,23 +129,12 @@ export const Settings = () => {
           <h3 className="font-bold text-red-500 mb-2 flex items-center gap-2">
             <ShieldAlert size={18}/> Danger Zone
           </h3>
-
           {nuclearStep === 0 ? (
-             <button 
-               onClick={() => setNuclearStep(1)}
-               className="w-full py-3 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white rounded-xl text-sm font-bold transition-all"
-             >
-               Initiate Nuclear Reset
-             </button>
+             <button onClick={() => setNuclearStep(1)} className="w-full py-3 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white rounded-xl text-sm font-bold transition-all">Initiate Nuclear Reset</button>
           ) : (
             <div className="space-y-4 animate-fade-in">
               <p className="text-sm text-red-400 font-bold uppercase">This will wipe all data. Irreversible.</p>
-              <GlassInput 
-                type="password" 
-                placeholder="Enter Master Key to Confirm" 
-                value={masterPass} 
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMasterPass(e.target.value)}
-              />
+              <GlassInput type="password" placeholder="Enter Master Key" value={masterPass} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMasterPass(e.target.value)} />
               <div className="flex gap-2">
                 <GlassButton variant="ghost" onClick={() => setNuclearStep(0)} className="flex-1">Cancel</GlassButton>
                 <GlassButton variant="danger" onClick={executeNuclear} className="flex-1">NUKE IT</GlassButton>
@@ -149,23 +142,6 @@ export const Settings = () => {
             </div>
           )}
       </GlassCard>
-
-      {/* EVOLUTION LOG */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest">Evolution Log</h3>
-        {evolutionLog.map(log => (
-          <div key={log.id} className="flex gap-4 p-4 border-l-2 border-white/10 pl-6 relative">
-            <div className="absolute -left-[9px] top-6 w-4 h-4 rounded-full bg-black border-2 border-white/20" />
-            <div>
-              <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
-                <Clock size={12}/> {new Date(log.date).toLocaleDateString()}
-              </div>
-              <h4 className="font-bold text-white text-sm">{log.title}</h4>
-              <p className="text-xs text-gray-400">{log.description}</p>
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 };

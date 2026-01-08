@@ -20,7 +20,7 @@ interface FinancialContextType {
   unallocatedCash: number;
   dailyBurn: number;
   isGhostMode: boolean;
-  isLoading: boolean; // Exposed to show spinners if needed
+  isLoading: boolean;
 
   updateUser: (updates: Partial<UserProfile>) => void;
   updateAccount: (id: AccountType, amount: number) => void;
@@ -35,13 +35,14 @@ interface FinancialContextType {
   commitAction: (log: HistoryLog) => void;
   deleteTransaction: (id: string) => void;
   nuclearReset: (password: string) => boolean;
-  syncLocalData: () => Promise<void>; // New: Rescue data button
+  syncLocalData: () => Promise<void>;
 }
 
 const FinancialContext = createContext<FinancialContextType | undefined>(undefined);
 
 const INITIAL_USER: UserProfile = {
   burnCap: 200000,
+  annualRent: 0, // NEW DEFAULT
   inflationRate: 1.0,
   lastSeen: new Date().toISOString(),
   lastReconciliationDate: new Date().toISOString(),
@@ -50,7 +51,6 @@ const INITIAL_USER: UserProfile = {
   pendingChanges: []
 };
 
-// Initial state for accounts if DB is empty
 const DEFAULT_ACCOUNTS = [
   { id: 'treasury', name: 'Treasury (Redot)', balance: 0, currency: 'USD', isLocked: false },
   { id: 'payroll', name: 'Payroll (Opay)', balance: 0, currency: 'NGN', isLocked: false },
@@ -71,7 +71,6 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [session, setSession] = useState<any>(null);
 
-  // 1. Auth Listener & Data Fetcher
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -89,13 +88,11 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchCloudData = async (userId: string) => {
     try {
-      // Profile
       let { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
-      if (!profile) {
-         // Profile trigger usually handles this, but safe fallback logic if needed
-      } else {
+      if (profile) {
          setUser({
             burnCap: profile.burn_cap,
+            annualRent: profile.annual_rent || 0, // NEW MAP
             inflationRate: profile.inflation_rate,
             lastSeen: profile.last_seen || new Date().toISOString(),
             lastReconciliationDate: profile.last_reconciliation_date || new Date().toISOString(),
@@ -105,23 +102,19 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
          });
       }
 
-      // Accounts
       const { data: accs } = await supabase.from('accounts').select('*').eq('user_id', userId);
       if (accs && accs.length > 0) {
-        // Map DB rows to our fixed ID system based on 'type' column
         const mappedAccounts = DEFAULT_ACCOUNTS.map(def => {
-           const found = accs.find(a => a.type === def.id); // Map 'type' col to 'id' prop
+           const found = accs.find(a => a.type === def.id); 
            return found ? { ...def, balance: found.balance } : def;
         });
         setAccounts(mappedAccounts);
       } else {
-        // First time? Create default accounts
         await Promise.all(DEFAULT_ACCOUNTS.map(acc => 
            supabase.from('accounts').insert({ user_id: userId, type: acc.id, name: acc.name, balance: 0, currency: acc.currency, is_locked: acc.isLocked })
         ));
       }
 
-      // Other Tables
       const { data: b } = await supabase.from('budgets').select('*').eq('user_id', userId);
       if (b) setBudgets(b.map((x: any) => ({...x, autoDeduct: x.auto_deduct, expiryDate: x.expiry_date})));
 
@@ -143,15 +136,13 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // --- ACTIONS (Database Writers) ---
-
   const updateUser = async (updates: Partial<UserProfile>) => {
     setUser(prev => ({ ...prev, ...updates }));
     if (!session) return;
     
-    // Map camelCase to snake_case for DB
     const dbUpdates: any = {};
     if (updates.burnCap) dbUpdates.burn_cap = updates.burnCap;
+    if (updates.annualRent !== undefined) dbUpdates.annual_rent = updates.annualRent; // NEW WRITE
     if (updates.lastSeen) dbUpdates.last_seen = updates.lastSeen;
     if (updates.lastReconciliationDate) dbUpdates.last_reconciliation_date = updates.lastReconciliationDate;
     if (updates.pendingChanges) dbUpdates.pending_changes = updates.pendingChanges;
@@ -160,12 +151,8 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateAccount = async (id: AccountType, amount: number) => {
-    // 1. Optimistic Update
     setAccounts(prev => prev.map(acc => acc.id === id ? { ...acc, balance: acc.balance + amount } : acc));
-    
     if (!session) return;
-    // 2. DB Update (Fetch current balance first to be safe, or just increment)
-    // For simplicity/speed in MVP, we calculate the NEW balance and set it.
     const currentAccount = accounts.find(a => a.id === id);
     if (currentAccount) {
        const newBalance = currentAccount.balance + amount;
@@ -192,7 +179,6 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     if (budgetId) {
       setBudgets(prev => prev.map(b => b.id === budgetId ? { ...b, spent: (b.spent || 0) + amount } : b));
       if (session) {
-         // We need to calc new spent. 
          const b = budgets.find(b => b.id === budgetId);
          if (b) await supabase.from('budgets').update({ spent: b.spent + amount }).eq('id', budgetId);
       }
@@ -218,15 +204,12 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     });
     if (!session) return;
     
-    // Check if insert or update
     const { data } = await supabase.from('goals').select('id').eq('id', goal.id).single();
-    
     const payload = {
        id: goal.id, user_id: session.user.id, title: goal.title, phase: goal.phase, 
        target_amount: goal.targetAmount, current_amount: goal.currentAmount, 
        is_completed: goal.isCompleted, priority: goal.priority, type: goal.type, sub_goals: goal.subGoals
     };
-
     if (data) await supabase.from('goals').update(payload).eq('id', goal.id);
     else await supabase.from('goals').insert(payload);
   };
@@ -252,7 +235,6 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
        red_flags: signal.redFlags, thesis: signal.thesis, research: signal.research, 
        outcome: signal.outcome, timeline: signal.timeline, updated_at: new Date().toISOString()
     };
-
     if (data) await supabase.from('signals').update(payload).eq('id', signal.id);
     else await supabase.from('signals').insert(payload);
   };
@@ -283,33 +265,26 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
     if (session) await supabase.from('history').delete().eq('id', id);
   };
 
-  // Sync Data: Uploads local JSON dump to Supabase (One-time utility)
   const syncLocalData = async () => {
-     // This would read from localStorage and loop through inserts. 
-     // For safety, users usually export JSON, then we could have an 'Import' feature.
-     // Implementing basic migration:
      const local = localStorage.getItem('riot_financial_os');
      if (!local || !session) return;
      const data = JSON.parse(local);
      
-     // 1. Migrate Accounts (Update Balances)
      if (data.accounts) {
         for (const acc of data.accounts) {
            await supabase.from('accounts').update({ balance: acc.balance }).eq('user_id', session.user.id).eq('type', acc.id);
         }
      }
-     // 2. Migrate Goals
      if (data.goals) {
         for (const g of data.goals) await updateGoal(g);
      }
-     // 3. Migrate Signals
      if (data.signals) {
         for (const s of data.signals) await updateSignal(s);
      }
      alert('Migration Complete. Please refresh.');
   };
 
-  const nuclearReset = (password: string) => { return false; }; // Disabled in cloud for safety, or use specialized Supabase RPC
+  const nuclearReset = (password: string) => { return false; }; 
 
   const exchangeRate = 1500; 
   const totalLiquid = 

@@ -2,30 +2,61 @@ import { useState, useEffect } from 'react';
 import { useFinancials } from '../context/FinancialContext';
 
 export const useSimulation = () => {
-  const { user, dailyBurn, updateUser, updateAccount, commitAction } = useFinancials();
+  const { 
+    user, dailyBurn, budgets, runwayMonths, totalLiquid,
+    updateUser, updateAccount, commitAction, deleteBudget 
+  } = useFinancials();
+
   const [showWelcomeBack, setShowWelcomeBack] = useState(false);
   const [decayAmount, setDecayAmount] = useState(0);
   const [daysMissed, setDaysMissed] = useState(0);
 
   useEffect(() => {
     const now = new Date();
-    const lastRec = new Date(user.lastReconciliationDate);
     
-    // Calculate difference in days (ignoring milliseconds/seconds for stability)
+    // --- 1. BUDGET GARBAGE COLLECTOR ---
+    budgets.forEach(budget => {
+      if (budget.frequency === 'one-time' && budget.expiryDate) {
+        if (new Date(budget.expiryDate) < now) {
+          deleteBudget(budget.id);
+          commitAction({
+            id: crypto.randomUUID(),
+            date: now.toISOString(),
+            type: 'SYSTEM_EVENT',
+            title: 'Budget Expired',
+            description: `Auto-deleted one-time budget: ${budget.name}.`,
+            amount: 0
+          });
+        }
+      }
+    });
+
+    // --- 2. RUNWAY DECAY & SNAPSHOT ENGINE ---
+    const lastRec = new Date(user.lastReconciliationDate);
     const diffTime = Math.abs(now.getTime() - lastRec.getTime());
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    // Daily Snapshot Logic: If it's a new day, log the stats for Analytics
+    if (diffDays >= 1) {
+       commitAction({
+         id: crypto.randomUUID(),
+         date: now.toISOString(),
+         type: 'SYSTEM_EVENT',
+         title: 'Daily Snapshot',
+         description: `Runway: ${runwayMonths.toFixed(2)}mo | Liquid: ${totalLiquid}`,
+         amount: runwayMonths, // Hack: Storing runway months in amount for charting
+         tags: ['SNAPSHOT']
+       });
+    }
 
     if (diffDays > 0) {
       const estimatedBurn = diffDays * dailyBurn;
 
       if (diffDays > 7) {
-        // Mode 1: Major Reconciliation (Welcome Back)
         setDaysMissed(diffDays);
         setDecayAmount(estimatedBurn);
         setShowWelcomeBack(true);
       } else {
-        // Mode 2: Silent Decay (Standard Operation)
-        // We auto-deduct, but we log it so the user sees it in history
         updateAccount('payroll', -estimatedBurn);
         updateUser({ lastReconciliationDate: now.toISOString() });
         
@@ -41,10 +72,9 @@ export const useSimulation = () => {
         }
       }
     }
-  }, []); // Run once on mount
+  }, []); 
 
   const confirmReconciliation = () => {
-    // User accepts the major burn
     updateAccount('payroll', -decayAmount);
     updateUser({ lastReconciliationDate: new Date().toISOString() });
     

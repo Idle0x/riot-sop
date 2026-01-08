@@ -5,56 +5,89 @@ import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
 import { Naira } from '../components/ui/Naira';
 import { getFinancialState, calculateGenerosityCap } from '../utils/finance';
-import { ArrowRight, Flame, Heart, AlertTriangle, CheckCircle2, Lock, Wand2, Landmark } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Flame, Heart, AlertTriangle, CheckCircle2, Lock, Wand2, Landmark, ShieldCheck, Wallet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Triage = () => {
   const navigate = useNavigate();
   const { 
-    runwayMonths, goals, signals, unallocatedCash,
-    updateAccount, commitAction, updateSignal 
+    user, runwayMonths, goals, signals, unallocatedCash,
+    updateAccount, commitAction, updateSignal, history 
   } = useFinancials();
 
   const [step, setStep] = useState(1);
   const [amountUSD, setAmountUSD] = useState('');
+  const [costBasisUSD, setCostBasisUSD] = useState('0'); 
   const [rate, setRate] = useState('1500');
   const [selectedSignalId, setSelectedSignalId] = useState('');
   
-  // NEW STATES
+  const [taxProvision, setTaxProvision] = useState(0); 
   const [ventureTax, setVentureTax] = useState(0);
-  const [vaultTax, setVaultTax] = useState(10); // Default 10%
+  const [vaultTax, setVaultTax] = useState(10); 
+  
+  // STEP 2 STATES
   const [generosity, setGenerosity] = useState('0');
+  const [runwayAlloc, setRunwayAlloc] = useState('0'); // NEW: Manual Runway
   const [recipientName, setRecipientName] = useState(''); 
   const [recipientTier, setRecipientTier] = useState('T3');
-
   const [allocations, setAllocations] = useState<Record<string, number>>({});
-  // REMOVED: const [impulseLock, setImpulseLock] = useState(false);
 
-  // Calculations
+  // --- MATH ENGINE ---
   const dropUSD = parseFloat(amountUSD) || 0;
+  const costUSD = parseFloat(costBasisUSD) || 0;
   const rateVal = parseFloat(rate) || 0;
+  
   const grossNGN = dropUSD * rateVal;
+  const profitNGN = Math.max(0, (dropUSD - costUSD) * rateVal);
   const sourceFunds = dropUSD > 0 ? grossNGN : unallocatedCash;
 
-  // 1. Taxes (Off the top)
-  const taxAmount = sourceFunds * (ventureTax / 100);
+  // NTA 2026 Progressive Calculation
+  const calculateTaxEstimate = (profit: number) => {
+    const annualRent = user.annualRent || 0;
+    const rentRelief = Math.min(500000, annualRent * 0.20);
+    const chargeableProfit = Math.max(0, profit - rentRelief);
+
+    let tax = 0;
+    let remaining = chargeableProfit;
+
+    // First 800k @ 0%
+    remaining -= 800000;
+    if (remaining > 0) {
+      // Next 2.2M @ 15%
+      const band2 = Math.min(remaining, 2200000);
+      tax += band2 * 0.15;
+      remaining -= band2;
+    }
+    if (remaining > 0) {
+      // Next 9M @ 18%
+      const band3 = Math.min(remaining, 9000000);
+      tax += band3 * 0.18;
+      remaining -= band3;
+    }
+    return profit > 0 ? (tax / profit) * 100 : 0;
+  };
+
+  const estTaxPercent = calculateTaxEstimate(profitNGN);
+  
+  // Deductions (Step 1)
+  const taxAmount = sourceFunds * (taxProvision / 100);
+  const ventureAmount = sourceFunds * (ventureTax / 100);
   const vaultAmount = sourceFunds * (vaultTax / 100);
   
-  // 2. Net Funds
-  const netFunds = sourceFunds - taxAmount - vaultAmount;
+  // Net Deployable (Starting point for Step 2)
+  const netFunds = sourceFunds - taxAmount - ventureAmount - vaultAmount;
   
-  // 3. Allocations
-  const bufferAmount = netFunds * 0.10;
+  // Allocations (Step 2)
   const genAmount = parseFloat(generosity) || 0;
-  const availableForGoals = netFunds - bufferAmount - genAmount;
+  const runwayAmount = parseFloat(runwayAlloc) || 0;
+  const goalSum = Object.values(allocations).reduce((a, b) => a + b, 0);
   
-  const allocatedSum = Object.values(allocations).reduce((a, b) => a + b, 0);
-  const remaining = availableForGoals - allocatedSum;
+  // Remaining = Unallocated (Stays in Holding)
+  const availableForGoals = netFunds - genAmount - runwayAmount;
+  const remaining = availableForGoals - goalSum;
 
   const state = getFinancialState(runwayMonths);
   const isCritical = runwayMonths < 3; 
-
-  // Generosity Logic
   const dynamicGenCap = calculateGenerosityCap(runwayMonths);
   const isGenerosityLocked = dynamicGenCap === 0;
   const isOverCap = genAmount > dynamicGenCap;
@@ -62,7 +95,8 @@ export const Triage = () => {
   const autoDistribute = () => {
     const activeGoals = goals.filter(g => !g.isCompleted);
     if (activeGoals.length === 0) return;
-    const split = Math.floor(availableForGoals / activeGoals.length);
+    // Split whatever is available after runway/generosity
+    const split = Math.floor(Math.max(0, availableForGoals) / activeGoals.length);
     const newAlloc: Record<string, number> = {};
     activeGoals.forEach(g => newAlloc[g.id] = split);
     setAllocations(newAlloc);
@@ -70,60 +104,48 @@ export const Triage = () => {
 
   const handleCommit = () => {
     const timestamp = new Date().toISOString();
-
     if (dropUSD > 0) updateAccount('holding', grossNGN);
     updateAccount('holding', -sourceFunds);
 
-    // 1. Burn Venture Tax
-    if (taxAmount > 0) commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'SPEND', title: 'Venture Tax Burned', amount: taxAmount, tags: ['risk'] });
-
-    // 2. Stash Vault
+    // 1. Taxes & Burns
+    if (taxAmount > 0) {
+      updateAccount('vault', taxAmount); 
+      commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'TRANSFER', title: 'Tax Shield Stashed', amount: taxAmount, tags: ['tax_nta2026'] });
+    }
+    if (ventureAmount > 0) commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'SPEND', title: 'Venture Tax Burned', amount: ventureAmount, tags: ['risk'] });
     if (vaultAmount > 0) {
       updateAccount('vault', vaultAmount);
       commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'TRANSFER', title: 'Vault Deposit', amount: vaultAmount, tags: ['wealth_defense'] });
     }
 
-    // 3. Buffer
-    updateAccount('buffer', bufferAmount);
-
-    // 4. Generosity (With Detail)
+    // 2. Generosity
     if (genAmount > 0) {
         updateAccount('payroll', genAmount);
         commitAction({ 
-            id: crypto.randomUUID(), 
-            date: timestamp, 
-            type: 'SPEND', 
-            title: 'Generosity', 
-            amount: genAmount, 
-            description: `${recipientName || 'Unknown'} | [${recipientTier}]`, 
-            tags: ['generosity'] 
+            id: crypto.randomUUID(), date: timestamp, type: 'SPEND', title: 'Generosity', 
+            amount: genAmount, description: `${recipientName} | [${recipientTier}]`, tags: ['generosity'] 
         });
     }
 
-    // 5. Goals
+    // 3. Runway Top-up (Manual)
+    if (runwayAmount > 0) {
+        updateAccount('payroll', runwayAmount); // Moves to Payroll to extend runway
+        commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'TRANSFER', title: 'Runway Extension', amount: runwayAmount, tags: ['operations'] });
+    }
+
+    // 4. Goals
     Object.entries(allocations).forEach(([goalId, amount]) => {
-       if (amount > 0) {
-          commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'GOAL_FUND', title: 'Goal Allocation', amount, linkedGoalId: goalId });
-       }
+       if (amount > 0) commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'GOAL_FUND', title: 'Goal Allocation', amount, linkedGoalId: goalId });
     });
 
-    // 6. Remainder
+    // 5. Remaining -> Holding (Unallocated)
     if (remaining > 0) {
-       updateAccount('payroll', remaining);
+       updateAccount('holding', remaining);
     }
 
     // Signal ROI
     const signal = signals.find(s => s.id === selectedSignalId);
-    if (signal && dropUSD > 0) {
-      updateSignal({ ...signal, totalGenerated: signal.totalGenerated + dropUSD, updatedAt: timestamp });
-    }
-
-    commitAction({
-      id: crypto.randomUUID(), date: timestamp, type: 'TRIAGE',
-      title: `Triaged ${dropUSD > 0 ? 'Drop' : 'Unallocated'}`,
-      amount: sourceFunds,
-      linkedSignalId: selectedSignalId
-    });
+    if (signal && dropUSD > 0) updateSignal({ ...signal, totalGenerated: signal.totalGenerated + dropUSD, updatedAt: timestamp });
 
     navigate('/');
   };
@@ -139,36 +161,50 @@ export const Triage = () => {
         {step === 1 && (
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
-              <GlassInput label="Drop (USD)" type="number" value={amountUSD} onChange={e => setAmountUSD(e.target.value)} autoFocus />
-              <GlassInput label="Rate" type="number" value={rate} onChange={e => setRate(e.target.value)} />
+              <GlassInput label="Drop (USD)" type="number" value={amountUSD} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmountUSD(e.target.value)} autoFocus />
+              <GlassInput label="Rate" type="number" value={rate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRate(e.target.value)} />
             </div>
+
+            <GlassInput label="Cost Basis (USD)" type="number" value={costBasisUSD} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCostBasisUSD(e.target.value)} icon={<Lock size={14}/>}/>
 
             <div>
               <label className="text-xs font-bold text-gray-500 uppercase">Signal Source</label>
-              <select className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white" value={selectedSignalId} onChange={e => setSelectedSignalId(e.target.value)}>
+              <select className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white" value={selectedSignalId} onChange={(e) => setSelectedSignalId(e.target.value)}>
                 <option value="">Select Source...</option>
                 {signals.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
               </select>
             </div>
 
             <div className="space-y-4">
+                {/* Tax Shield */}
+                <div className="p-4 bg-slate-500/10 rounded-xl border border-slate-500/20">
+                    <div className="flex justify-between mb-2">
+                        <span className="flex items-center gap-2 font-bold text-slate-400"><ShieldCheck size={16}/> Tax Shield (NTA 2026)</span>
+                        <span className="font-mono text-slate-300">{taxProvision}%</span>
+                    </div>
+                    <input type="range" min="0" max="25" value={taxProvision} onChange={(e) => setTaxProvision(Number(e.target.value))} className="w-full accent-slate-500"/>
+                    <div className="flex justify-between mt-2">
+                       <span className="text-[10px] text-gray-500">Legal Est: {estTaxPercent.toFixed(1)}%</span>
+                       <button onClick={() => setTaxProvision(Math.round(estTaxPercent))} className="text-[10px] text-accent-info hover:underline">Apply Est.</button>
+                    </div>
+                </div>
+
                 {/* Venture Tax */}
                 <div className="p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="flex justify-between mb-2">
-                        <span className="flex items-center gap-2 font-bold text-red-500"><Flame size={16}/> Venture Tax (Burn)</span>
+                        <span className="flex items-center gap-2 font-bold text-red-500"><Flame size={16}/> Venture Tax</span>
                         <span className="font-mono text-red-500">{ventureTax}%</span>
                     </div>
-                    <input type="range" min="0" max="20" value={ventureTax} onChange={e => setVentureTax(Number(e.target.value))} className="w-full accent-red-500"/>
+                    <input type="range" min="0" max="20" value={ventureTax} onChange={(e) => setVentureTax(Number(e.target.value))} className="w-full accent-red-500"/>
                 </div>
 
                 {/* Vault Tax */}
                 <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
                     <div className="flex justify-between mb-2">
-                        <span className="flex items-center gap-2 font-bold text-blue-400"><Landmark size={16}/> The Vault (Wealth)</span>
+                        <span className="flex items-center gap-2 font-bold text-blue-400"><Landmark size={16}/> The Vault</span>
                         <span className="font-mono text-blue-400">{vaultTax}%</span>
                     </div>
-                    <input type="range" min="0" max="50" value={vaultTax} onChange={e => setVaultTax(Number(e.target.value))} className="w-full accent-blue-500"/>
-                    <p className="text-[10px] text-gray-500 mt-2">Money that never sleeps. It leaves the ecosystem.</p>
+                    <input type="range" min="0" max="50" value={vaultTax} onChange={(e) => setVaultTax(Number(e.target.value))} className="w-full accent-blue-500"/>
                 </div>
             </div>
 
@@ -178,6 +214,14 @@ export const Triage = () => {
 
         {step === 2 && (
           <div className="space-y-6">
+            {/* Header with Back Button */}
+            <div className="flex items-center gap-4 border-b border-white/10 pb-4">
+               <button onClick={() => setStep(1)} className="p-2 bg-white/5 rounded-lg hover:bg-white/10 text-white transition-colors">
+                  <ArrowLeft size={16}/>
+               </button>
+               <h2 className="text-lg font-bold text-white">Allocation</h2>
+            </div>
+
             <div className="grid grid-cols-2 gap-4 text-center">
               <div className="p-3 bg-white/5 rounded-xl border border-white/10">
                 <div className="text-xs text-gray-500 uppercase">Net Deployable</div>
@@ -187,6 +231,20 @@ export const Triage = () => {
                 <div className="text-xs text-blue-500 uppercase">Vault Stashed</div>
                 <div className="font-mono font-bold text-white"><Naira/>{new Intl.NumberFormat().format(vaultAmount)}</div>
               </div>
+            </div>
+
+            {/* RUNWAY EXTENSION (MANUAL) */}
+            <div className="p-4 bg-green-500/10 rounded-xl border border-green-500/20">
+              <div className="flex justify-between items-center mb-2">
+                <span className="flex items-center gap-2 font-bold text-green-400"><Wallet size={16}/> Runway Top-up</span>
+              </div>
+              <GlassInput 
+                value={runwayAlloc} 
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRunwayAlloc(e.target.value)} 
+                className="text-right font-mono" 
+                placeholder="0" 
+              />
+              <p className="text-[10px] text-gray-500 mt-2 text-right">Extends operational life (Payroll).</p>
             </div>
 
             {/* DYNAMIC GENEROSITY */}
@@ -204,13 +262,13 @@ export const Triage = () => {
                   <div className="text-xs text-red-400 italic text-center py-2">"My security comes first." (Runway &lt; 3mo)</div>
               ) : (
                   <>
-                      <GlassInput value={generosity} onChange={e => setGenerosity(e.target.value)} className="text-right mb-3" placeholder="0" />
+                      <GlassInput value={generosity} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGenerosity(e.target.value)} className="text-right mb-3" placeholder="0" />
                       {genAmount > 0 && (
                           <div className="grid grid-cols-3 gap-2 animate-fade-in">
                               <div className="col-span-2">
-                                  <input className="w-full bg-black/20 border border-white/10 rounded-lg p-2 text-xs text-white" placeholder="Recipient Name" value={recipientName} onChange={e => setRecipientName(e.target.value)} />
+                                  <input className="w-full bg-black/20 border border-white/10 rounded-lg p-2 text-xs text-white" placeholder="Recipient Name" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} />
                               </div>
-                              <select className="bg-black/20 border border-white/10 rounded-lg p-2 text-xs text-white" value={recipientTier} onChange={e => setRecipientTier(e.target.value)}>
+                              <select className="bg-black/20 border border-white/10 rounded-lg p-2 text-xs text-white" value={recipientTier} onChange={(e) => setRecipientTier(e.target.value)}>
                                   <option value="T1">T1 (Family)</option>
                                   <option value="T2">T2 (Close)</option>
                                   <option value="T3">T3 (One-off)</option>
@@ -249,14 +307,17 @@ export const Triage = () => {
                     className="w-full bg-black/40 border border-white/10 rounded p-2 text-white text-sm disabled:opacity-50"
                     placeholder="Allocation"
                     value={allocations[g.id] || ''}
-                    onChange={e => setAllocations({...allocations, [g.id]: parseFloat(e.target.value) || 0})}
+                    onChange={(e) => setAllocations({...allocations, [g.id]: parseFloat(e.target.value) || 0})}
                   />
                 </div>
               ))}
             </div>
 
             <div className="flex justify-between items-center pt-4 border-t border-white/10">
-              <span className="text-gray-400 text-sm">Remaining</span>
+              <div className="flex flex-col">
+                <span className="text-gray-400 text-sm">Remaining</span>
+                <span className="text-[10px] text-gray-500">(Unallocated Holding)</span>
+              </div>
               <span className={`font-mono font-bold ${remaining < 0 ? 'text-red-500' : 'text-green-500'}`}><Naira/>{new Intl.NumberFormat().format(remaining)}</span>
             </div>
 

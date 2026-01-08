@@ -3,7 +3,7 @@ import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
-import { Settings as Gear, Clock, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { Settings as Gear, Clock, ShieldAlert } from 'lucide-react';
 
 export const Settings = () => {
   const { user, updateUser, history, nuclearReset } = useFinancials();

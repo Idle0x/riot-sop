@@ -16,9 +16,6 @@ export const useSimulation = () => {
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays > 0) {
-      const burn = diffDays * dailyBurn * 30; // Daily burn is monthly/30, so just use monthly burn fraction? 
-      // Actually dailyBurn in context is (sum / 30). So burn = diffDays * dailyBurn.
-      // Wait, dailyBurn in context is number. 
       const estimatedBurn = diffDays * dailyBurn;
 
       if (diffDays > 7) {

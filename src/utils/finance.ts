@@ -22,7 +22,7 @@ export const getFinancialState = (months: number) => {
   return 'freedom';
 };
 
-// NEW: Generosity Logic
+// Generosity Logic
 export const calculateGenerosityCap = (runwayMonths: number): number => {
   const ABSOLUTE_MAX = 300000;
 

@@ -3,15 +3,15 @@ import { useFinancials } from '../context/FinancialContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
-import { Settings as Gear, Clock, ShieldAlert, CloudUpload, Landmark } from 'lucide-react';
+import { Settings as Gear, ShieldAlert, CloudUpload, Landmark } from 'lucide-react'; // FIXED: Removed Clock
 
 export const Settings = () => {
-  const { user, updateUser, history, nuclearReset, syncLocalData } = useFinancials();
-  
+  const { user, updateUser, nuclearReset, syncLocalData } = useFinancials(); // Removed 'history'
+
   // Existing States
   const [newBurn, setNewBurn] = useState(user.burnCap.toString());
   const [reason, setReason] = useState('');
-  
+
   // NEW: Tax Profile State (Synced with User Profile)
   const [rent, setRent] = useState(user.annualRent?.toString() || '0');
 
@@ -19,7 +19,7 @@ export const Settings = () => {
   const [nuclearStep, setNuclearStep] = useState(0);
   const [masterPass, setMasterPass] = useState('');
 
-  const evolutionLog = history.filter(h => h.type === 'SYSTEM_EVENT');
+  // FIXED: Removed unused evolutionLog
 
   const handleUpdate = () => {
     const effectiveDate = new Date();

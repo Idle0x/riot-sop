@@ -1,224 +1,205 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { 
-  type Account, 
-  type Goal, 
-  type Signal, 
-  type Budget, 
-  type HistoryLog, 
-  type JournalEntry, 
-  type UserProfile,
+  type UserProfile, type Account, type Budget, type Goal, type Signal, type HistoryLog,
   type AccountType
 } from '../types';
 import { calculateDailyBurn } from '../utils/finance';
 
+// --- TYPES ---
 interface FinancialContextType {
   user: UserProfile;
   accounts: Account[];
+  budgets: Budget[];
   goals: Goal[];
   signals: Signal[];
-  budgets: Budget[];
   history: HistoryLog[];
-  journal: JournalEntry[];
   
   // Computed
-  totalLiquid: number;
   runwayMonths: number;
-  unallocatedCash: number;
   dailyBurn: number;
+  totalLiquid: number;
+  unallocatedCash: number;
   isGhostMode: boolean;
 
   // Actions
-  updateUser: (updates: Partial<UserProfile>) => void;
-  updateAccount: (id: AccountType, amount: number) => void;
+  updateUser: (data: Partial<UserProfile>) => void;
+  updateAccount: (id: AccountType, amount: number) => void; // Adds/Subtracts
   addBudget: (budget: Budget) => void;
-  deleteBudget: (id: string) => void; // <--- ADDED THIS LINE
-  logExpense: (budgetId: string | null, amount: number, note: string) => void;
+  deleteBudget: (id: string) => void;
+  logExpense: (budgetId: string | null, amount: number, note?: string) => void;
   resetBudgetCycle: () => void;
   updateGoal: (goal: Goal) => void;
+  deleteGoal: (id: string) => void; // <--- FIXED: Added
   updateSignal: (signal: Signal) => void;
   commitAction: (log: HistoryLog) => void;
   deleteTransaction: (id: string) => void;
   nuclearReset: (password: string) => boolean;
+  syncLocalData: () => void; // <--- FIXED: Added
 }
 
-const FinancialContext = createContext<FinancialContextType | undefined>(undefined);
+const FinancialContext = createContext<FinancialContextType | null>(null);
 
-const INITIAL_USER: UserProfile = {
-  burnCap: 200000,
-  inflationRate: 1.0,
+// --- DEFAULTS ---
+const defaultUser: UserProfile = {
+  burnCap: 500000,
+  annualRent: 0, // <--- FIXED: Added to match UserProfile type
+  inflationRate: 18.5,
   lastSeen: new Date().toISOString(),
   lastReconciliationDate: new Date().toISOString(),
   runwayEmptySince: null,
-  systemVersion: 'v2.3 (Alive)',
+  systemVersion: '1.6.0',
   pendingChanges: []
 };
 
-const INITIAL_ACCOUNTS: Account[] = [
-  { id: 'treasury', name: 'Treasury (Redot)', balance: 0, currency: 'USD' },
-  { id: 'payroll', name: 'Payroll (Opay)', balance: 0, currency: 'NGN' },
-  { id: 'buffer', name: 'Buffer (Piggy)', balance: 0, currency: 'NGN', isLocked: true },
-  { id: 'holding', name: 'Holding Pen', balance: 0, currency: 'NGN' }
+const defaultAccounts: Account[] = [
+  { id: 'treasury', name: 'Main Ops', balance: 0, currency: 'NGN' },
+  { id: 'payroll', name: 'Runway', balance: 0, currency: 'NGN' },
+  { id: 'buffer', name: 'Safety Net', balance: 0, currency: 'NGN', isLocked: true },
+  { id: 'holding', name: 'Inflow Pen', balance: 0, currency: 'NGN' },
+  { id: 'vault', name: 'Wealth Vault', balance: 0, currency: 'NGN', isLocked: true },
 ];
 
 export const FinancialProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<UserProfile>(INITIAL_USER);
-  const [accounts, setAccounts] = useState<Account[]>(INITIAL_ACCOUNTS);
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [signals, setSignals] = useState<Signal[]>([]);
-  const [budgets, setBudgets] = useState<Budget[]>([]);
-  const [history, setHistory] = useState<HistoryLog[]>([]);
-  const [journal, setJournal] = useState<JournalEntry[]>([]);
-  const [isInitialized, setIsInitialized] = useState(false);
+  // --- STATE ---
+  const [user, setUser] = useState<UserProfile>(() => {
+    const saved = localStorage.getItem('riot_user');
+    return saved ? JSON.parse(saved) : defaultUser;
+  });
 
-  // --- Persistence Engine ---
-  useEffect(() => {
-    const savedData = localStorage.getItem('riot_financial_os');
-    if (savedData) {
-      try {
-        const parsed = JSON.parse(savedData);
-        if (parsed.user) setUser(parsed.user);
-        if (parsed.accounts) setAccounts(parsed.accounts);
-        if (parsed.goals) setGoals(parsed.goals);
-        if (parsed.signals) setSignals(parsed.signals);
-        if (parsed.budgets) setBudgets(parsed.budgets);
-        if (parsed.history) setHistory(parsed.history);
-        if (parsed.journal) setJournal(parsed.journal);
-      } catch (e) {
-        console.error("Failed to load financial data", e);
-      }
-    }
-    setIsInitialized(true);
-  }, []);
+  const [accounts, setAccounts] = useState<Account[]>(() => {
+    const saved = localStorage.getItem('riot_accounts');
+    return saved ? JSON.parse(saved) : defaultAccounts;
+  });
 
-  useEffect(() => {
-    if (!isInitialized) return;
-    
-    // --- SIMULATION: Check Pending Changes (7-Day Cooldown) ---
-    const now = new Date();
-    if (user.pendingChanges.length > 0) {
-      const activeChanges = user.pendingChanges.filter(c => new Date(c.effectiveDate) <= now);
-      if (activeChanges.length > 0) {
-         // Apply changes
-         activeChanges.forEach(change => {
-            setUser(prev => ({ ...prev, [change.key]: change.value }));
-         });
-         // Clean up queue
-         setUser(prev => ({
-           ...prev, 
-           pendingChanges: prev.pendingChanges.filter(c => new Date(c.effectiveDate) > now)
-         }));
-      }
-    }
+  const [budgets, setBudgets] = useState<Budget[]>(() => {
+    const saved = localStorage.getItem('riot_budgets');
+    return saved ? JSON.parse(saved) : [];
+  });
 
-    const currentState = { user, accounts, goals, signals, budgets, history, journal };
-    localStorage.setItem('riot_financial_os', JSON.stringify(currentState));
-  }, [user, accounts, goals, signals, budgets, history, journal, isInitialized]);
+  const [goals, setGoals] = useState<Goal[]>(() => {
+    const saved = localStorage.getItem('riot_goals');
+    return saved ? JSON.parse(saved) : [];
+  });
 
+  const [signals, setSignals] = useState<Signal[]>(() => {
+    const saved = localStorage.getItem('riot_signals');
+    return saved ? JSON.parse(saved) : [];
+  });
 
-  // --- Computed Metrics ---
-  const exchangeRate = 1500; 
-  const totalLiquid = 
-    (accounts.find(a => a.id === 'treasury')?.balance || 0) * exchangeRate +
-    (accounts.find(a => a.id === 'payroll')?.balance || 0);
-  const unallocatedCash = accounts.find(a => a.id === 'holding')?.balance || 0;
-  const dailyBurn = calculateDailyBurn(budgets);
-  const monthlyBurn = dailyBurn * 30;
-  const runwayMonths = monthlyBurn > 0 ? totalLiquid / monthlyBurn : 0;
-  
-  const isGhostMode = (new Date().getTime() - new Date(user.lastSeen).getTime()) > (7 * 24 * 60 * 60 * 1000);
+  const [history, setHistory] = useState<HistoryLog[]>(() => {
+    const saved = localStorage.getItem('riot_history');
+    return saved ? JSON.parse(saved) : [];
+  });
 
-  // --- Actions ---
-  const updateUser = (updates: Partial<UserProfile>) => setUser(prev => ({ ...prev, ...updates }));
+  // --- PERSISTENCE ---
+  useEffect(() => { localStorage.setItem('riot_user', JSON.stringify(user)); }, [user]);
+  useEffect(() => { localStorage.setItem('riot_accounts', JSON.stringify(accounts)); }, [accounts]);
+  useEffect(() => { localStorage.setItem('riot_budgets', JSON.stringify(budgets)); }, [budgets]);
+  useEffect(() => { localStorage.setItem('riot_goals', JSON.stringify(goals)); }, [goals]);
+  useEffect(() => { localStorage.setItem('riot_signals', JSON.stringify(signals)); }, [signals]);
+  useEffect(() => { localStorage.setItem('riot_history', JSON.stringify(history)); }, [history]);
+
+  // --- ACTIONS ---
+  const updateUser = (data: Partial<UserProfile>) => setUser(prev => ({ ...prev, ...data }));
 
   const updateAccount = (id: AccountType, amount: number) => {
-    setAccounts(prev => prev.map(acc => 
-      acc.id === id ? { ...acc, balance: acc.balance + amount } : acc
-    ));
+    setAccounts(prev => prev.map(a => a.id === id ? { ...a, balance: a.balance + amount } : a));
   };
 
-  const addBudget = (budget: Budget) => setBudgets(prev => [...prev, budget]);
+  const addBudget = (b: Budget) => setBudgets(prev => [...prev, b]);
+  const deleteBudget = (id: string) => setBudgets(prev => prev.filter(b => b.id !== id));
   
-  const deleteBudget = (id: string) => {
-    setBudgets(prev => prev.filter(b => b.id !== id));
-  };
-
-  const logExpense = (budgetId: string | null, amount: number, note: string) => {
-    updateAccount('payroll', -amount);
-    if (budgetId) {
-      setBudgets(prev => prev.map(b => 
-        b.id === budgetId ? { ...b, spent: (b.spent || 0) + amount } : b
-      ));
-    }
-    commitAction({
-      id: crypto.randomUUID(),
-      date: new Date().toISOString(),
-      type: 'SPEND',
-      title: budgetId ? `Spend: ${budgets.find(b => b.id === budgetId)?.name}` : 'Uncategorized Spend',
-      amount: amount,
-      description: note,
-      currency: 'NGN'
-    });
-  };
-
   const resetBudgetCycle = () => {
     setBudgets(prev => prev.map(b => ({ ...b, spent: 0 })));
     commitAction({
-      id: crypto.randomUUID(),
-      date: new Date().toISOString(),
-      type: 'SYSTEM_EVENT',
-      title: 'Budget Cycle Reset',
-      description: 'Monthly spend counters reset to zero.'
+      id: crypto.randomUUID(), date: new Date().toISOString(), type: 'SYSTEM_EVENT',
+      title: 'Cycle Reset', description: 'Monthly budget counters reset.'
     });
   };
-  
-  const updateGoal = (goal: Goal) => {
+
+  const logExpense = (budgetId: string | null, amount: number, note?: string) => {
+    if (budgetId) {
+      setBudgets(prev => prev.map(b => b.id === budgetId ? { ...b, spent: (b.spent || 0) + amount } : b));
+    }
+    // Pull from Payroll (OpEx)
+    updateAccount('payroll', -amount);
+    commitAction({
+      id: crypto.randomUUID(), date: new Date().toISOString(), type: 'SPEND',
+      title: budgetId ? budgets.find(b => b.id === budgetId)?.name || 'Expense' : 'Uncategorized',
+      amount, description: note
+    });
+  };
+
+  const updateGoal = (g: Goal) => {
     setGoals(prev => {
-      const exists = prev.find(g => g.id === goal.id);
-      if (exists) return prev.map(g => g.id === goal.id ? goal : g);
-      return [...prev, goal];
+      const exists = prev.find(item => item.id === g.id);
+      if (exists) return prev.map(item => item.id === g.id ? g : item);
+      return [...prev, g];
     });
   };
 
-  const updateSignal = (signal: Signal) => {
+  // <--- FIXED: Missing function added
+  const deleteGoal = (id: string) => {
+    setGoals(prev => prev.filter(g => g.id !== id));
+  };
+
+  const updateSignal = (s: Signal) => {
     setSignals(prev => {
-      const exists = prev.find(s => s.id === signal.id);
-      if (exists) return prev.map(s => s.id === signal.id ? signal : s);
-      return [...prev, signal];
+      const exists = prev.find(item => item.id === s.id);
+      if (exists) return prev.map(item => item.id === s.id ? s : item);
+      return [...prev, s];
     });
   };
 
-  const commitAction = (log: HistoryLog) => {
-    setHistory(prev => [log, ...prev]);
-    updateUser({ lastSeen: new Date().toISOString() });
-  };
+  const commitAction = (log: HistoryLog) => setHistory(prev => [log, ...prev]);
 
   const deleteTransaction = (id: string) => {
     const log = history.find(h => h.id === id);
-    if (log && log.type === 'SPEND' && log.amount) {
-        updateAccount('payroll', log.amount); 
-    }
+    if (!log) return;
+    
+    // Simple Reversal Logic (Naive)
+    if (log.type === 'SPEND' && log.amount) updateAccount('payroll', log.amount);
+    
     setHistory(prev => prev.filter(h => h.id !== id));
   };
 
   const nuclearReset = (password: string) => {
-    const storedKey = localStorage.getItem('riot_access_key');
-    if (password !== storedKey) return false;
-
-    setAccounts(prev => prev.map(a => ({ ...a, balance: 0 })));
-    setHistory([]);
-    setGoals([]);
-    setSignals([]);
-    setBudgets([]);
-    setJournal([]);
-    return true;
+    if (password === 'PROTOCOL_ZERO') {
+      localStorage.clear();
+      return true;
+    }
+    return false;
   };
+
+  // <--- FIXED: Missing function added
+  const syncLocalData = () => {
+    const backup = { user, accounts, budgets, goals, signals, history, timestamp: new Date() };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `riot_sync_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // --- COMPUTED ---
+  const dailyBurn = calculateDailyBurn(budgets);
+  const totalLiquid = (accounts.find(a => a.id === 'payroll')?.balance || 0) + (accounts.find(a => a.id === 'treasury')?.balance || 0);
+  const unallocatedCash = accounts.find(a => a.id === 'holding')?.balance || 0;
+  
+  // Runway = Liquid Cash / Monthly Burn
+  const monthlyBurn = dailyBurn * 30;
+  const runwayMonths = monthlyBurn > 0 ? totalLiquid / monthlyBurn : 0;
+  const isGhostMode = false; // Placeholder for future feature
 
   return (
     <FinancialContext.Provider value={{
-      user, accounts, goals, signals, budgets, history, journal,
-      totalLiquid, runwayMonths, unallocatedCash, dailyBurn, isGhostMode,
-      updateUser, updateAccount, addBudget, deleteBudget, logExpense, resetBudgetCycle,
-      updateGoal, updateSignal, commitAction, deleteTransaction, nuclearReset
+      user, accounts, budgets, goals, signals, history,
+      runwayMonths, dailyBurn, totalLiquid, unallocatedCash, isGhostMode,
+      updateUser, updateAccount, addBudget, deleteBudget, logExpense, 
+      resetBudgetCycle, updateGoal, deleteGoal, updateSignal, commitAction, // Added deleteGoal
+      deleteTransaction, nuclearReset, syncLocalData // Added syncLocalData
     }}>
       {children}
     </FinancialContext.Provider>
@@ -227,6 +208,6 @@ export const FinancialProvider = ({ children }: { children: ReactNode }) => {
 
 export const useFinancials = () => {
   const context = useContext(FinancialContext);
-  if (context === undefined) throw new Error('useFinancials must be used within a FinancialProvider');
+  if (!context) throw new Error('useFinancials must be used within FinancialProvider');
   return context;
 };

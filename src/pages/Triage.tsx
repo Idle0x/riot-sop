@@ -12,7 +12,8 @@ export const Triage = () => {
   const navigate = useNavigate();
   const { 
     user, runwayMonths, goals, signals, unallocatedCash,
-    updateAccount, commitAction, updateSignal, history 
+    updateAccount, commitAction, updateSignal 
+    // FIXED: Removed 'history'
   } = useFinancials();
 
   const [step, setStep] = useState(1);
@@ -20,11 +21,11 @@ export const Triage = () => {
   const [costBasisUSD, setCostBasisUSD] = useState('0'); 
   const [rate, setRate] = useState('1500');
   const [selectedSignalId, setSelectedSignalId] = useState('');
-  
+
   const [taxProvision, setTaxProvision] = useState(0); 
   const [ventureTax, setVentureTax] = useState(0);
   const [vaultTax, setVaultTax] = useState(10); 
-  
+
   // STEP 2 STATES
   const [generosity, setGenerosity] = useState('0');
   const [runwayAlloc, setRunwayAlloc] = useState('0'); // NEW: Manual Runway
@@ -36,7 +37,7 @@ export const Triage = () => {
   const dropUSD = parseFloat(amountUSD) || 0;
   const costUSD = parseFloat(costBasisUSD) || 0;
   const rateVal = parseFloat(rate) || 0;
-  
+
   const grossNGN = dropUSD * rateVal;
   const profitNGN = Math.max(0, (dropUSD - costUSD) * rateVal);
   const sourceFunds = dropUSD > 0 ? grossNGN : unallocatedCash;
@@ -68,20 +69,20 @@ export const Triage = () => {
   };
 
   const estTaxPercent = calculateTaxEstimate(profitNGN);
-  
+
   // Deductions (Step 1)
   const taxAmount = sourceFunds * (taxProvision / 100);
   const ventureAmount = sourceFunds * (ventureTax / 100);
   const vaultAmount = sourceFunds * (vaultTax / 100);
-  
+
   // Net Deployable (Starting point for Step 2)
   const netFunds = sourceFunds - taxAmount - ventureAmount - vaultAmount;
-  
+
   // Allocations (Step 2)
   const genAmount = parseFloat(generosity) || 0;
   const runwayAmount = parseFloat(runwayAlloc) || 0;
   const goalSum = Object.values(allocations).reduce((a, b) => a + b, 0);
-  
+
   // Remaining = Unallocated (Stays in Holding)
   const availableForGoals = netFunds - genAmount - runwayAmount;
   const remaining = availableForGoals - goalSum;

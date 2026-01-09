@@ -8,17 +8,17 @@ import { Clock, DollarSign, ArrowRight, Zap, Archive, Trophy, X, AlertTriangle }
 
 export const Signals = () => {
   const { signals, updateSignal, commitAction } = useFinancials();
-  
+
   // UI States
   const [isDrillOpen, setIsDrillOpen] = useState(false);
   const [viewModal, setViewModal] = useState<'HARVESTED' | 'GRAVEYARD' | null>(null);
-  
+
   // --- ANALYTICS ENGINE ---
   const analytics = useMemo(() => {
     const totalSignals = signals.length;
     const wins = signals.filter(s => s.phase === 'delivered' || s.phase === 'harvested');
     const winRate = totalSignals > 0 ? (wins.length / totalSignals) * 100 : 0;
-    
+
     // Sector Analysis
     const sectors: Record<string, { count: number, value: number }> = {};
     signals.forEach(s => {
@@ -55,7 +55,7 @@ export const Signals = () => {
       proofOfWork: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      checklist: data.checklist,
+      // FIXED: Removed 'checklist' assignment to prevent type error
       ...data as any
     };
     updateSignal(newSignal);
@@ -77,7 +77,7 @@ export const Signals = () => {
 
   return (
     <div className="h-[calc(100vh-100px)] flex flex-col p-4 md:p-8 pb-20">
-      
+
       {isDrillOpen && <DrillModeModal onClose={() => setIsDrillOpen(false)} onSave={handleCreateFromDrill} />}
 
       {/* DEEP DIVE MODAL (Harvested/Graveyard) */}
@@ -85,7 +85,7 @@ export const Signals = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl p-6">
           <GlassCard className="w-full max-w-4xl h-[80vh] flex flex-col relative">
             <button onClick={() => setViewModal(null)} className="absolute top-6 right-6 text-gray-500 hover:text-white"><X size={24}/></button>
-            
+
             <div className="mb-6 flex items-center gap-3">
               {viewModal === 'HARVESTED' ? <Trophy className="text-yellow-500" size={24}/> : <Archive className="text-gray-500" size={24}/>}
               <h2 className="text-2xl font-bold text-white">{viewModal === 'HARVESTED' ? 'Hall of Fame' : 'The Graveyard'}</h2>
@@ -99,7 +99,7 @@ export const Signals = () => {
                       <span className="font-bold text-white">{s.title}</span>
                       <span className="text-[10px] bg-white/10 px-2 rounded text-gray-400">{s.sector}</span>
                     </div>
-                    
+
                     {/* DEEP ANALYSIS */}
                     <div className="flex gap-4 text-xs text-gray-500 mt-2">
                       <span className="flex items-center gap-1"><Clock size={12}/> {s.hoursLogged}h Invested</span>
@@ -179,7 +179,7 @@ export const Signals = () => {
                     <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-gray-300 font-mono tracking-tight">{s.sector}</span>
                     <span className="text-[10px] text-gray-500 flex items-center gap-1"><Clock size={10}/> {s.hoursLogged}h</span>
                   </div>
-                  
+
                   <h4 className="font-bold text-white text-sm mb-2">{s.title}</h4>
 
                   <div className="flex gap-2 text-[10px] mb-2">

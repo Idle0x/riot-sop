@@ -4,8 +4,8 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
 import { GlassProgressBar } from '../components/ui/GlassProgressBar';
-import { Naira } from '../components/ui/Naira'; // RESTORED
-import { formatNumber } from '../utils/format'; // UPDATED
+import { Naira } from '../components/ui/Naira';
+import { formatNumber } from '../utils/format';
 import { Trash2, Calendar, RefreshCcw, Plus, X } from 'lucide-react';
 
 export const Budget = () => {
@@ -38,9 +38,16 @@ export const Budget = () => {
   const handleSpend = () => {
     const val = parseFloat(spendAmount);
     if (!val) return;
+
+    // 1. Deduct from Money
     updateAccount('payroll', -val);
-    if (selectedBudgetId) updateBudgetSpent(selectedBudgetId, val);
-    
+
+    // 2. Track against Budget (if category selected)
+    if (selectedBudgetId) {
+        updateBudgetSpent(selectedBudgetId, val);
+    }
+
+    // 3. Log History
     const budgetName = selectedBudgetId 
         ? budgets.find(b => b.id === selectedBudgetId)?.name 
         : 'Uncategorized';
@@ -68,11 +75,13 @@ export const Budget = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 pb-20">
+
       {isSpendModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-fade-in">
           <GlassCard className="w-full max-w-md p-6 relative">
             <button onClick={() => setIsSpendModalOpen(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X size={20}/></button>
             <h2 className="text-2xl font-bold text-white mb-6">Log Expense</h2>
+
             <div className="space-y-4">
                <div>
                  <label className="text-xs font-bold text-gray-500 uppercase">Category</label>
@@ -96,9 +105,7 @@ export const Budget = () => {
       <div className="flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-bold text-white">OpEx Monitor</h1>
-          <p className="text-gray-400 flex items-center gap-1">
-            Total Monthly Burn: <span className="text-white font-mono flex items-center"><Naira/>{formatNumber(totalMonthly)}</span>
-          </p>
+          <p className="text-gray-400 flex items-center gap-1">Total Monthly Burn: <span className="text-white font-mono flex items-center gap-1"><Naira/>{formatNumber(totalMonthly)}</span></p>
         </div>
         <div className="flex gap-2">
            <GlassButton size="sm" variant="secondary" onClick={() => resetBudgetCycle()}>
@@ -116,10 +123,22 @@ export const Budget = () => {
           <div className="space-y-4">
             <GlassInput label="Name" value={name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)} />
             <GlassInput label="Limit (NGN)" type="number" value={amount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)} />
+
             <div className="flex gap-2">
-              <button onClick={() => setFreq('monthly')} className={`flex-1 p-2 rounded-lg border text-xs font-bold ${freq === 'monthly' ? 'bg-white text-black' : 'bg-transparent text-gray-500 border-white/10'}`}>Recurring</button>
-              <button onClick={() => setFreq('one-time')} className={`flex-1 p-2 rounded-lg border text-xs font-bold ${freq === 'one-time' ? 'bg-white text-black' : 'bg-transparent text-gray-500 border-white/10'}`}>One-Time</button>
+              <button 
+                onClick={() => setFreq('monthly')}
+                className={`flex-1 p-2 rounded-lg border text-xs font-bold flex items-center justify-center gap-2 ${freq === 'monthly' ? 'bg-white text-black' : 'bg-transparent text-gray-500 border-white/10'}`}
+              >
+                <RefreshCcw size={12}/> Recurring
+              </button>
+              <button 
+                onClick={() => setFreq('one-time')}
+                className={`flex-1 p-2 rounded-lg border text-xs font-bold flex items-center justify-center gap-2 ${freq === 'one-time' ? 'bg-white text-black' : 'bg-transparent text-gray-500 border-white/10'}`}
+              >
+                <Calendar size={12}/> One-Time
+              </button>
             </div>
+
             <GlassButton className="w-full" onClick={handleAdd} disabled={!name || !amount}>Add to Burn</GlassButton>
           </div>
         </GlassCard>
@@ -137,7 +156,12 @@ export const Budget = () => {
                      <span className="text-white flex items-center"><Naira/>{formatNumber(b.spent || 0)}</span> / <span className="flex items-center"><Naira/>{formatNumber(b.amount)}</span>
                   </div>
                 </div>
-                <button onClick={() => deleteBudget(b.id)} className="text-gray-600 hover:text-red-500"><Trash2 size={16}/></button>
+                <button 
+                    onClick={() => deleteBudget(b.id)} 
+                    className="text-gray-600 hover:text-red-500"
+                >
+                    <Trash2 size={16}/>
+                </button>
               </div>
               <GlassProgressBar 
                 value={b.spent || 0} 

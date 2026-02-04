@@ -16,7 +16,8 @@ const UserContext = createContext<UserContextType | null>(null);
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<any>(null);
-  const [isGhostMode, setIsGhostMode] = useState(false); // Local UI state only
+  // Fixed: Removed unused 'setIsGhostMode' setter
+  const [isGhostMode] = useState(false); 
   const queryClient = useQueryClient();
 
   // 1. Auth Listener

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '../context/UserContext';
 import { useLedger } from '../context/LedgerContext';
-import { formatCurrency } from '../utils/format';
 
 export const useSystemEngine = () => {
   const { user, updateProfile } = useUser();

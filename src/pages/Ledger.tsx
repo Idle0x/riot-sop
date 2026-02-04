@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
-import { useFinancials } from '../context/FinancialContext';
+import { useLedger } from '../context/LedgerContext'; // Updated Hook
 import { GlassCard } from '../components/ui/GlassCard';
+import { formatCurrency } from '../utils/format'; // Updated Utility
 import { Naira } from '../components/ui/Naira';
 import { Clock, Undo2, Search, Filter, ArrowDown } from 'lucide-react';
 
 export const Ledger = () => {
-  const { history, deleteTransaction } = useFinancials();
+  const { history, deleteTransaction } = useLedger(); // Updated Hook
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('ALL');
   const [limit, setLimit] = useState(50);
@@ -79,7 +80,7 @@ export const Ledger = () => {
 
             <div className="text-right">
               <div className={`font-mono font-bold ${log.amount && log.amount < 0 ? 'text-red-400' : 'text-white'}`}>
-                {log.amount ? <><Naira/>{new Intl.NumberFormat().format(Math.abs(log.amount))}</> : '-'}
+                {log.amount ? formatCurrency(Math.abs(log.amount)) : '-'}
               </div>
               {isUndoable(log.date) && (
                 <button 

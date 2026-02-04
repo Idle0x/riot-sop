@@ -1,21 +1,22 @@
 import { useState } from 'react';
-import { useFinancials } from '../context/FinancialContext';
+import { useLedger } from '../context/LedgerContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Naira } from '../components/ui/Naira';
 import { calculateGenerosityCap, getTierColor } from '../utils/finance';
+import { formatCurrency } from '../utils/format';
 import { Shield, Users, AlertTriangle, Search, Ban } from 'lucide-react';
 
 export const Generosity = () => {
-  const { history, runwayMonths } = useFinancials();
+  const { history, runwayMonths } = useLedger();
   const [searchTerm, setSearchTerm] = useState('');
 
   // 1. Calculate Caps
   const dynamicCap = calculateGenerosityCap(runwayMonths);
   const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-  
+
   // 2. Filter History for Generosity logs
   const generosityLogs = history.filter(h => h.tags?.includes('generosity'));
-  
+
   // 3. Calculate Month-to-Date Giving
   const monthTotal = generosityLogs
     .filter(log => log.date.startsWith(currentMonth))
@@ -31,7 +32,7 @@ export const Generosity = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 pb-20 animate-fade-in">
-      
+
       {/* HEADER & BALANCE */}
       <div className="flex flex-col md:flex-row justify-between md:items-end gap-6">
         <div>
@@ -44,11 +45,11 @@ export const Generosity = () => {
         <GlassCard className="p-4 min-w-[250px] border-blue-500/30">
           <div className="text-xs text-gray-400 uppercase font-bold mb-1">Available to Give (This Month)</div>
           <div className={`text-2xl font-mono font-bold ${remainingCap === 0 ? 'text-red-500' : 'text-white'}`}>
-            <Naira/>{new Intl.NumberFormat().format(remainingCap)}
+            {formatCurrency(remainingCap)}
           </div>
           <div className="text-[10px] text-gray-500 mt-1 flex justify-between">
-            <span>Cap: <Naira/>{new Intl.NumberFormat().format(dynamicCap)}</span>
-            <span>Used: <Naira/>{new Intl.NumberFormat().format(monthTotal)}</span>
+            <span>Cap: {formatCurrency(dynamicCap)}</span>
+            <span>Used: {formatCurrency(monthTotal)}</span>
           </div>
         </GlassCard>
       </div>
@@ -129,7 +130,7 @@ export const Generosity = () => {
                     <div className="text-xs text-gray-500">{new Date(log.date).toLocaleDateString()}</div>
                   </div>
                   <div className="font-mono font-bold text-white">
-                    <Naira/>{new Intl.NumberFormat().format(log.amount || 0)}
+                    {formatCurrency(log.amount || 0)}
                   </div>
                 </GlassCard>
                );

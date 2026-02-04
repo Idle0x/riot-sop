@@ -1,3 +1,5 @@
+// src/types/index.ts
+
 export type Currency = 'USD' | 'NGN';
 
 // --- USER & SYSTEM STATE ---
@@ -9,21 +11,30 @@ export interface PendingChange {
 }
 
 export interface UserProfile {
+  id: string; // NEW: Added to match Supabase Auth ID
   burnCap: number;           
-  annualRent: number; // NEW: For Tax Relief (NTA 2026)
+  annualRent: number; 
   inflationRate: number;     
   lastSeen: string;          
   lastReconciliationDate: string; 
   runwayEmptySince: string | null;
   systemVersion: string;     
-  pendingChanges: PendingChange[]; 
+  pendingChanges: PendingChange[];
+  // NEW V2 FIELDS
+  currencyCode?: string; 
+  settings?: {
+    allowNegativeBalance: boolean;
+    monthlyCheckpointDay: number;
+  };
 }
 
 // --- ACCOUNTING ---
+// Updated to allow string UUIDs while keeping the union for specific logic if needed
 export type AccountType = 'treasury' | 'payroll' | 'buffer' | 'holding' | 'vault';
 
 export interface Account {
-  id: AccountType;
+  id: string; // Changed to string (UUID) to match Supabase
+  type: AccountType; // Added to persist the "role" of the account
   name: string;
   balance: number;
   currency: Currency;
@@ -42,6 +53,7 @@ export interface Budget {
   expiryDate?: string;  
   category: string;
   autoDeduct?: boolean;
+  lastProcessedAt?: string; // NEW: For Monthly Checkpoint Logic
 }
 
 // --- GOALS ---
@@ -53,6 +65,10 @@ export interface SubGoal {
   targetAmount: number;
   currentAmount: number;
   isCompleted: boolean;
+  priority: number;
+  type: 'single' | 'container'; 
+  subGoals: SubGoal[];          
+  isHidden?: boolean;        
 }
 
 export interface Goal {
@@ -85,7 +101,7 @@ export interface Signal {
   phase: SignalPhase;
   confidence: number;        
   effort: 'low' | 'med' | 'high';
-  
+
   thesis: {
     alpha: string;        
     catalyst: string;     

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useFinancials } from '../context/FinancialContext';
+import { useLedger } from '../context/LedgerContext'; // Updated Hook
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
 import { Hash, Calendar } from 'lucide-react';
@@ -7,7 +7,7 @@ import { Hash, Calendar } from 'lucide-react';
 const AVAILABLE_TAGS = ['Win', 'Fail', 'Lesson', 'Idea', 'Note', 'System'];
 
 export const Journal = () => {
-  const { commitAction } = useFinancials(); // Removed unused 'journal'
+  const { commitAction, history } = useLedger(); // Updated Hook
   const [content, setContent] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
@@ -21,20 +21,18 @@ export const Journal = () => {
 
   const handleSave = () => {
     commitAction({
-      id: crypto.randomUUID(),
       date: new Date().toISOString(),
       type: 'JOURNAL',
       title: 'Captain\'s Log',
       description: content,
       tags: selectedTags
     });
-    
+
     setContent('');
     setSelectedTags([]);
   };
 
   // Filter history for Journal entries
-  const { history } = useFinancials();
   const journalEntries = history.filter(h => h.type === 'JOURNAL');
 
   return (
@@ -49,7 +47,7 @@ export const Journal = () => {
           value={content}
           onChange={e => setContent(e.target.value)}
         />
-        
+
         {/* Tag Selector */}
         <div className="flex flex-wrap gap-2 mt-4 mb-4">
           {AVAILABLE_TAGS.map(tag => (
@@ -79,12 +77,12 @@ export const Journal = () => {
       <div className="space-y-8 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-white/10 before:to-transparent">
         {journalEntries.map(entry => (
           <div key={entry.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-            
+
             {/* Dot */}
             <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white/20 bg-black shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
               <Hash size={16} className="text-gray-400"/>
             </div>
-            
+
             {/* Card */}
             <GlassCard className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-6">
               <div className="flex justify-between items-start mb-2">

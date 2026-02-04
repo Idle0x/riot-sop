@@ -47,16 +47,15 @@ export const Settings = () => {
     if (!confirm("This will upload data from your browser's LocalStorage to the Cloud Database. Continue?")) return;
 
     try {
-        // 1. Migrate Accounts (Balances only, assuming types exist)
+        // 1. Migrate Accounts
         const localAccounts = JSON.parse(localStorage.getItem('riot_accounts') || '[]');
         localAccounts.forEach((acc: any) => {
-            if (acc.balance !== 0) updateAccount(acc.id, acc.balance); // Add balance diff
+            if (acc.balance !== 0) updateAccount(acc.id, acc.balance);
         });
 
         // 2. Migrate Budgets
         const localBudgets = JSON.parse(localStorage.getItem('riot_budgets') || '[]');
         localBudgets.forEach((b: any) => {
-            // Remove ID so DB generates a fresh one
             const { name, amount, spent, frequency, category, autoDeduct, expiryDate } = b; 
             addBudget({ name, amount, spent, frequency, category, autoDeduct, expiryDate });
         });
@@ -71,16 +70,20 @@ export const Settings = () => {
         // 4. Migrate Signals
         const localSignals = JSON.parse(localStorage.getItem('riot_signals') || '[]');
         localSignals.forEach((s: any) => {
-            const { title, sector, phase, confidence, effort, hoursLogged, totalGenerated, redFlags, proofOfWork, thesis, research, outcome, timeline } = s;
-            addSignal({ title, sector, phase, confidence, effort, hoursLogged, totalGenerated, redFlags, proofOfWork, thesis, research, outcome, timeline });
+            const { title, sector, phase, confidence, effort, hoursLogged, totalGenerated, redFlags, proofOfWork, thesis, research, outcome, timeline, createdAt, updatedAt } = s;
+            
+            addSignal({ 
+                title, sector, phase, confidence, effort, hoursLogged, totalGenerated, redFlags, proofOfWork, thesis, research, outcome, timeline,
+                createdAt: createdAt || new Date().toISOString(),
+                updatedAt: updatedAt || new Date().toISOString()
+            });
         });
 
         // 5. Migrate History
         const localHistory = JSON.parse(localStorage.getItem('riot_history') || '[]');
         localHistory.forEach((h: any) => {
-             // Remove ID so DB generates a fresh one
-            const { id, ...rest } = h;
-            commitAction(rest);
+            const { date, type, title, amount, currency, description, linkedSignalId, linkedGoalId, tags } = h;
+            commitAction({ date, type, title, amount, currency, description, linkedSignalId, linkedGoalId, tags });
         });
 
         alert("Migration initiated! Check your dashboard in a few seconds.");

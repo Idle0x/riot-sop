@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, Link } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Wallet, 
@@ -15,7 +15,7 @@ import {
   PieChart,
   History,
   TrendingUp,
-  Heart // NEW IMPORT
+  Heart 
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
@@ -27,7 +27,7 @@ const NAV_ITEMS = [
   { icon: PieChart, label: 'Budget', path: '/budget' },
   { icon: History, label: 'Ledger', path: '/ledger' },
   { icon: TrendingUp, label: 'Analytics', path: '/analytics' },
-  { icon: Heart, label: 'Generosity', path: '/generosity' }, // NEW ITEM
+  { icon: Heart, label: 'Generosity', path: '/generosity' },
   { icon: Radio, label: 'Signals', path: '/signals' },
   { icon: BookOpen, label: 'Journal', path: '/journal' },
   { icon: Shield, label: 'Rules', path: '/constitution' },
@@ -42,26 +42,27 @@ export const Layout = ({ onLogout }: LayoutProps) => {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Auto-close menu on mobile when a link is clicked
   const handleNavClick = () => setIsMobileMenuOpen(false);
 
   return (
-    <div className="flex min-h-screen bg-bg-primary font-sans text-white">
+    <div className="flex min-h-screen bg-black font-sans text-white selection:bg-accent-success/30">
 
       {/* MOBILE OVERLAY */}
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm lg:hidden animate-fade-in"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
 
       {/* SIDEBAR */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 w-64 flex-col border-r border-glass-border bg-glass/95 backdrop-blur-xl transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:bg-glass/30",
+        "fixed inset-y-0 left-0 z-50 w-64 flex-col border-r border-white/10 bg-black/90 backdrop-blur-xl transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:bg-transparent",
         isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         {/* Logo Area */}
-        <div className="flex h-20 items-center justify-between px-8">
+        <div className="flex h-20 items-center justify-between px-8 border-b border-white/5">
           <div className="text-xl font-bold tracking-wider text-white">
             THE <span className="text-accent-success">riot'</span> SOP
           </div>
@@ -71,33 +72,33 @@ export const Layout = ({ onLogout }: LayoutProps) => {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-2 px-4 py-8 overflow-y-auto">
+        <nav className="flex-1 space-y-1 px-4 py-6 overflow-y-auto">
           {NAV_ITEMS.map((item) => {
             const isActive = location.pathname === item.path;
             return (
-              <a
+              <Link
                 key={item.path}
-                href={item.path}
+                to={item.path}
                 onClick={handleNavClick}
                 className={cn(
                   "flex items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200",
                   isActive 
-                    ? "bg-accent-success/10 text-accent-success shadow-glass-sm" 
-                    : "text-gray-400 hover:bg-white/5 hover:text-white"
+                    ? "bg-accent-success/10 text-accent-success border border-accent-success/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]" 
+                    : "text-gray-400 hover:bg-white/5 hover:text-white border border-transparent"
                 )}
               >
                 <item.icon className={cn("h-5 w-5", isActive && "animate-pulse")} />
                 {item.label}
-              </a>
+              </Link>
             );
           })}
         </nav>
 
         {/* User / Logout */}
-        <div className="border-t border-glass-border p-4">
+        <div className="border-t border-white/10 p-4">
           <button 
             onClick={onLogout}
-            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-gray-400 transition-colors hover:bg-red-500/10 hover:text-red-400"
+            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-gray-400 transition-colors hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 border border-transparent"
           >
             <LogOut className="h-5 w-5" />
             Disconnect
@@ -106,32 +107,33 @@ export const Layout = ({ onLogout }: LayoutProps) => {
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 w-full">
-        <header className="sticky top-0 z-40 flex h-20 items-center justify-between border-b border-glass-border bg-glass/50 px-8 backdrop-blur-xl">
+      <main className="flex-1 w-full relative">
+        <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-white/10 bg-black/50 px-8 backdrop-blur-xl">
           <div className="flex items-center gap-4 lg:hidden">
             <button onClick={() => setIsMobileMenuOpen(true)} className="text-gray-400 hover:text-white">
               <Menu className="h-6 w-6" />
             </button>
-            <span className="font-bold lg:hidden">THE riot' SOP</span>
+            <span className="font-bold lg:hidden text-white">THE riot' SOP</span>
           </div>
 
-          <div className="hidden text-sm font-medium text-gray-400 lg:block">
+          <div className="hidden text-xs font-mono font-medium text-gray-500 lg:block tracking-widest uppercase">
             // FINANCIAL COMMAND CENTER
           </div>
 
           <div className="flex items-center gap-6">
-             <div className="hidden md:flex items-center gap-2 rounded-full border border-glass-border bg-black/20 px-4 py-1.5 backdrop-blur-sm">
-                <div className="h-2 w-2 animate-pulse rounded-full bg-accent-success"></div>
-                <span className="text-xs font-bold tracking-wider text-accent-success">SYSTEM ONLINE</span>
+             <div className="hidden md:flex items-center gap-2 rounded-full border border-accent-success/20 bg-accent-success/5 px-4 py-1.5 backdrop-blur-sm">
+                <div className="h-2 w-2 animate-pulse rounded-full bg-accent-success shadow-[0_0_10px_#10b981]"></div>
+                <span className="text-[10px] font-bold tracking-widest text-accent-success">SYSTEM ONLINE</span>
              </div>
-             <button className="relative text-gray-400 hover:text-white">
+             <button className="relative text-gray-400 hover:text-white transition-colors">
                <Bell className="h-5 w-5" />
+               <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-accent-danger animate-ping"></span>
                <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-accent-danger"></span>
              </button>
           </div>
         </header>
 
-        <div className="p-4 md:p-8">
+        <div className="min-h-[calc(100vh-80px)]">
           <Outlet />
         </div>
       </main>

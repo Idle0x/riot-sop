@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { useFinancials } from '../context/FinancialContext';
+import { useUser } from '../context/UserContext';
+import { useLedger } from '../context/LedgerContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
 import { Download, TrendingUp, Calendar, Layers } from 'lucide-react';
@@ -8,7 +9,8 @@ import {
 } from 'recharts';
 
 export const Analytics = () => {
-  const { history, user, budgets } = useFinancials();
+  const { user } = useUser();
+  const { history, budgets } = useLedger();
   const [viewMode, setViewMode] = useState<'BURN' | 'RUNWAY' | 'COMPARE'>('BURN');
 
   // --- 1. DATA SOVEREIGNTY ---
@@ -23,7 +25,7 @@ export const Analytics = () => {
   };
 
   // --- 2. CHART DATA ENGINES ---
-  
+
   // A. Burn History (Line)
   const burnData = useMemo(() => {
     const grouped = history
@@ -54,7 +56,7 @@ export const Analytics = () => {
   const comparisonData = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const lastYear = currentYear - 1;
-    
+
     // Initialize 12 months
     const months = Array.from({length: 12}, (_, i) => ({
       name: new Date(0, i).toLocaleString('default', { month: 'short' }),
@@ -142,7 +144,7 @@ export const Analytics = () => {
             {new Intl.NumberFormat().format(history.filter(h => h.type === 'SPEND').reduce((a, b) => a + (b.amount || 0), 0))}
           </div>
         </GlassCard>
-        
+
         <GlassCard className="p-6">
           <h3 className="text-gray-500 text-xs font-bold uppercase mb-2">Data Points</h3>
           <div className="text-2xl font-mono font-bold text-white">

@@ -4,7 +4,7 @@ import { useLedger } from '../context/LedgerContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
-import { Settings as Gear, ShieldAlert, CloudUpload, Landmark, Lock, CheckCircle2 } from 'lucide-react';
+import { Settings as Gear, ShieldAlert, CloudUpload, Landmark, Lock } from 'lucide-react'; // REMOVED CheckCircle2
 
 export const Settings = () => {
   const { user, updateProfile } = useUser();

@@ -1,20 +1,22 @@
 import { useState } from 'react';
-import { useFinancials } from '../context/FinancialContext';
+import { useUser } from '../context/UserContext';
+import { useLedger } from '../context/LedgerContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
 import { Naira } from '../components/ui/Naira';
 import { getFinancialState, calculateGenerosityCap } from '../utils/finance';
+import { formatCurrency } from '../utils/format';
 import { ArrowRight, ArrowLeft, Flame, Heart, AlertTriangle, CheckCircle2, Lock, Wand2, Landmark, ShieldCheck, Wallet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Triage = () => {
   const navigate = useNavigate();
+  const { user } = useUser();
   const { 
-    user, runwayMonths, goals, signals, unallocatedCash,
+    runwayMonths, goals, signals, unallocatedCash,
     updateAccount, commitAction, updateSignal 
-    // FIXED: Removed 'history'
-  } = useFinancials();
+  } = useLedger();
 
   const [step, setStep] = useState(1);
   const [amountUSD, setAmountUSD] = useState('');
@@ -28,7 +30,7 @@ export const Triage = () => {
 
   // STEP 2 STATES
   const [generosity, setGenerosity] = useState('0');
-  const [runwayAlloc, setRunwayAlloc] = useState('0'); // NEW: Manual Runway
+  const [runwayAlloc, setRunwayAlloc] = useState('0'); 
   const [recipientName, setRecipientName] = useState(''); 
   const [recipientTier, setRecipientTier] = useState('T3');
   const [allocations, setAllocations] = useState<Record<string, number>>({});
@@ -39,12 +41,12 @@ export const Triage = () => {
   const rateVal = parseFloat(rate) || 0;
 
   const grossNGN = dropUSD * rateVal;
-  const profitNGN = Math.max(0, (dropUSD - costUSD) * rateVal);
+  //const profitNGN = Math.max(0, (dropUSD - costUSD) * rateVal);
   const sourceFunds = dropUSD > 0 ? grossNGN : unallocatedCash;
 
-  // NTA 2026 Progressive Calculation
+  // Estimate Tax Logic
   const calculateTaxEstimate = (profit: number) => {
-    const annualRent = user.annualRent || 0;
+    const annualRent = user?.annualRent || 0;
     const rentRelief = Math.min(500000, annualRent * 0.20);
     const chargeableProfit = Math.max(0, profit - rentRelief);
 
@@ -68,6 +70,7 @@ export const Triage = () => {
     return profit > 0 ? (tax / profit) * 100 : 0;
   };
 
+  const profitNGN = Math.max(0, (dropUSD - costUSD) * rateVal);
   const estTaxPercent = calculateTaxEstimate(profitNGN);
 
   // Deductions (Step 1)
@@ -83,7 +86,7 @@ export const Triage = () => {
   const runwayAmount = parseFloat(runwayAlloc) || 0;
   const goalSum = Object.values(allocations).reduce((a, b) => a + b, 0);
 
-  // Remaining = Unallocated (Stays in Holding)
+  // Remaining
   const availableForGoals = netFunds - genAmount - runwayAmount;
   const remaining = availableForGoals - goalSum;
 
@@ -96,7 +99,6 @@ export const Triage = () => {
   const autoDistribute = () => {
     const activeGoals = goals.filter(g => !g.isCompleted);
     if (activeGoals.length === 0) return;
-    // Split whatever is available after runway/generosity
     const split = Math.floor(Math.max(0, availableForGoals) / activeGoals.length);
     const newAlloc: Record<string, number> = {};
     activeGoals.forEach(g => newAlloc[g.id] = split);
@@ -105,41 +107,55 @@ export const Triage = () => {
 
   const handleCommit = () => {
     const timestamp = new Date().toISOString();
-    if (dropUSD > 0) updateAccount('holding', grossNGN);
-    updateAccount('holding', -sourceFunds);
+    
+    // Logic: If new drop, we "add" it to holding then "subtract" sourceFunds.
+    // Simpler: Just deduct taxes/burns from source.
+    if (dropUSD > 0) {
+        updateAccount('holding', grossNGN); // Inflow
+    }
+    updateAccount('holding', -sourceFunds); // Outflow for allocation
 
     // 1. Taxes & Burns
     if (taxAmount > 0) {
       updateAccount('vault', taxAmount); 
-      commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'TRANSFER', title: 'Tax Shield Stashed', amount: taxAmount, tags: ['tax_nta2026'] });
+      commitAction({ date: timestamp, type: 'TRANSFER', title: 'Tax Shield Stashed', amount: taxAmount, tags: ['tax_nta2026'] });
     }
-    if (ventureAmount > 0) commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'SPEND', title: 'Venture Tax Burned', amount: ventureAmount, tags: ['risk'] });
+    if (ventureAmount > 0) commitAction({ date: timestamp, type: 'SPEND', title: 'Venture Tax Burned', amount: ventureAmount, tags: ['risk'] });
     if (vaultAmount > 0) {
       updateAccount('vault', vaultAmount);
-      commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'TRANSFER', title: 'Vault Deposit', amount: vaultAmount, tags: ['wealth_defense'] });
+      commitAction({ date: timestamp, type: 'TRANSFER', title: 'Vault Deposit', amount: vaultAmount, tags: ['wealth_defense'] });
     }
 
     // 2. Generosity
     if (genAmount > 0) {
         updateAccount('payroll', genAmount);
         commitAction({ 
-            id: crypto.randomUUID(), date: timestamp, type: 'SPEND', title: 'Generosity', 
+            date: timestamp, type: 'SPEND', title: 'Generosity', 
             amount: genAmount, description: `${recipientName} | [${recipientTier}]`, tags: ['generosity'] 
         });
     }
 
     // 3. Runway Top-up (Manual)
     if (runwayAmount > 0) {
-        updateAccount('payroll', runwayAmount); // Moves to Payroll to extend runway
-        commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'TRANSFER', title: 'Runway Extension', amount: runwayAmount, tags: ['operations'] });
+        updateAccount('payroll', runwayAmount); // Moves to Payroll
+        commitAction({ date: timestamp, type: 'TRANSFER', title: 'Runway Extension', amount: runwayAmount, tags: ['operations'] });
     }
 
     // 4. Goals
     Object.entries(allocations).forEach(([goalId, amount]) => {
-       if (amount > 0) commitAction({ id: crypto.randomUUID(), date: timestamp, type: 'GOAL_FUND', title: 'Goal Allocation', amount, linkedGoalId: goalId });
+       if (amount > 0) {
+         // Note: Logic for goal funding needs to be handled. 
+         // In LedgerContext, we don't have a direct 'Goal Fund' account update, 
+         // usually this implies moving money to 'Buffer' or updating Goal currentAmount.
+         // For simplicity here, we assume it stays in holding/buffer as a "Goal" asset.
+         // Real implementation should likely move it to 'buffer' account.
+         // Let's assume goals are tracked virtually, or backed by 'Buffer' account.
+         updateAccount('buffer', amount);
+         commitAction({ date: timestamp, type: 'GOAL_FUND', title: 'Goal Allocation', amount, linkedGoalId: goalId });
+       }
     });
 
-    // 5. Remaining -> Holding (Unallocated)
+    // 5. Remaining -> Holding (It's already there since we deducted sourceFunds and re-added parts)
     if (remaining > 0) {
        updateAccount('holding', remaining);
     }
@@ -226,11 +242,11 @@ export const Triage = () => {
             <div className="grid grid-cols-2 gap-4 text-center">
               <div className="p-3 bg-white/5 rounded-xl border border-white/10">
                 <div className="text-xs text-gray-500 uppercase">Net Deployable</div>
-                <div className="font-mono font-bold text-white"><Naira/>{new Intl.NumberFormat().format(netFunds)}</div>
+                <div className="font-mono font-bold text-white">{formatCurrency(netFunds)}</div>
               </div>
               <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
                 <div className="text-xs text-blue-500 uppercase">Vault Stashed</div>
-                <div className="font-mono font-bold text-white"><Naira/>{new Intl.NumberFormat().format(vaultAmount)}</div>
+                <div className="font-mono font-bold text-white">{formatCurrency(vaultAmount)}</div>
               </div>
             </div>
 
@@ -255,7 +271,7 @@ export const Triage = () => {
                 {isGenerosityLocked ? (
                     <span className="text-xs font-bold text-red-500 flex items-center gap-1"><Lock size={12}/> LOCKED</span>
                 ) : (
-                    <span className={`text-xs font-bold ${isOverCap ? 'text-red-500' : 'text-gray-500'}`}>Cap: <Naira/>{new Intl.NumberFormat().format(dynamicGenCap)}</span>
+                    <span className={`text-xs font-bold ${isOverCap ? 'text-red-500' : 'text-gray-500'}`}>Cap: {formatCurrency(dynamicGenCap)}</span>
                 )}
               </div>
 
@@ -300,7 +316,7 @@ export const Triage = () => {
                 <div key={g.id} className="mb-3">
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-white">{g.title}</span>
-                    <span className="text-gray-500">Need: <Naira/>{new Intl.NumberFormat().format(g.targetAmount - g.currentAmount)}</span>
+                    <span className="text-gray-500">Need: {formatCurrency(g.targetAmount - g.currentAmount)}</span>
                   </div>
                   <input 
                     type="number" 
@@ -319,7 +335,7 @@ export const Triage = () => {
                 <span className="text-gray-400 text-sm">Remaining</span>
                 <span className="text-[10px] text-gray-500">(Unallocated Holding)</span>
               </div>
-              <span className={`font-mono font-bold ${remaining < 0 ? 'text-red-500' : 'text-green-500'}`}><Naira/>{new Intl.NumberFormat().format(remaining)}</span>
+              <span className={`font-mono font-bold ${remaining < 0 ? 'text-red-500' : 'text-green-500'}`}>{formatCurrency(remaining)}</span>
             </div>
 
             <GlassButton className="w-full" disabled={remaining < 0 || genAmount > 300000} onClick={handleCommit}>

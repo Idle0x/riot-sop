@@ -1,17 +1,26 @@
+// src/utils/finance.ts
 import { type Budget } from '../types';
 
-export const calculateDailyBurn = (budgets: Budget[]): number => {
+/**
+ * Calculates the Total Committed Monthly Burn
+ * This is the "Hard Cap" of what you plan to spend.
+ * It does NOT average it by 30 days. It gives you the full liability.
+ */
+export const calculateMonthlyBurn = (budgets: Budget[]): number => {
   const now = new Date();
 
-  const activeTotal = budgets.reduce((sum, budget) => {
+  return budgets.reduce((sum, budget) => {
     // Skip expired one-time budgets
     if (budget.frequency === 'one-time' && budget.expiryDate) {
       if (new Date(budget.expiryDate) < now) return sum;
     }
     return sum + budget.amount;
   }, 0);
+};
 
-  return activeTotal / 30; // Daily burn rate
+// KEEPING LEGACY SUPPORT FOR NOW (Optional, prevents breakages elsewhere)
+export const calculateDailyBurn = (budgets: Budget[]): number => {
+  return calculateMonthlyBurn(budgets) / 30;
 };
 
 export const getFinancialState = (months: number) => {
@@ -29,7 +38,7 @@ export const calculateGenerosityCap = (runwayMonths: number): number => {
   if (runwayMonths <= 3) return 0;       // CRITICAL: Locked
   if (runwayMonths < 6) return 50000;    // BUILDING: Restricted
   if (runwayMonths < 12) return 150000;  // SECURE: Moderate
-  
+
   return ABSOLUTE_MAX; // FREEDOM
 };
 

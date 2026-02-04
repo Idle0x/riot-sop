@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '../context/UserContext';
 import { useLedger } from '../context/LedgerContext';
-import { supabase } from '../lib/supabase';
 
 export const useMonthlyReconciliation = () => {
   const { user, updateProfile } = useUser();

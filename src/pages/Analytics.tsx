@@ -7,6 +7,8 @@ import { Download, TrendingUp, Calendar, Layers } from 'lucide-react';
 import { 
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend 
 } from 'recharts';
+import { formatNumber } from '../utils/format';
+import { Naira } from '../components/ui/Naira';
 
 export const Analytics = () => {
   const { user } = useUser();
@@ -139,9 +141,8 @@ export const Analytics = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <GlassCard className="p-6">
           <h3 className="text-gray-500 text-xs font-bold uppercase mb-2">Total Lifecycle Spend</h3>
-          <div className="text-2xl font-mono font-bold text-white">
-            {/* Sum all SPEND types */}
-            {new Intl.NumberFormat().format(history.filter(h => h.type === 'SPEND').reduce((a, b) => a + (b.amount || 0), 0))}
+          <div className="text-2xl font-mono font-bold text-white flex items-center gap-1">
+            <Naira/>{formatNumber(history.filter(h => h.type === 'SPEND').reduce((a, b) => a + (b.amount || 0), 0))}
           </div>
         </GlassCard>
 

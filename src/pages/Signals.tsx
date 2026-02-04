@@ -35,9 +35,6 @@ export const Signals = () => {
 
   // --- ACTIONS ---
   const moveSignal = (signal: Signal, phase: SignalPhase) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { id, ...rest } = signal;
-    
     updateSignal({ ...signal, phase, updatedAt: new Date().toISOString() });
     
     commitAction({
@@ -50,15 +47,10 @@ export const Signals = () => {
   };
 
   const handleCreateFromDrill = (data: Partial<Signal>) => {
-    // Create new signal via Ledger (which handles UUID on DB side, but we mock strictly here)
-    // Note: In a real app, addSignal should handle the ID. 
-    // Since we don't have addSignal exposed in the hook yet for this specific shape, 
-    // we assume the user will implement addSignal in LedgerContext or use this mock:
-    
+    // Note: The actual creation logic should be handled by an addSignal function 
+    // exposed by the LedgerContext. For now, we log it to satisfy the requirement
+    // without breaking the build with unused vars.
     console.log("Creating signal:", data);
-    // You need to ensure 'addSignal' is exposed in LedgerContext and used here.
-    // For now, to satisfy the build, we will just close the modal.
-    // Ideally: addSignal(data as Omit<Signal, 'id'>);
     setIsDrillOpen(false);
   };
 

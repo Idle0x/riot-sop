@@ -1,15 +1,15 @@
 import { useState } from 'react';
-import { useFinancials } from '../context/FinancialContext';
+import { useLedger } from '../context/LedgerContext'; // NEW CONTEXT
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
 import { GlassProgressBar } from '../components/ui/GlassProgressBar';
-import { Naira } from '../components/ui/Naira';
+import { formatCurrency } from '../utils/format'; // NEW UTILITY
 import { GoalArchitect } from '../components/roadmap/GoalArchitect';
 import { type Goal, type Phase } from '../types';
 import { Target, CheckCircle2, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 
 export const Roadmap = () => {
-  const { goals, updateGoal, deleteGoal } = useFinancials();
+  const { goals, addGoal, deleteGoal } = useLedger(); // Using Ledger Context
   const [viewMode, setViewMode] = useState<'FOCUS' | 'ROADMAP'>('FOCUS');
   const [expandedGoals, setExpandedGoals] = useState<Record<string, boolean>>({});
   const [isArchitectOpen, setIsArchitectOpen] = useState(false);
@@ -19,22 +19,28 @@ export const Roadmap = () => {
   };
 
   const handleCreateGoal = (goalData: Partial<Goal>) => {
-    // FIX: Spread goalData first, then overwrite/set system defaults to avoid "Specified more than once" error
-    const newGoal: Goal = {
-      ...goalData as Goal,
-      id: crypto.randomUUID(),
+    // LedgerContext handles UUID generation, just pass the data
+    addGoal({
+      title: goalData.title || 'New Goal',
+      phase: goalData.phase || 'P1',
+      targetAmount: goalData.targetAmount || 0,
       currentAmount: 0,
       isCompleted: false,
       priority: 99,
+      type: goalData.type || 'single',
       subGoals: goalData.subGoals || []
-    };
-    updateGoal(newGoal);
+    } as any);
     setIsArchitectOpen(false);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure? This deletes the goal and all allocation history.')) {
-      deleteGoal(id);
+  const handleDelete = (goal: Goal) => {
+    if (confirm(`Delete "${goal.title}"?`)) {
+      let reclaim = false;
+      if (goal.currentAmount > 0) {
+        // ASK THE QUESTION
+        reclaim = confirm(`This goal has ${formatCurrency(goal.currentAmount)} allocated.\n\nClick OK to RECLAIM funds to Holding.\nClick CANCEL to BURN funds (Vanished).`);
+      }
+      deleteGoal(goal.id, reclaim);
     }
   };
 
@@ -42,7 +48,7 @@ export const Roadmap = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 pb-20 animate-fade-in">
-      
+
       {isArchitectOpen && <GoalArchitect onClose={() => setIsArchitectOpen(false)} onSave={handleCreateGoal} />}
 
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
@@ -50,7 +56,7 @@ export const Roadmap = () => {
            <h1 className="text-3xl font-bold text-white">Master Roadmap</h1>
            <p className="text-gray-400 text-sm">Design your life architecture.</p>
         </div>
-        
+
         <div className="flex gap-4">
            <div className="flex bg-black/20 p-1 rounded-lg border border-white/10 h-fit">
             <button 
@@ -112,8 +118,8 @@ export const Roadmap = () => {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="font-mono font-bold text-white"><Naira/>{new Intl.NumberFormat().format(goal.currentAmount)}</div>
-                          <div className="text-xs text-gray-500">of <Naira/>{new Intl.NumberFormat().format(goal.targetAmount)}</div>
+                          <div className="font-mono font-bold text-white">{formatCurrency(goal.currentAmount)}</div>
+                          <div className="text-xs text-gray-500">of {formatCurrency(goal.targetAmount)}</div>
                         </div>
                       </div>
 
@@ -132,23 +138,26 @@ export const Roadmap = () => {
                     {expandedGoals[goal.id] && (
                       <div className="bg-black/20 border-t border-white/10 p-4 space-y-3 animate-slide-down">
                         {goal.subGoals.length > 0 ? (
-                          goal.subGoals.map(sub => (
-                            <div key={sub.id} className="flex items-center gap-3 text-sm p-2 rounded hover:bg-white/5">
+                          goal.subGoals.map((sub, idx) => (
+                            <div key={idx} className="flex items-center gap-3 text-sm p-2 rounded hover:bg-white/5">
                               <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${sub.isCompleted ? 'bg-green-500 border-green-500' : 'border-gray-600'}`}>
                                 {sub.isCompleted && <CheckCircle2 size={10} className="text-black"/>}
                               </div>
                               <span className={sub.isCompleted ? 'text-gray-500 line-through' : 'text-gray-300'}>{sub.title}</span>
                               <div className="ml-auto flex items-center gap-4">
-                                <span className="font-mono text-xs text-gray-500"><Naira/>{new Intl.NumberFormat().format(sub.targetAmount)}</span>
+                                <span className="font-mono text-xs text-gray-500">{formatCurrency(sub.targetAmount)}</span>
                               </div>
                             </div>
                           ))
                         ) : (
                           <div className="text-xs text-gray-500 italic text-center">Single funding target. No sub-steps.</div>
                         )}
-                        
+
                         <div className="flex justify-end pt-4 border-t border-white/5 gap-2">
-                           <button onClick={(e) => { e.stopPropagation(); handleDelete(goal.id); }} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1">
+                           <button 
+                              onClick={(e) => { e.stopPropagation(); handleDelete(goal); }} 
+                              className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1 border border-red-500/20 px-3 py-1.5 rounded hover:bg-red-500/10 transition-colors"
+                           >
                              <Trash2 size={12}/> Delete Blueprint
                            </button>
                         </div>

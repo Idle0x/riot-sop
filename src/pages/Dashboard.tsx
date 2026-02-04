@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useUser } from '../context/UserContext'; // NEW
-import { useLedger } from '../context/LedgerContext'; // NEW
-import { useMonthlyReconciliation } from '../hooks/useMonthlyReconciliation'; // NEW
-import { formatCurrency } from '../utils/format'; // NEW UTILITY
+import { useUser } from '../context/UserContext';
+import { useLedger } from '../context/LedgerContext';
+import { useSystemEngine } from '../hooks/useSystemEngine';
+import { formatNumber } from '../utils/format'; // UPDATED: Use formatNumber (no symbol)
+import { Naira } from '../components/ui/Naira'; // NEW: Use your SVG
 
 import { MetricCard } from '../components/ui/MetricCard';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -24,7 +25,7 @@ export const Dashboard = () => {
   } = useLedger();
 
   // Initialize The New Simulation Engine
-  const { showModal, monthsMissed, pendingBurn, confirmReconciliation } = useMonthlyReconciliation();
+  const { showModal, monthsMissed, pendingBurn, confirmReconciliation } = useSystemEngine();
 
   const navigate = useNavigate();
   const [time, setTime] = useState(new Date());
@@ -77,7 +78,7 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        {/* UNALLOCATED CAPITAL (Zero Floor Applied) */}
+        {/* UNALLOCATED CAPITAL (Fixed: Use SVG) */}
         {unallocatedCash > 0 && (
           <div className="bg-yellow-500/10 border border-yellow-500/50 p-6 rounded-2xl flex items-center justify-between animate-pulse shadow-[0_0_20px_rgba(234,179,8,0.2)]">
             <div className="flex items-center gap-4">
@@ -88,7 +89,9 @@ export const Dashboard = () => {
               </div>
             </div>
             <div className="text-right">
-              <div className="font-mono font-bold text-yellow-500 text-xl">{formatCurrency(unallocatedCash)}</div>
+              <div className="font-mono font-bold text-yellow-500 text-xl flex items-center justify-end gap-1">
+                <Naira/>{formatNumber(unallocatedCash)}
+              </div>
               <GlassButton size="sm" onClick={() => navigate('/triage')} className="mt-2 border-yellow-500/50 text-yellow-500 hover:bg-yellow-500 hover:text-black">
                 Triange Now <ArrowRight size={14} className="ml-1"/>
               </GlassButton>
@@ -96,23 +99,23 @@ export const Dashboard = () => {
           </div>
         )}
 
-        {/* ASSETS (All using formatCurrency) */}
+        {/* ASSETS (Fixed: Use SVG) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <MetricCard 
             title="Liquid Runway" 
-            value={formatCurrency(totalLiquid)} 
+            value={<div className="flex items-center gap-1"><Naira/>{formatNumber(totalLiquid)}</div>} 
             subValue={`${runwayMonths.toFixed(1)} Months`} 
             icon={<Activity size={20}/>} 
           />
           <MetricCard 
             title="Locked Assets" 
-            value={formatCurrency(totalLocked)} 
+            value={<div className="flex items-center gap-1"><Naira/>{formatNumber(totalLocked)}</div>} 
             subValue="Buffer & Goals" 
             icon={<Lock size={20}/>} 
           />
           <MetricCard 
             title="Net Worth" 
-            value={formatCurrency(netWorth)} 
+            value={<div className="flex items-center gap-1"><Naira/>{formatNumber(netWorth)}</div>} 
             subValue="Total System Value" 
             icon={<ShieldCheck size={20}/>} 
             isPrivate 
@@ -152,8 +155,8 @@ export const Dashboard = () => {
                     <div className="text-xs text-gray-500">{new Date(log.date).toLocaleDateString()}</div>
                   </div>
                 </div>
-                <div className="font-mono text-sm text-white">
-                  {log.amount ? formatCurrency(log.amount) : '-'}
+                <div className="font-mono text-sm text-white flex items-center gap-1">
+                  {log.amount ? <><Naira/>{formatNumber(log.amount)}</> : '-'}
                 </div>
               </div>
             ))}

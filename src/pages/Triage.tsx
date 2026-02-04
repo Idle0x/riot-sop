@@ -6,7 +6,7 @@ import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
 import { Naira } from '../components/ui/Naira';
 import { getFinancialState, calculateGenerosityCap } from '../utils/finance';
-import { formatCurrency } from '../utils/format';
+import { formatNumber } from '../utils/format';
 import { ArrowRight, ArrowLeft, Flame, Heart, AlertTriangle, CheckCircle2, Lock, Wand2, Landmark, ShieldCheck, Wallet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -144,12 +144,6 @@ export const Triage = () => {
     // 4. Goals
     Object.entries(allocations).forEach(([goalId, amount]) => {
        if (amount > 0) {
-         // Note: Logic for goal funding needs to be handled. 
-         // In LedgerContext, we don't have a direct 'Goal Fund' account update, 
-         // usually this implies moving money to 'Buffer' or updating Goal currentAmount.
-         // For simplicity here, we assume it stays in holding/buffer as a "Goal" asset.
-         // Real implementation should likely move it to 'buffer' account.
-         // Let's assume goals are tracked virtually, or backed by 'Buffer' account.
          updateAccount('buffer', amount);
          commitAction({ date: timestamp, type: 'GOAL_FUND', title: 'Goal Allocation', amount, linkedGoalId: goalId });
        }
@@ -242,11 +236,11 @@ export const Triage = () => {
             <div className="grid grid-cols-2 gap-4 text-center">
               <div className="p-3 bg-white/5 rounded-xl border border-white/10">
                 <div className="text-xs text-gray-500 uppercase">Net Deployable</div>
-                <div className="font-mono font-bold text-white">{formatCurrency(netFunds)}</div>
+                <div className="font-mono font-bold text-white flex items-center justify-center gap-1"><Naira/>{formatNumber(netFunds)}</div>
               </div>
               <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
                 <div className="text-xs text-blue-500 uppercase">Vault Stashed</div>
-                <div className="font-mono font-bold text-white">{formatCurrency(vaultAmount)}</div>
+                <div className="font-mono font-bold text-white flex items-center justify-center gap-1"><Naira/>{formatNumber(vaultAmount)}</div>
               </div>
             </div>
 
@@ -271,7 +265,7 @@ export const Triage = () => {
                 {isGenerosityLocked ? (
                     <span className="text-xs font-bold text-red-500 flex items-center gap-1"><Lock size={12}/> LOCKED</span>
                 ) : (
-                    <span className={`text-xs font-bold ${isOverCap ? 'text-red-500' : 'text-gray-500'}`}>Cap: {formatCurrency(dynamicGenCap)}</span>
+                    <span className={`text-xs font-bold ${isOverCap ? 'text-red-500' : 'text-gray-500'} flex items-center gap-1`}>Cap: <Naira/>{formatNumber(dynamicGenCap)}</span>
                 )}
               </div>
 
@@ -316,7 +310,7 @@ export const Triage = () => {
                 <div key={g.id} className="mb-3">
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-white">{g.title}</span>
-                    <span className="text-gray-500">Need: {formatCurrency(g.targetAmount - g.currentAmount)}</span>
+                    <span className="text-gray-500 flex items-center gap-1">Need: <Naira/>{formatNumber(g.targetAmount - g.currentAmount)}</span>
                   </div>
                   <input 
                     type="number" 
@@ -335,7 +329,7 @@ export const Triage = () => {
                 <span className="text-gray-400 text-sm">Remaining</span>
                 <span className="text-[10px] text-gray-500">(Unallocated Holding)</span>
               </div>
-              <span className={`font-mono font-bold ${remaining < 0 ? 'text-red-500' : 'text-green-500'}`}>{formatCurrency(remaining)}</span>
+              <span className={`font-mono font-bold flex items-center gap-1 ${remaining < 0 ? 'text-red-500' : 'text-green-500'}`}><Naira/>{formatNumber(remaining)}</span>
             </div>
 
             <GlassButton className="w-full" disabled={remaining < 0 || genAmount > 300000} onClick={handleCommit}>

@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
 import { useLedger } from '../context/LedgerContext';
 import { useSystemEngine } from '../hooks/useSystemEngine';
-import { formatNumber } from '../utils/format'; // UPDATED: Use formatNumber (no symbol)
-import { Naira } from '../components/ui/Naira'; // NEW: Use your SVG
+import { useAnalytics } from '../hooks/useAnalytics'; // INTELLIGENCE ENGINE
+import { formatNumber } from '../utils/format'; 
+import { Naira } from '../components/ui/Naira'; 
 
 import { MetricCard } from '../components/ui/MetricCard';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -15,7 +16,8 @@ import { BudgetBurnWidget } from '../components/dashboard/BudgetBurnWidget';
 import { RunwayWeather } from '../components/layout/RunwayWeather';
 import { MonthlyCheckpointModal } from '../components/modals/MonthlyCheckpointModal';
 
-import { Clock, AlertTriangle, ArrowRight, Lock, Activity, ShieldCheck } from 'lucide-react';
+import { Clock, AlertTriangle, ArrowRight, Lock, Activity, ShieldCheck, BarChart3 } from 'lucide-react';
+import { AreaChart, Area, ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'; // VISUALS
 
 export const Dashboard = () => {
   const { isGhostMode } = useUser();
@@ -24,7 +26,7 @@ export const Dashboard = () => {
     unallocatedCash, history, isSyncing 
   } = useLedger();
 
-  // Initialize The New Simulation Engine
+  const { burnHistory } = useAnalytics(); // DATA LAYER
   const { showModal, monthsMissed, pendingBurn, confirmReconciliation } = useSystemEngine();
 
   const navigate = useNavigate();
@@ -35,11 +37,18 @@ export const Dashboard = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Calculate Locked Assets
+  // Calculate Asset Composition
   const buffer = accounts.find(a => a.type === 'buffer')?.balance || 0;
   const lockedGoals = goals.reduce((sum, g) => sum + g.currentAmount, 0);
   const totalLocked = buffer + lockedGoals;
   const netWorth = totalLiquid + totalLocked + unallocatedCash;
+
+  // Donut Data
+  const allocationData = [
+    { name: 'Liquid', value: totalLiquid, color: '#10b981' },
+    { name: 'Locked', value: totalLocked, color: '#3b82f6' },
+    { name: 'Idle', value: unallocatedCash, color: '#eab308' },
+  ].filter(d => d.value > 0);
 
   if (isSyncing) {
     return <div className="min-h-screen flex items-center justify-center text-gray-500">Syncing with Cloud...</div>;
@@ -49,7 +58,7 @@ export const Dashboard = () => {
     <RunwayWeather months={runwayMonths}>
       <div className={`p-4 md:p-8 space-y-8 pb-20 max-w-7xl mx-auto transition-all duration-1000 ${isGhostMode ? 'grayscale contrast-125' : ''}`}>
 
-        {/* NEW: Monthly Checkpoint Modal */}
+        {/* MODAL */}
         {showModal && (
           <MonthlyCheckpointModal 
             monthsMissed={monthsMissed}
@@ -78,7 +87,7 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        {/* UNALLOCATED CAPITAL (Fixed: Use SVG) */}
+        {/* UNALLOCATED ALERT */}
         {unallocatedCash > 0 && (
           <div className="bg-yellow-500/10 border border-yellow-500/50 p-6 rounded-2xl flex items-center justify-between animate-pulse shadow-[0_0_20px_rgba(234,179,8,0.2)]">
             <div className="flex items-center gap-4">
@@ -99,7 +108,7 @@ export const Dashboard = () => {
           </div>
         )}
 
-        {/* ASSETS (Fixed: Use SVG) */}
+        {/* ASSET METRICS (Enhanced with Mini Charts) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <MetricCard 
             title="Liquid Runway" 
@@ -113,27 +122,63 @@ export const Dashboard = () => {
             subValue="Buffer & Goals" 
             icon={<Lock size={20}/>} 
           />
-          <MetricCard 
-            title="Net Worth" 
-            value={<div className="flex items-center gap-1"><Naira/>{formatNumber(netWorth)}</div>} 
-            subValue="Total System Value" 
-            icon={<ShieldCheck size={20}/>} 
-            isPrivate 
-          />
-        </div>
-
-        {/* MAIN VISUALIZER */}
-        <GlassCard className="p-8">
-          <div className="flex justify-between items-end mb-4">
-            <div>
-              <h3 className="font-bold text-white text-lg">Runway Health</h3>
-              <p className="text-sm text-gray-400">Based on Active Budgets</p>
-            </div>
-            <div className={`text-4xl font-mono font-bold ${runwayMonths < 3 ? 'text-red-500' : runwayMonths < 6 ? 'text-orange-500' : 'text-green-500'}`}>
-              {runwayMonths.toFixed(2)} Mo
+          {/* NET WORTH + MINI DONUT */}
+          <div className="relative">
+            <MetricCard 
+              title="Net Worth" 
+              value={<div className="flex items-center gap-1"><Naira/>{formatNumber(netWorth)}</div>} 
+              subValue="Total System Value" 
+              icon={<ShieldCheck size={20}/>} 
+              isPrivate 
+            />
+            {/* Visual Overlay for Net Worth Composition */}
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 opacity-50 pointer-events-none">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={allocationData} dataKey="value" innerRadius={15} outerRadius={24} stroke="none">
+                    {allocationData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
             </div>
           </div>
-          <GlassProgressBar value={runwayMonths} max={12} color={runwayMonths < 3 ? 'danger' : runwayMonths < 6 ? 'warning' : 'success'} size="lg" showPercentage={false} />
+        </div>
+
+        {/* RUNWAY COCKPIT (Main Visualizer) */}
+        <GlassCard className="p-0 overflow-hidden relative group h-48">
+          {/* Data Layer */}
+          <div className="absolute inset-0 p-8 z-10 flex flex-col justify-between">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                  Runway Health
+                  <button onClick={() => navigate('/analytics')} className="text-gray-500 hover:text-white transition-colors"><BarChart3 size={14}/></button>
+                </h3>
+                <p className="text-sm text-gray-400">Survival Horizon</p>
+              </div>
+              <div className={`text-4xl font-mono font-bold ${runwayMonths < 3 ? 'text-red-500' : runwayMonths < 6 ? 'text-orange-500' : 'text-green-500'}`}>
+                {runwayMonths.toFixed(2)} Mo
+              </div>
+            </div>
+            <GlassProgressBar value={runwayMonths} max={12} color={runwayMonths < 3 ? 'danger' : runwayMonths < 6 ? 'warning' : 'success'} size="lg" showPercentage={false} />
+          </div>
+
+          {/* Visual Layer (Background Chart) */}
+          <div className="absolute bottom-0 left-0 right-0 h-32 opacity-20 group-hover:opacity-30 transition-opacity pointer-events-none">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={burnHistory}>
+                <defs>
+                  <linearGradient id="colorBurn" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#fff" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#fff" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <Area type="monotone" dataKey="burn" stroke="#fff" fill="url(#colorBurn)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </GlassCard>
 
         {/* WIDGET GRID */}
@@ -147,16 +192,18 @@ export const Dashboard = () => {
           <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Recent System Events</h3>
           <div className="space-y-3">
             {history.slice(0, 3).map(log => (
-              <div key={log.id} className="flex justify-between items-center p-4 bg-white/5 border border-white/5 rounded-xl">
+              <div key={log.id} className="flex justify-between items-center p-4 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-colors">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white/5 rounded-lg text-gray-400"><Clock size={16}/></div>
+                  <div className={`p-2 rounded-lg ${log.type === 'SPEND' ? 'bg-red-500/10 text-red-500' : 'bg-white/5 text-gray-400'}`}>
+                    <Clock size={16}/>
+                  </div>
                   <div>
                     <div className="font-bold text-white text-sm">{log.title}</div>
                     <div className="text-xs text-gray-500">{new Date(log.date).toLocaleDateString()}</div>
                   </div>
                 </div>
                 <div className="font-mono text-sm text-white flex items-center gap-1">
-                  {log.amount ? <><Naira/>{formatNumber(log.amount)}</> : '-'}
+                  {log.amount ? <><Naira/>{formatNumber(Math.abs(log.amount))}</> : '-'}
                 </div>
               </div>
             ))}

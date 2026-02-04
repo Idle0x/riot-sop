@@ -1,10 +1,11 @@
-import { useFinancials } from '../../context/FinancialContext';
+import { useLedger } from '../../context/LedgerContext';
 import { GlassCard } from '../ui/GlassCard';
 import { Naira } from '../ui/Naira';
+import { formatCurrency } from '../../utils/format';
 import { Flame } from 'lucide-react';
 
 export const BudgetBurnWidget = () => {
-  const { budgets } = useFinancials();
+  const { budgets } = useLedger();
 
   // Sort by Amount (Limit) descending to show biggest commitments
   // In a future update, this should sort by 'spent' to show actual burn
@@ -31,7 +32,7 @@ export const BudgetBurnWidget = () => {
                </div>
              </div>
              <div className="text-right">
-                <div className="text-sm font-mono text-white"><Naira/>{new Intl.NumberFormat().format(b.amount)}</div>
+                <div className="text-sm font-mono text-white">{formatCurrency(b.amount)}</div>
                 <div className="text-[10px] text-gray-500">Cap</div>
              </div>
           </div>

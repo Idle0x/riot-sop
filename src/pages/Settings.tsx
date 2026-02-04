@@ -4,7 +4,7 @@ import { useLedger } from '../context/LedgerContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
-import { Settings as Gear, ShieldAlert, CloudUpload, Landmark } from 'lucide-react';
+import { Settings as Gear, ShieldAlert, CloudUpload, Landmark, Lock, CheckCircle2 } from 'lucide-react';
 
 export const Settings = () => {
   const { user, updateProfile } = useUser();
@@ -12,14 +12,19 @@ export const Settings = () => {
     addBudget, addGoal, addSignal, updateAccount, commitAction 
   } = useLedger();
 
-  // Existing States
+  // Core Settings States
   const [newBurn, setNewBurn] = useState(user?.burnCap?.toString() || '');
   const [reason, setReason] = useState('');
   const [rent, setRent] = useState(user?.annualRent?.toString() || '0');
 
-  // Nuclear State
-  const [nuclearStep, setNuclearStep] = useState(0);
-  const [masterPass, setMasterPass] = useState('');
+  // Nuclear & Security States
+  const [nuclearStep, setNuclearStep] = useState(0); // 0=Idle, 1=Phrase, 2=Key
+  const [resetPhrase, setResetPhrase] = useState('');
+  const [masterPassInput, setMasterPassInput] = useState('');
+  const [newMasterKey, setNewMasterKey] = useState('');
+
+  const hasMasterKey = !!user?.settings?.masterKey;
+  const NUCLEAR_PHRASE = "I AM DEPLOYING IMMEDIATE CAPITAL";
 
   const handleUpdate = () => {
     const effectiveDate = new Date();
@@ -41,6 +46,23 @@ export const Settings = () => {
     });
     setReason('');
     alert("Profile Updated: Cooldowns applied where necessary.");
+  };
+
+  const handleSetMasterKey = () => {
+    if (!newMasterKey || newMasterKey.length < 6) {
+      alert("Master Key must be at least 6 characters.");
+      return;
+    }
+    updateProfile({
+      settings: {
+        ...user?.settings,
+        allowNegativeBalance: user?.settings?.allowNegativeBalance || false,
+        monthlyCheckpointDay: user?.settings?.monthlyCheckpointDay || 1,
+        masterKey: newMasterKey
+      }
+    });
+    setNewMasterKey('');
+    alert("Master Key Established. Do not lose this.");
   };
 
   const syncLocalData = async () => {
@@ -93,10 +115,16 @@ export const Settings = () => {
     }
   };
 
+  const handlePhraseCheck = () => {
+    if (resetPhrase === NUCLEAR_PHRASE) {
+      setNuclearStep(2);
+    } else {
+      alert("Incorrect Phrase. Case sensitive.");
+    }
+  };
+
   const executeNuclear = () => {
-    // In Cloud V2, we restrict Nuclear Reset to just LocalStorage clearing for safety
-    // True Database Wiping should be done via Supabase Dashboard to prevent accidents
-    if (masterPass === 'PROTOCOL_ZERO') {
+    if (masterPassInput === user?.settings?.masterKey) {
       localStorage.clear();
       alert("LOCAL DATA PURGED. You are now disconnected.");
       window.location.reload();
@@ -141,7 +169,7 @@ export const Settings = () => {
         </div>
       </GlassCard>
 
-      {/* NEW: TAX PROFILE CARD (NTA 2026) */}
+      {/* TAX PROFILE CARD (NTA 2026) */}
       <GlassCard className="p-6">
         <div className="flex items-center gap-3 mb-6">
           <Landmark className="text-accent-info" />
@@ -180,22 +208,69 @@ export const Settings = () => {
         </button>
       </GlassCard>
 
-      {/* NUCLEAR ZONE */}
+      {/* NUCLEAR ZONE (IMPROVED SECURITY) */}
       <GlassCard className="p-6 border-red-900/30">
           <h3 className="font-bold text-red-500 mb-2 flex items-center gap-2">
             <ShieldAlert size={18}/> Danger Zone
           </h3>
-          {nuclearStep === 0 ? (
-             <button onClick={() => setNuclearStep(1)} className="w-full py-3 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white rounded-xl text-sm font-bold transition-all">Initiate Nuclear Reset</button>
-          ) : (
+
+          {!hasMasterKey ? (
             <div className="space-y-4 animate-fade-in">
-              <p className="text-sm text-red-400 font-bold uppercase">This will clear local session. Cloud data remains safe.</p>
-              <GlassInput type="password" placeholder="Enter Master Key" value={masterPass} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMasterPass(e.target.value)} />
-              <div className="flex gap-2">
-                <GlassButton variant="ghost" onClick={() => setNuclearStep(0)} className="flex-1">Cancel</GlassButton>
-                <GlassButton variant="danger" onClick={executeNuclear} className="flex-1">NUKE LOCAL</GlassButton>
+              <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-yellow-500 text-xs">
+                <strong className="block mb-1">Security Alert</strong>
+                You have not set a Master Key. You must set one to enable High-Security features like Nuclear Reset.
               </div>
+              <GlassInput 
+                type="password" 
+                label="Create Master Key" 
+                placeholder="Unique Password (Not login)" 
+                value={newMasterKey} 
+                onChange={(e) => setNewMasterKey(e.target.value)} 
+              />
+              <GlassButton variant="secondary" className="w-full" onClick={handleSetMasterKey}>
+                <Lock size={16} className="mr-2"/> Set Master Key
+              </GlassButton>
             </div>
+          ) : (
+            <>
+              {nuclearStep === 0 && (
+                 <button onClick={() => setNuclearStep(1)} className="w-full py-3 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white rounded-xl text-sm font-bold transition-all">Initiate Nuclear Reset</button>
+              )}
+
+              {nuclearStep === 1 && (
+                <div className="space-y-4 animate-fade-in">
+                  <p className="text-sm text-red-400 font-bold uppercase text-center">Step 1: Verification</p>
+                  <p className="text-xs text-gray-400 text-center">Type exactly: <span className="text-white font-mono">{NUCLEAR_PHRASE}</span></p>
+                  <GlassInput 
+                    value={resetPhrase} 
+                    onChange={(e) => setResetPhrase(e.target.value)} 
+                    placeholder="Type the phrase..." 
+                    className="text-center border-red-500/50"
+                  />
+                  <div className="flex gap-2">
+                    <GlassButton variant="ghost" onClick={() => { setNuclearStep(0); setResetPhrase(''); }} className="flex-1">Cancel</GlassButton>
+                    <GlassButton variant="danger" disabled={resetPhrase !== NUCLEAR_PHRASE} onClick={handlePhraseCheck} className="flex-1">Next Step</GlassButton>
+                  </div>
+                </div>
+              )}
+
+              {nuclearStep === 2 && (
+                <div className="space-y-4 animate-fade-in">
+                  <p className="text-sm text-red-400 font-bold uppercase text-center">Step 2: Authorization</p>
+                  <GlassInput 
+                    type="password" 
+                    placeholder="Enter Master Key" 
+                    value={masterPassInput} 
+                    onChange={(e) => setMasterPassInput(e.target.value)} 
+                    className="text-center border-red-500/50"
+                  />
+                  <div className="flex gap-2">
+                    <GlassButton variant="ghost" onClick={() => { setNuclearStep(0); setMasterPassInput(''); setResetPhrase(''); }} className="flex-1">Cancel</GlassButton>
+                    <GlassButton variant="danger" onClick={executeNuclear} className="flex-1">NUKE LOCAL</GlassButton>
+                  </div>
+                </div>
+              )}
+            </>
           )}
       </GlassCard>
     </div>

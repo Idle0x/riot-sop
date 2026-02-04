@@ -17,6 +17,7 @@ export const Budget = () => {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [freq, setFreq] = useState<'monthly'|'one-time'>('monthly');
+  const [subDay, setSubDay] = useState(''); // NEW
 
   const [isSpendModalOpen, setIsSpendModalOpen] = useState(false);
   const [selectedBudgetId, setSelectedBudgetId] = useState('');
@@ -30,24 +31,20 @@ export const Budget = () => {
       spent: 0,
       frequency: freq,
       category: 'General',
-      autoDeduct: true
+      autoDeduct: true,
+      subscriptionDay: subDay ? parseInt(subDay) : undefined // NEW
     });
-    setName(''); setAmount('');
+    setName(''); setAmount(''); setSubDay('');
   };
 
+  // ... (handleSpend and resetBudgetCycle logic remain same)
+  // Just copying for context
   const handleSpend = () => {
     const val = parseFloat(spendAmount);
     if (!val) return;
-
-    // 1. Deduct from Money
     updateAccount('payroll', -val);
-
-    // 2. Track against Budget (if category selected)
-    if (selectedBudgetId) {
-        updateBudgetSpent(selectedBudgetId, val);
-    }
-
-    // 3. Log History
+    if (selectedBudgetId) updateBudgetSpent(selectedBudgetId, val);
+    
     const budgetName = selectedBudgetId 
         ? budgets.find(b => b.id === selectedBudgetId)?.name 
         : 'Uncategorized';
@@ -76,12 +73,12 @@ export const Budget = () => {
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 pb-20">
 
+      {/* Spend Modal remains same... */}
       {isSpendModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-fade-in">
           <GlassCard className="w-full max-w-md p-6 relative">
             <button onClick={() => setIsSpendModalOpen(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X size={20}/></button>
             <h2 className="text-2xl font-bold text-white mb-6">Log Expense</h2>
-
             <div className="space-y-4">
                <div>
                  <label className="text-xs font-bold text-gray-500 uppercase">Category</label>
@@ -127,17 +124,33 @@ export const Budget = () => {
             <div className="flex gap-2">
               <button 
                 onClick={() => setFreq('monthly')}
-                className={`flex-1 p-2 rounded-lg border text-xs font-bold flex items-center justify-center gap-2 ${freq === 'monthly' ? 'bg-white text-black' : 'bg-transparent text-gray-500 border-white/10'}`}
+                className={`flex-1 p-2 rounded-lg border text-xs font-bold ${freq === 'monthly' ? 'bg-white text-black' : 'bg-transparent text-gray-500 border-white/10'}`}
               >
-                <RefreshCcw size={12}/> Recurring
+                Recurring
               </button>
               <button 
                 onClick={() => setFreq('one-time')}
-                className={`flex-1 p-2 rounded-lg border text-xs font-bold flex items-center justify-center gap-2 ${freq === 'one-time' ? 'bg-white text-black' : 'bg-transparent text-gray-500 border-white/10'}`}
+                className={`flex-1 p-2 rounded-lg border text-xs font-bold ${freq === 'one-time' ? 'bg-white text-black' : 'bg-transparent text-gray-500 border-white/10'}`}
               >
-                <Calendar size={12}/> One-Time
+                One-Time
               </button>
             </div>
+
+            {/* NEW: Subscription Day Input */}
+            {freq === 'monthly' && (
+              <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+                <GlassInput 
+                  label="Subscription Day (Optional)" 
+                  type="number" 
+                  placeholder="e.g. 15 (for 15th of month)" 
+                  value={subDay} 
+                  onChange={(e) => setSubDay(e.target.value)} 
+                />
+                <p className="text-[10px] text-gray-500 mt-2">
+                  System will track this as a fixed bill on this date.
+                </p>
+              </div>
+            )}
 
             <GlassButton className="w-full" onClick={handleAdd} disabled={!name || !amount}>Add to Burn</GlassButton>
           </div>
@@ -151,6 +164,8 @@ export const Budget = () => {
                   <div className="font-bold text-white flex items-center gap-2">
                     {b.name}
                     {b.frequency === 'one-time' && <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 rounded">1x</span>}
+                    {/* Display Sub Day */}
+                    {b.subscriptionDay && <span className="text-[10px] bg-purple-500/20 text-purple-400 px-1.5 rounded border border-purple-500/30">Day {b.subscriptionDay}</span>}
                   </div>
                   <div className="text-xs text-gray-500 flex items-center gap-1">
                      <span className="text-white flex items-center"><Naira/>{formatNumber(b.spent || 0)}</span> / <span className="flex items-center"><Naira/>{formatNumber(b.amount)}</span>

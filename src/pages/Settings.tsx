@@ -57,27 +57,28 @@ export const Settings = () => {
         const localBudgets = JSON.parse(localStorage.getItem('riot_budgets') || '[]');
         localBudgets.forEach((b: any) => {
             // Remove ID so DB generates a fresh one
-            const { id, ...rest } = b; 
-            addBudget(rest);
+            const { name, amount, spent, frequency, category, autoDeduct, expiryDate } = b; 
+            addBudget({ name, amount, spent, frequency, category, autoDeduct, expiryDate });
         });
 
         // 3. Migrate Goals
         const localGoals = JSON.parse(localStorage.getItem('riot_goals') || '[]');
         localGoals.forEach((g: any) => {
-             const { id, ...rest } = g;
-             addGoal(rest);
+             const { title, phase, targetAmount, currentAmount, isCompleted, priority, type, subGoals } = g;
+             addGoal({ title, phase, targetAmount, currentAmount, isCompleted, priority, type, subGoals });
         });
         
         // 4. Migrate Signals
         const localSignals = JSON.parse(localStorage.getItem('riot_signals') || '[]');
         localSignals.forEach((s: any) => {
-            const { id, ...rest } = s;
-            addSignal(rest);
+            const { title, sector, phase, confidence, effort, hoursLogged, totalGenerated, redFlags, proofOfWork, thesis, research, outcome, timeline } = s;
+            addSignal({ title, sector, phase, confidence, effort, hoursLogged, totalGenerated, redFlags, proofOfWork, thesis, research, outcome, timeline });
         });
 
         // 5. Migrate History
         const localHistory = JSON.parse(localStorage.getItem('riot_history') || '[]');
         localHistory.forEach((h: any) => {
+             // Remove ID so DB generates a fresh one
             const { id, ...rest } = h;
             commitAction(rest);
         });

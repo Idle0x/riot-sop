@@ -11,7 +11,7 @@ export interface PendingChange {
 }
 
 export interface UserProfile {
-  id: string; 
+  id: string; // NEW: Added to match Supabase Auth ID
   burnCap: number;           
   annualRent: number; 
   inflationRate: number;     
@@ -20,13 +20,12 @@ export interface UserProfile {
   runwayEmptySince: string | null;
   systemVersion: string;     
   pendingChanges: PendingChange[];
-  
   // NEW V2 FIELDS
   currencyCode?: string; 
   settings?: {
     allowNegativeBalance: boolean;
     monthlyCheckpointDay: number;
-    masterKey?: string; // NEW: Stores the custom nuclear password
+    masterKey?: string;
   };
 }
 
@@ -55,6 +54,7 @@ export interface Budget {
   category: string;
   autoDeduct?: boolean;
   lastProcessedAt?: string; 
+  subscriptionDay?: number; // NEW: 1-31 for fixed bills
 }
 
 // --- GOALS ---

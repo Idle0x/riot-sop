@@ -1,31 +1,34 @@
-import { useState, useEffect } from 'react'; // ADDED useEffect
+import { useState, useEffect } from 'react';
 import { useUser } from '../context/UserContext';
 import { useLedger } from '../context/LedgerContext';
+import { useExchangeRate } from '../hooks/useExchangeRate'; // NEW HOOK
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
 import { Naira } from '../components/ui/Naira';
 import { getFinancialState, calculateGenerosityCap } from '../utils/finance';
 import { formatNumber } from '../utils/format';
-import { ArrowRight, ArrowLeft, Flame, Heart, AlertTriangle, CheckCircle2, Lock, Wand2, Landmark, ShieldCheck, Wallet } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router-dom'; // ADDED useSearchParams
+import { ArrowRight, ArrowLeft, Flame, Heart, AlertTriangle, CheckCircle2, Lock, Wand2, Landmark, ShieldCheck, Wallet, RefreshCw } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 export const Triage = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams(); // NEW
+  const [searchParams] = useSearchParams();
   const { user } = useUser();
   const { 
     runwayMonths, goals, signals, unallocatedCash,
     updateAccount, commitAction, updateSignal, fundGoal 
   } = useLedger();
 
+  const { rate, setRate, fetchLiveRate } = useExchangeRate(); // SMART RATE
+  const [isFetchingRate, setIsFetchingRate] = useState(false);
+
   const [step, setStep] = useState(1);
   const [amountUSD, setAmountUSD] = useState('');
   const [costBasisUSD, setCostBasisUSD] = useState('0'); 
-  const [rate, setRate] = useState('1500');
   const [selectedSignalId, setSelectedSignalId] = useState('');
 
-  // AUTO-FILL FROM HARVEST (NEW LOGIC)
+  // AUTO-FILL FROM HARVEST
   useEffect(() => {
     const paramAmount = searchParams.get('amount');
     const paramSource = searchParams.get('source');
@@ -34,7 +37,6 @@ export const Triage = () => {
       setAmountUSD(paramAmount);
     }
     if (paramSource) {
-      // Try to find the signal by name to auto-select
       const found = signals.find(s => s.title === paramSource);
       if (found) setSelectedSignalId(found.id);
     }
@@ -44,29 +46,26 @@ export const Triage = () => {
   const [ventureTax, setVentureTax] = useState(0);
   const [vaultTax, setVaultTax] = useState(10); 
 
-  // ... (Rest of the file logic remains IDENTICAL, just pasting to ensure valid file)
-  // ... Paste everything below from previous Triage.tsx version until the end
-  
-  // To avoid truncation issues in the chat, use the previous Triage.tsx content 
-  // starting from `const [generosity, setGenerosity] = useState('0');` 
-  // down to the last `};`.
-  //
-  // NOTE for you: I am not pasting the whole file again to save space, 
-  // but ensure you keep the new `useEffect` and `useSearchParams` hook.
-  
-  // -- START COPY FROM PREVIOUS FILE --
+  // STEP 2 STATES
   const [generosity, setGenerosity] = useState('0');
   const [runwayAlloc, setRunwayAlloc] = useState('0'); 
   const [recipientName, setRecipientName] = useState(''); 
   const [recipientTier, setRecipientTier] = useState('T3');
   const [allocations, setAllocations] = useState<Record<string, number>>({});
 
+  // --- MATH ENGINE ---
   const dropUSD = parseFloat(amountUSD) || 0;
   const costUSD = parseFloat(costBasisUSD) || 0;
   const rateVal = parseFloat(rate) || 0;
 
   const grossNGN = dropUSD * rateVal;
   const sourceFunds = dropUSD > 0 ? grossNGN : unallocatedCash;
+
+  const handleFetchRate = async () => {
+    setIsFetchingRate(true);
+    await fetchLiveRate();
+    setIsFetchingRate(false);
+  };
 
   const calculateTaxEstimate = (profit: number) => {
     const annualRent = user?.annualRent || 0;
@@ -76,6 +75,7 @@ export const Triage = () => {
     let tax = 0;
     let remaining = chargeableProfit;
 
+    // NTA 2026 Bands
     remaining -= 800000;
     if (remaining > 0) {
       const band2 = Math.min(remaining, 2200000);
@@ -155,7 +155,7 @@ export const Triage = () => {
     Object.entries(allocations).forEach(([goalId, amount]) => {
        if (amount > 0) {
          updateAccount('buffer', amount);
-         fundGoal(goalId, amount); 
+         fundGoal(goalId, amount); // Updates Progress Bar
          commitAction({ date: timestamp, type: 'GOAL_FUND', title: 'Goal Allocation', amount, linkedGoalId: goalId });
        }
     });
@@ -182,7 +182,21 @@ export const Triage = () => {
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <GlassInput label="Drop (USD)" type="number" value={amountUSD} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmountUSD(e.target.value)} autoFocus />
-              <GlassInput label="Rate" type="number" value={rate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRate(e.target.value)} />
+              <div className="relative">
+                <GlassInput 
+                  label="Rate (NGN/USD)" 
+                  type="number" 
+                  value={rate} 
+                  onChange={(e) => setRate(e.target.value)} 
+                />
+                <button 
+                  onClick={handleFetchRate}
+                  disabled={isFetchingRate}
+                  className="absolute right-2 top-8 text-[10px] bg-white/10 px-2 py-1 rounded text-accent-info hover:bg-white/20 transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                  {isFetchingRate ? <RefreshCw size={10} className="animate-spin"/> : 'FETCH'}
+                </button>
+              </div>
             </div>
 
             <GlassInput label="Cost Basis (USD)" type="number" value={costBasisUSD} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCostBasisUSD(e.target.value)} icon={<Lock size={14}/>}/>
@@ -196,6 +210,7 @@ export const Triage = () => {
             </div>
 
             <div className="space-y-4">
+                {/* Tax Shield */}
                 <div className="p-4 bg-slate-500/10 rounded-xl border border-slate-500/20">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-slate-400"><ShieldCheck size={16}/> Tax Shield (NTA 2026)</span>
@@ -208,6 +223,7 @@ export const Triage = () => {
                     </div>
                 </div>
 
+                {/* Venture Tax */}
                 <div className="p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-red-500"><Flame size={16}/> Venture Tax</span>
@@ -216,6 +232,7 @@ export const Triage = () => {
                     <input type="range" min="0" max="20" value={ventureTax} onChange={(e) => setVentureTax(Number(e.target.value))} className="w-full accent-red-500"/>
                 </div>
 
+                {/* Vault Tax */}
                 <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-blue-400"><Landmark size={16}/> The Vault</span>
@@ -241,11 +258,11 @@ export const Triage = () => {
             <div className="grid grid-cols-2 gap-4 text-center">
               <div className="p-3 bg-white/5 rounded-xl border border-white/10">
                 <div className="text-xs text-gray-500 uppercase">Net Deployable</div>
-                <div className="font-mono font-bold text-white"><Naira/>{formatNumber(netFunds)}</div>
+                <div className="font-mono font-bold text-white flex items-center justify-center gap-1"><Naira/>{formatNumber(netFunds)}</div>
               </div>
               <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
                 <div className="text-xs text-blue-500 uppercase">Vault Stashed</div>
-                <div className="font-mono font-bold text-white"><Naira/>{formatNumber(vaultAmount)}</div>
+                <div className="font-mono font-bold text-white flex items-center justify-center gap-1"><Naira/>{formatNumber(vaultAmount)}</div>
               </div>
             </div>
 

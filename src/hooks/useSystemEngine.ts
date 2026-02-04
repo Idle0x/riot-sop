@@ -6,7 +6,7 @@ export const useSystemEngine = () => {
   const { user, updateProfile } = useUser();
   const { 
     signals, budgets, accounts, monthlyBurn,
-    updateSignal, deleteBudget, updateAccount, commitAction 
+    updateSignal, deleteBudget, updateAccount, commitAction, resetBudgetCounters // NEW
   } = useLedger();
 
   // State for the Monthly Checkpoint Modal
@@ -17,8 +17,7 @@ export const useSystemEngine = () => {
   useEffect(() => {
     const now = new Date();
 
-    // --- 1. SIGNAL AUTO-ARCHIVE (The Alpha Engine) ---
-    // Rule: If in 'discovery' for > 7 days, move to 'graveyard'
+    // --- 1. SIGNAL AUTO-ARCHIVE ---
     signals.forEach(signal => {
       if (signal.phase === 'discovery') {
         const created = new Date(signal.createdAt);
@@ -28,8 +27,6 @@ export const useSystemEngine = () => {
           updateSignal({ 
             ...signal, 
             phase: 'graveyard', 
-            // Note: redFlags is handled in the LedgerContext mutation or passed here if needed
-            // For now, we just move it. You can add a specific mutation for this if redFlags updates are critical.
           });
 
           commitAction({
@@ -59,11 +56,10 @@ export const useSystemEngine = () => {
       }
     });
 
-    // --- 3. MONTHLY CHECKPOINT (Replaces Daily Decay) ---
+    // --- 3. MONTHLY CHECKPOINT ---
     if (user?.lastReconciliationDate) {
       const lastRun = new Date(user.lastReconciliationDate);
       
-      // Check if we are in a different month AND later in time
       const isNewMonth = now.getMonth() !== lastRun.getMonth() || now.getFullYear() !== lastRun.getFullYear();
       const isLater = now > lastRun;
 
@@ -72,24 +68,21 @@ export const useSystemEngine = () => {
         
         if (diffMonths > 0) {
           setMonthsMissed(diffMonths);
-          setPendingBurn(monthlyBurn * diffMonths); // Calculates full liability
-          setShowModal(true); // Triggers the modal instead of auto-burning
+          setPendingBurn(monthlyBurn * diffMonths); 
+          setShowModal(true); 
         }
       }
     }
-  }, [user?.lastReconciliationDate, monthlyBurn, signals.length, budgets.length]); // Dependencies ensure it runs when data loads
+  }, [user?.lastReconciliationDate, monthlyBurn, signals.length, budgets.length]);
 
   // --- THE CONFIRMATION LOGIC ---
   const confirmReconciliation = async () => {
     const totalLiquid = (accounts.find(a => a.type === 'payroll')?.balance || 0) + 
                         (accounts.find(a => a.type === 'treasury')?.balance || 0);
 
-    // ZERO FLOOR ENFORCEMENT
-    // If debt is 500k but you have 0, we deduct 0.
     const actualDeduction = Math.min(pendingBurn, totalLiquid);
 
     if (actualDeduction > 0) {
-      // Prioritize Payroll, then Treasury
       const payroll = accounts.find(a => a.type === 'payroll');
       let remaining = actualDeduction;
 
@@ -112,7 +105,6 @@ export const useSystemEngine = () => {
         tags: ['auto_reconciliation']
       });
     } else {
-      // Log the skipped payment (Insolvency Protection)
       commitAction({
         date: new Date().toISOString(),
         type: 'SYSTEM_EVENT',
@@ -123,7 +115,9 @@ export const useSystemEngine = () => {
       });
     }
 
-    // Fast-forward the date
+    // CRITICAL FIX: Reset the budget progress bars for the new month
+    resetBudgetCounters(); 
+
     updateProfile({ lastReconciliationDate: new Date().toISOString() });
     setShowModal(false);
   };

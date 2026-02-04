@@ -1,12 +1,14 @@
 import { useLedger } from '../../context/LedgerContext';
 import { GlassCard } from '../ui/GlassCard';
-import { Naira } from '../ui/Naira'; // RESTORED
-import { formatNumber } from '../../utils/format'; // UPDATED
+import { Naira } from '../ui/Naira';
+import { formatNumber } from '../../utils/format';
 import { Flame } from 'lucide-react';
 
 export const BudgetBurnWidget = () => {
   const { budgets } = useLedger();
 
+  // Sort by Amount (Limit) descending to show biggest commitments
+  // In a future update, this should sort by 'spent' to show actual burn
   const topBurners = budgets
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 3);

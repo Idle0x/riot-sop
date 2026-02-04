@@ -1,16 +1,20 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom'; // NEW
 import { useLedger } from '../context/LedgerContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
 import { DrillModeModal } from '../components/signals/DrillModeModal'; 
+import { HarvestModal } from '../components/signals/HarvestModal'; // NEW
 import { type Signal, type SignalPhase } from '../types';
 import { Clock, DollarSign, ArrowRight, Zap, Archive, Trophy, X, AlertTriangle } from 'lucide-react';
 
 export const Signals = () => {
+  const navigate = useNavigate(); // NEW
   const { signals, updateSignal, commitAction } = useLedger();
 
   // UI States
   const [isDrillOpen, setIsDrillOpen] = useState(false);
+  const [harvestSignal, setHarvestSignal] = useState<Signal | null>(null); // NEW
   const [viewModal, setViewModal] = useState<'HARVESTED' | 'GRAVEYARD' | null>(null);
 
   // --- ANALYTICS ENGINE ---
@@ -19,7 +23,6 @@ export const Signals = () => {
     const wins = signals.filter(s => s.phase === 'delivered' || s.phase === 'harvested');
     const winRate = totalSignals > 0 ? (wins.length / totalSignals) * 100 : 0;
 
-    // Sector Analysis
     const sectors: Record<string, { count: number, value: number }> = {};
     signals.forEach(s => {
       const sector = s.sector || 'Uncategorized';
@@ -35,6 +38,12 @@ export const Signals = () => {
 
   // --- ACTIONS ---
   const moveSignal = (signal: Signal, phase: SignalPhase) => {
+    // Intercept Harvest Action
+    if (phase === 'harvested') {
+      setHarvestSignal(signal);
+      return;
+    }
+
     updateSignal({ ...signal, phase, updatedAt: new Date().toISOString() });
     
     commitAction({
@@ -46,11 +55,36 @@ export const Signals = () => {
     });
   };
 
+  const handleHarvestConfirm = (amount: number) => {
+    if (!harvestSignal) return;
+
+    // 1. Update Signal as Harvested
+    updateSignal({ 
+      ...harvestSignal, 
+      phase: 'harvested', 
+      totalGenerated: (harvestSignal.totalGenerated || 0) + amount,
+      updatedAt: new Date().toISOString() 
+    });
+
+    // 2. Log History
+    commitAction({
+      date: new Date().toISOString(),
+      type: 'SIGNAL_UPDATE',
+      title: `Harvested: ${harvestSignal.title}`,
+      description: `Realized profit of $${amount}`,
+      linkedSignalId: harvestSignal.id,
+      amount: amount
+    });
+
+    setHarvestSignal(null);
+
+    // 3. REDIRECT TO TRIAGE (The Pipeline)
+    navigate(`/triage?source=${encodeURIComponent(harvestSignal.title)}&amount=${amount}`);
+  };
+
   const handleCreateFromDrill = (data: Partial<Signal>) => {
-    // Note: The actual creation logic should be handled by an addSignal function 
-    // exposed by the LedgerContext. For now, we log it to satisfy the requirement
-    // without breaking the build with unused vars.
     console.log("Creating signal:", data);
+    // Ideally call addSignal here
     setIsDrillOpen(false);
   };
 
@@ -59,7 +93,6 @@ export const Signals = () => {
     return (s.totalGenerated / s.hoursLogged).toFixed(0);
   };
 
-  // --- COLUMNS ---
   const activeColumns: { id: SignalPhase; label: string; color: string }[] = [
     { id: 'discovery', label: 'Discovery (Inbox)', color: 'bg-blue-500' },
     { id: 'validation', label: 'Validation (Filter)', color: 'bg-yellow-500' },
@@ -71,8 +104,17 @@ export const Signals = () => {
     <div className="h-[calc(100vh-100px)] flex flex-col p-4 md:p-8 pb-20">
 
       {isDrillOpen && <DrillModeModal onClose={() => setIsDrillOpen(false)} onSave={handleCreateFromDrill} />}
+      
+      {/* NEW: Harvest Modal */}
+      {harvestSignal && (
+        <HarvestModal 
+          signalTitle={harvestSignal.title} 
+          onClose={() => setHarvestSignal(null)} 
+          onConfirm={handleHarvestConfirm} 
+        />
+      )}
 
-      {/* DEEP DIVE MODAL (Harvested/Graveyard) */}
+      {/* DEEP DIVE MODAL */}
       {viewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl p-6">
           <GlassCard className="w-full max-w-4xl h-[80vh] flex flex-col relative">
@@ -91,24 +133,12 @@ export const Signals = () => {
                       <span className="font-bold text-white">{s.title}</span>
                       <span className="text-[10px] bg-white/10 px-2 rounded text-gray-400">{s.sector}</span>
                     </div>
-
                     <div className="flex gap-4 text-xs text-gray-500 mt-2">
                       <span className="flex items-center gap-1"><Clock size={12}/> {s.hoursLogged}h Invested</span>
                       <span className="flex items-center gap-1"><DollarSign size={12}/> ${s.totalGenerated} Generated</span>
                       <span className="flex items-center gap-1 text-green-400">ROI: ${getHourlyRate(s)}/hr</span>
                     </div>
-
-                    {s.redFlags.length > 0 && (
-                      <div className="mt-2 flex gap-2">
-                        {s.redFlags.map((flag, i) => (
-                          <span key={i} className="text-[10px] text-red-400 border border-red-500/20 px-1.5 rounded flex items-center gap-1">
-                            <AlertTriangle size={8}/> {flag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
-
                   <div className="text-right">
                     <div className="text-xs text-gray-600 mb-1">{new Date(s.updatedAt).toLocaleDateString()}</div>
                     {viewModal === 'GRAVEYARD' && (
@@ -177,12 +207,7 @@ export const Signals = () => {
                     <span className="text-gray-500 capitalize">{s.effort} Effort</span>
                   </div>
 
-                  {s.redFlags.length > 0 && (
-                    <div className="mb-2">
-                      <span className="text-[10px] text-red-400 flex items-center gap-1"><AlertTriangle size={8}/> {s.redFlags.length} Flags</span>
-                    </div>
-                  )}
-
+                  {/* QUICK ACTIONS OVERLAY */}
                   <div className="pt-2 border-t border-white/10 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                      <button onClick={() => moveSignal(s, 'graveyard')} className="text-[10px] text-gray-500 hover:text-red-500 mr-auto">Kill</button>
                      {col.id === 'delivered' ? (

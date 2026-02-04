@@ -15,13 +15,12 @@ interface LedgerContextType {
   signals: Signal[];
   history: HistoryLog[];
   
-  // Computed
   runwayMonths: number;
-  monthlyBurn: number; // Replaces dailyBurn
+  monthlyBurn: number;
   totalLiquid: number;
   unallocatedCash: number;
+  isSyncing: boolean;
 
-  // Actions
   updateAccount: (id: AccountType, amount: number) => void;
   addBudget: (budget: Omit<Budget, 'id'>) => void;
   deleteBudget: (id: string) => void;
@@ -29,15 +28,13 @@ interface LedgerContextType {
   
   addGoal: (goal: Omit<Goal, 'id'>) => void;
   updateGoal: (goal: Goal) => void;
-  deleteGoal: (id: string, reclaimAmount: boolean) => void; // NEW: Reclaim Logic
+  deleteGoal: (id: string, reclaimAmount: boolean) => void;
   
   updateSignal: (signal: Signal) => void;
   addSignal: (signal: Omit<Signal, 'id'>) => void;
   
   commitAction: (log: Omit<HistoryLog, 'id'>) => void;
   deleteTransaction: (id: string) => void;
-  
-  isSyncing: boolean;
 }
 
 const LedgerContext = createContext<LedgerContextType | null>(null);
@@ -47,7 +44,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
   const queryClient = useQueryClient();
   const userId = session?.user?.id;
 
-  // --- 1. PARALLEL DATA FETCHING ---
+  // --- QUERIES ---
   const { data: accounts = [], isLoading: loadingAccounts } = useQuery({
     queryKey: ['accounts', userId],
     enabled: !!userId,
@@ -62,7 +59,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     enabled: !!userId,
     queryFn: async () => {
       const { data } = await supabase.from('budgets').select('*');
-      // Map snake_case to camelCase
       return (data || []).map((b: any) => ({
         ...b,
         expiryDate: b.expiry_date,
@@ -108,52 +104,32 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     queryKey: ['history', userId],
     enabled: !!userId,
     queryFn: async () => {
-      const { data } = await supabase
-        .from('history')
-        .select('*')
-        .order('date', { ascending: false });
+      const { data } = await supabase.from('history').select('*').order('date', { ascending: false });
       return data || [];
     }
   });
 
-  // --- 2. MUTATIONS (ACTIONS) ---
+  // --- MUTATIONS ---
 
-  // ACCOUNTS
   const updateAccountMutation = useMutation({
     mutationFn: async ({ id, amount }: { id: AccountType; amount: number }) => {
-      // 1. Get current balance
       const current = accounts.find(a => a.type === id);
       if (!current) throw new Error('Account not found');
-      
       const newBalance = Number(current.balance) + amount;
-
-      // 2. Update DB
-      const { error } = await supabase
-        .from('accounts')
-        .update({ balance: newBalance })
-        .eq('type', id) // Assuming 'type' is unique per user
-        .eq('user_id', userId);
-
+      const { error } = await supabase.from('accounts').update({ balance: newBalance }).eq('type', id).eq('user_id', userId);
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['accounts'] })
   });
 
-  // GOALS (With Atomic Delete)
   const deleteGoalMutation = useMutation({
     mutationFn: async ({ id, reclaimAmount }: { id: string; reclaimAmount: boolean }) => {
       const goal = goals.find(g => g.id === id);
       if (!goal) return;
-
       if (reclaimAmount && goal.currentAmount > 0) {
-        // Find Holding Account
         const holding = accounts.find(a => a.type === 'holding');
         if (holding) {
-          await supabase.from('accounts').update({ 
-            balance: Number(holding.balance) + Number(goal.currentAmount) 
-          }).eq('id', holding.id);
-          
-          // Log the reclaim
+          await supabase.from('accounts').update({ balance: Number(holding.balance) + Number(goal.currentAmount) }).eq('id', holding.id);
           await supabase.from('history').insert({
              user_id: userId,
              date: new Date().toISOString(),
@@ -164,8 +140,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
           });
         }
       }
-      
-      // Delete Goal
       await supabase.from('goals').delete().eq('id', id);
     },
     onSuccess: () => {
@@ -175,7 +149,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     }
   });
 
-  // HISTORY LOGGING
   const addLogMutation = useMutation({
     mutationFn: async (log: Omit<HistoryLog, 'id'>) => {
        await supabase.from('history').insert({
@@ -188,7 +161,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['history'] })
   });
   
-  // BUDGETS
   const addBudgetMutation = useMutation({
     mutationFn: async (budget: Omit<Budget, 'id'>) => {
       await supabase.from('budgets').insert({
@@ -200,24 +172,26 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budgets'] })
   });
+
+  const deleteBudgetMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await supabase.from('budgets').delete().eq('id', id);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budgets'] })
+  });
   
   const updateBudgetSpentMutation = useMutation({
     mutationFn: async ({ id, amount }: { id: string, amount: number }) => {
         const budget = budgets.find(b => b.id === id);
         if(!budget) return;
-        
-        await supabase.from('budgets').update({
-            spent: Number(budget.spent) + amount
-        }).eq('id', id);
+        await supabase.from('budgets').update({ spent: Number(budget.spent) + amount }).eq('id', id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budgets'] })
   });
 
-  // SIGNALS
   const updateSignalMutation = useMutation({
     mutationFn: async (signal: Signal) => {
       const { id, ...rest } = signal;
-      // Map camelCase back to snake_case for DB
       const dbSignal = {
         title: rest.title,
         sector: rest.sector,
@@ -234,18 +208,73 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         timeline: rest.timeline,
         updated_at: new Date().toISOString()
       };
-      
       await supabase.from('signals').update(dbSignal).eq('id', id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['signals'] })
   });
 
-  // --- 3. COMPUTED STATE ---
+  const addSignalMutation = useMutation({
+    mutationFn: async (signal: Omit<Signal, 'id'>) => {
+       const dbSignal = {
+        user_id: userId,
+        title: signal.title,
+        sector: signal.sector,
+        phase: signal.phase,
+        confidence: signal.confidence,
+        effort: signal.effort,
+        hours_logged: signal.hoursLogged,
+        total_generated: signal.totalGenerated,
+        red_flags: signal.redFlags,
+        proof_of_work: signal.proofOfWork,
+        thesis: signal.thesis,
+        research: signal.research,
+        outcome: signal.outcome,
+        timeline: signal.timeline,
+        created_at: signal.createdAt,
+        updated_at: signal.updatedAt
+      };
+      await supabase.from('signals').insert(dbSignal);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['signals'] })
+  });
+
+  const addGoalMutation = useMutation({
+    mutationFn: async (goal: Omit<Goal, 'id'>) => {
+       const dbGoal = {
+         user_id: userId,
+         title: goal.title,
+         phase: goal.phase,
+         target_amount: goal.targetAmount,
+         current_amount: goal.currentAmount,
+         type: goal.type,
+         sub_goals: goal.subGoals
+       };
+       await supabase.from('goals').insert(dbGoal);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['goals'] })
+  });
+
+  const updateGoalMutation = useMutation({
+    mutationFn: async (goal: Goal) => {
+       await supabase.from('goals').update({
+         current_amount: goal.currentAmount,
+         is_completed: goal.isCompleted
+       }).eq('id', goal.id);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['goals'] })
+  });
+
+  const deleteTransactionMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await supabase.from('history').delete().eq('id', id);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['history'] })
+  });
+
   const monthlyBurn = calculateMonthlyBurn(budgets);
   const totalLiquid = (accounts.find(a => a.type === 'payroll')?.balance || 0) + 
                       (accounts.find(a => a.type === 'treasury')?.balance || 0);
   const unallocatedCash = accounts.find(a => a.type === 'holding')?.balance || 0;
-  
   const runwayMonths = monthlyBurn > 0 ? Math.max(0, totalLiquid / monthlyBurn) : 0;
 
   return (
@@ -262,20 +291,19 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
       isSyncing: loadingAccounts || loadingBudgets,
 
       updateAccount: (id, amount) => updateAccountMutation.mutate({ id, amount }),
-      
       addBudget: (b) => addBudgetMutation.mutate(b),
-      deleteBudget: (id) => { /* Implement delete mutation */ },
+      deleteBudget: (id) => deleteBudgetMutation.mutate(id),
       updateBudgetSpent: (id, amount) => updateBudgetSpentMutation.mutate({ id, amount }),
 
-      addGoal: (g) => { /* Implement add mutation */ },
-      updateGoal: (g) => { /* Implement update mutation */ },
+      addGoal: (g) => addGoalMutation.mutate(g),
+      updateGoal: (g) => updateGoalMutation.mutate(g),
       deleteGoal: (id, reclaim) => deleteGoalMutation.mutate({ id, reclaimAmount: reclaim }),
 
       updateSignal: (s) => updateSignalMutation.mutate(s),
-      addSignal: (s) => { /* Implement add mutation */ },
+      addSignal: (s) => addSignalMutation.mutate(s),
       
       commitAction: (l) => addLogMutation.mutate(l),
-      deleteTransaction: (id) => { /* Implement delete mutation */ }
+      deleteTransaction: (id) => deleteTransactionMutation.mutate(id)
     }}>
       {children}
     </LedgerContext.Provider>

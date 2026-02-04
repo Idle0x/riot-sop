@@ -16,6 +16,7 @@ interface LedgerContextType {
   history: HistoryLog[];
   
   runwayMonths: number;
+  realRunwayMonths: number; // NEW: Inflation Adjusted
   monthlyBurn: number;
   totalLiquid: number;
   unallocatedCash: number;
@@ -25,9 +26,11 @@ interface LedgerContextType {
   addBudget: (budget: Omit<Budget, 'id'>) => void;
   deleteBudget: (id: string) => void;
   updateBudgetSpent: (id: string, amount: number) => void;
+  resetBudgetCounters: () => void; // NEW: For Monthly Reset
   
   addGoal: (goal: Omit<Goal, 'id'>) => void;
   updateGoal: (goal: Goal) => void;
+  fundGoal: (id: string, amount: number) => void; // NEW: For Triage
   deleteGoal: (id: string, reclaimAmount: boolean) => void;
   
   updateSignal: (signal: Signal) => void;
@@ -40,7 +43,7 @@ interface LedgerContextType {
 const LedgerContext = createContext<LedgerContextType | null>(null);
 
 export const LedgerProvider = ({ children }: { children: ReactNode }) => {
-  const { session } = useUser();
+  const { session, user } = useUser(); // Get User for Inflation Rate
   const queryClient = useQueryClient();
   const userId = session?.user?.id;
 
@@ -122,6 +125,23 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['accounts'] })
   });
 
+  // NEW: Fund Goal (Links Triage to Roadmap)
+  const fundGoalMutation = useMutation({
+    mutationFn: async ({ id, amount }: { id: string; amount: number }) => {
+      const goal = goals.find(g => g.id === id);
+      if (!goal) return;
+      
+      const newAmount = Number(goal.currentAmount) + amount;
+      const isCompleted = newAmount >= goal.targetAmount;
+
+      await supabase.from('goals').update({ 
+        current_amount: newAmount,
+        is_completed: isCompleted
+      }).eq('id', id);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['goals'] })
+  });
+
   const deleteGoalMutation = useMutation({
     mutationFn: async ({ id, reclaimAmount }: { id: string; reclaimAmount: boolean }) => {
       const goal = goals.find(g => g.id === id);
@@ -185,6 +205,17 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         const budget = budgets.find(b => b.id === id);
         if(!budget) return;
         await supabase.from('budgets').update({ spent: Number(budget.spent) + amount }).eq('id', id);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budgets'] })
+  });
+
+  // NEW: Reset All Budget Counters (For Monthly Checkpoint)
+  const resetBudgetCountersMutation = useMutation({
+    mutationFn: async () => {
+      // Updates all budgets for this user to have spent = 0
+      // Note: In Supabase, you can't update all rows without a WHERE clause that matches. 
+      // We use user_id to target all.
+      await supabase.from('budgets').update({ spent: 0 }).eq('user_id', userId);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budgets'] })
   });
@@ -271,11 +302,30 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['history'] })
   });
 
+  // --- COMPUTED LOGIC ---
   const monthlyBurn = calculateMonthlyBurn(budgets);
   const totalLiquid = (accounts.find(a => a.type === 'payroll')?.balance || 0) + 
                       (accounts.find(a => a.type === 'treasury')?.balance || 0);
   const unallocatedCash = accounts.find(a => a.type === 'holding')?.balance || 0;
+  
+  // Nominal Runway
   const runwayMonths = monthlyBurn > 0 ? Math.max(0, totalLiquid / monthlyBurn) : 0;
+
+  // Real Runway (Inflation Adjusted)
+  // Formula: Solves for n in Liquid = Burn * ((1+i)^n - 1) / i
+  // Where i = monthly inflation rate
+  const inflationRate = (user?.inflationRate || 0) / 100;
+  const monthlyInflation = inflationRate / 12;
+  
+  let realRunwayMonths = 0;
+  if (monthlyBurn > 0 && monthlyInflation > 0) {
+    // Derived from Geometric Series Sum Formula
+    const numerator = Math.log((totalLiquid * monthlyInflation / monthlyBurn) + 1);
+    const denominator = Math.log(1 + monthlyInflation);
+    realRunwayMonths = numerator / denominator;
+  } else {
+    realRunwayMonths = runwayMonths; // Fallback if no inflation
+  }
 
   return (
     <LedgerContext.Provider value={{
@@ -285,6 +335,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
       signals,
       history,
       runwayMonths,
+      realRunwayMonths, // EXPOSED
       monthlyBurn,
       totalLiquid,
       unallocatedCash,
@@ -294,9 +345,11 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
       addBudget: (b) => addBudgetMutation.mutate(b),
       deleteBudget: (id) => deleteBudgetMutation.mutate(id),
       updateBudgetSpent: (id, amount) => updateBudgetSpentMutation.mutate({ id, amount }),
+      resetBudgetCounters: () => resetBudgetCountersMutation.mutate(), // EXPOSED
 
       addGoal: (g) => addGoalMutation.mutate(g),
       updateGoal: (g) => updateGoalMutation.mutate(g),
+      fundGoal: (id, amount) => fundGoalMutation.mutate({ id, amount }), // EXPOSED
       deleteGoal: (id, reclaim) => deleteGoalMutation.mutate({ id, reclaimAmount: reclaim }),
 
       updateSignal: (s) => updateSignalMutation.mutate(s),

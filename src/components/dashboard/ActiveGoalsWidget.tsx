@@ -1,12 +1,12 @@
-import { useFinancials } from '../../context/FinancialContext';
+import { useLedger } from '../../context/LedgerContext';
 import { GlassCard } from '../ui/GlassCard';
 import { GlassProgressBar } from '../ui/GlassProgressBar';
-import { Naira } from '../ui/Naira';
+import { formatCurrency } from '../../utils/format';
 import { Target } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const ActiveGoalsWidget = () => {
-  const { goals } = useFinancials();
+  const { goals } = useLedger(); // Updated Hook
   const navigate = useNavigate();
 
   // Filter: Not completed, Sort by Priority (Ascending), Take top 3
@@ -31,7 +31,9 @@ export const ActiveGoalsWidget = () => {
           <div key={g.id}>
             <div className="flex justify-between text-xs mb-1">
               <span className="text-white font-bold">{g.title}</span>
-              <span className="text-gray-500"><Naira/>{new Intl.NumberFormat().format(g.currentAmount)} / {new Intl.NumberFormat().format(g.targetAmount)}</span>
+              <span className="text-gray-500">
+                {formatCurrency(g.currentAmount)} / {formatCurrency(g.targetAmount)}
+              </span>
             </div>
             <GlassProgressBar value={g.currentAmount} max={g.targetAmount} size="sm" showPercentage={false} />
           </div>

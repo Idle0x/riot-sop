@@ -11,7 +11,7 @@ export interface PendingChange {
 }
 
 export interface UserProfile {
-  id: string; // NEW: Added to match Supabase Auth ID
+  id: string; 
   burnCap: number;           
   annualRent: number; 
   inflationRate: number;     
@@ -20,21 +20,22 @@ export interface UserProfile {
   runwayEmptySince: string | null;
   systemVersion: string;     
   pendingChanges: PendingChange[];
+  
   // NEW V2 FIELDS
   currencyCode?: string; 
   settings?: {
     allowNegativeBalance: boolean;
     monthlyCheckpointDay: number;
+    masterKey?: string; // NEW: Stores the custom nuclear password
   };
 }
 
 // --- ACCOUNTING ---
-// Updated to allow string UUIDs while keeping the union for specific logic if needed
 export type AccountType = 'treasury' | 'payroll' | 'buffer' | 'holding' | 'vault';
 
 export interface Account {
-  id: string; // Changed to string (UUID) to match Supabase
-  type: AccountType; // Added to persist the "role" of the account
+  id: string; 
+  type: AccountType; 
   name: string;
   balance: number;
   currency: Currency;
@@ -53,7 +54,7 @@ export interface Budget {
   expiryDate?: string;  
   category: string;
   autoDeduct?: boolean;
-  lastProcessedAt?: string; // NEW: For Monthly Checkpoint Logic
+  lastProcessedAt?: string; 
 }
 
 // --- GOALS ---

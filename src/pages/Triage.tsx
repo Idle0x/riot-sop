@@ -15,7 +15,7 @@ export const Triage = () => {
   const { user } = useUser();
   const { 
     runwayMonths, goals, signals, unallocatedCash,
-    updateAccount, commitAction, updateSignal 
+    updateAccount, commitAction, updateSignal, fundGoal // NEW
   } = useLedger();
 
   const [step, setStep] = useState(1);
@@ -108,8 +108,6 @@ export const Triage = () => {
   const handleCommit = () => {
     const timestamp = new Date().toISOString();
     
-    // Logic: If new drop, we "add" it to holding then "subtract" sourceFunds.
-    // Simpler: Just deduct taxes/burns from source.
     if (dropUSD > 0) {
         updateAccount('holding', grossNGN); // Inflow
     }
@@ -141,15 +139,16 @@ export const Triage = () => {
         commitAction({ date: timestamp, type: 'TRANSFER', title: 'Runway Extension', amount: runwayAmount, tags: ['operations'] });
     }
 
-    // 4. Goals
+    // 4. Goals (CRITICAL FIX: Updates Goal Progress)
     Object.entries(allocations).forEach(([goalId, amount]) => {
        if (amount > 0) {
          updateAccount('buffer', amount);
+         fundGoal(goalId, amount); // NEW: Actually updates the goal logic
          commitAction({ date: timestamp, type: 'GOAL_FUND', title: 'Goal Allocation', amount, linkedGoalId: goalId });
        }
     });
 
-    // 5. Remaining -> Holding (It's already there since we deducted sourceFunds and re-added parts)
+    // 5. Remaining -> Holding
     if (remaining > 0) {
        updateAccount('holding', remaining);
     }

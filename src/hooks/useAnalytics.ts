@@ -1,10 +1,8 @@
 import { useMemo } from 'react';
 import { useLedger } from '../context/LedgerContext';
-import { useUser } from '../context/UserContext';
 
 export const useAnalytics = () => {
-  const { history, accounts, budgets, signals } = useLedger();
-  const { user } = useUser();
+  const { history, budgets, signals } = useLedger();
 
   // 1. BURN HISTORY (Last 6 Months)
   const burnHistory = useMemo(() => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 const STORAGE_KEY = 'riot_exchange_rate';
 
@@ -12,12 +12,9 @@ export const useExchangeRate = () => {
     localStorage.setItem(STORAGE_KEY, newRate);
   };
 
-  // Simulation: In a real app, this would fetch from an API
   const fetchLiveRate = async () => {
-    // Mocking an API call
     return new Promise<void>((resolve) => {
       setTimeout(() => {
-        // Simulating a fluctuation
         const mockRate = 1520 + Math.floor(Math.random() * 10); 
         setRate(mockRate.toString());
         resolve();

@@ -1,23 +1,21 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom'; // NEW
+import { useNavigate } from 'react-router-dom'; 
 import { useLedger } from '../context/LedgerContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
 import { DrillModeModal } from '../components/signals/DrillModeModal'; 
-import { HarvestModal } from '../components/signals/HarvestModal'; // NEW
+import { HarvestModal } from '../components/signals/HarvestModal'; 
 import { type Signal, type SignalPhase } from '../types';
-import { Clock, DollarSign, ArrowRight, Zap, Archive, Trophy, X, AlertTriangle } from 'lucide-react';
+import { Clock, DollarSign, ArrowRight, Zap, Archive, Trophy, X } from 'lucide-react';
 
 export const Signals = () => {
-  const navigate = useNavigate(); // NEW
+  const navigate = useNavigate();
   const { signals, updateSignal, commitAction } = useLedger();
 
-  // UI States
   const [isDrillOpen, setIsDrillOpen] = useState(false);
-  const [harvestSignal, setHarvestSignal] = useState<Signal | null>(null); // NEW
+  const [harvestSignal, setHarvestSignal] = useState<Signal | null>(null); 
   const [viewModal, setViewModal] = useState<'HARVESTED' | 'GRAVEYARD' | null>(null);
 
-  // --- ANALYTICS ENGINE ---
   const analytics = useMemo(() => {
     const totalSignals = signals.length;
     const wins = signals.filter(s => s.phase === 'delivered' || s.phase === 'harvested');
@@ -36,9 +34,7 @@ export const Signals = () => {
     return { winRate, bestSector };
   }, [signals]);
 
-  // --- ACTIONS ---
   const moveSignal = (signal: Signal, phase: SignalPhase) => {
-    // Intercept Harvest Action
     if (phase === 'harvested') {
       setHarvestSignal(signal);
       return;
@@ -58,7 +54,6 @@ export const Signals = () => {
   const handleHarvestConfirm = (amount: number) => {
     if (!harvestSignal) return;
 
-    // 1. Update Signal as Harvested
     updateSignal({ 
       ...harvestSignal, 
       phase: 'harvested', 
@@ -66,7 +61,6 @@ export const Signals = () => {
       updatedAt: new Date().toISOString() 
     });
 
-    // 2. Log History
     commitAction({
       date: new Date().toISOString(),
       type: 'SIGNAL_UPDATE',
@@ -77,14 +71,11 @@ export const Signals = () => {
     });
 
     setHarvestSignal(null);
-
-    // 3. REDIRECT TO TRIAGE (The Pipeline)
     navigate(`/triage?source=${encodeURIComponent(harvestSignal.title)}&amount=${amount}`);
   };
 
   const handleCreateFromDrill = (data: Partial<Signal>) => {
     console.log("Creating signal:", data);
-    // Ideally call addSignal here
     setIsDrillOpen(false);
   };
 
@@ -105,7 +96,6 @@ export const Signals = () => {
 
       {isDrillOpen && <DrillModeModal onClose={() => setIsDrillOpen(false)} onSave={handleCreateFromDrill} />}
       
-      {/* NEW: Harvest Modal */}
       {harvestSignal && (
         <HarvestModal 
           signalTitle={harvestSignal.title} 
@@ -114,7 +104,6 @@ export const Signals = () => {
         />
       )}
 
-      {/* DEEP DIVE MODAL */}
       {viewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl p-6">
           <GlassCard className="w-full max-w-4xl h-[80vh] flex flex-col relative">
@@ -152,7 +141,6 @@ export const Signals = () => {
         </div>
       )}
 
-      {/* HEADER & METRICS */}
       <div className="flex flex-col md:flex-row justify-between md:items-end gap-6 mb-6">
         <div>
            <h1 className="text-3xl font-bold text-white mb-2">Deal Flow</h1>
@@ -183,7 +171,6 @@ export const Signals = () => {
         </div>
       </div>
 
-      {/* KANBAN BOARD */}
       <div className="flex-1 flex gap-4 overflow-x-auto pb-4">
         {activeColumns.map(col => (
           <div key={col.id} className="min-w-[300px] flex flex-col gap-3">
@@ -207,7 +194,6 @@ export const Signals = () => {
                     <span className="text-gray-500 capitalize">{s.effort} Effort</span>
                   </div>
 
-                  {/* QUICK ACTIONS OVERLAY */}
                   <div className="pt-2 border-t border-white/10 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                      <button onClick={() => moveSignal(s, 'graveyard')} className="text-[10px] text-gray-500 hover:text-red-500 mr-auto">Kill</button>
                      {col.id === 'delivered' ? (

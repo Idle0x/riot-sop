@@ -6,7 +6,7 @@ import { GlassButton } from '../components/ui/GlassButton';
 import { GlassProgressBar } from '../components/ui/GlassProgressBar';
 import { Naira } from '../components/ui/Naira';
 import { formatNumber } from '../utils/format';
-import { Trash2, Calendar, RefreshCcw, Plus, X } from 'lucide-react';
+import { Trash2, RefreshCcw, Plus, X } from 'lucide-react';
 
 export const Budget = () => {
   const { 
@@ -17,7 +17,7 @@ export const Budget = () => {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [freq, setFreq] = useState<'monthly'|'one-time'>('monthly');
-  const [subDay, setSubDay] = useState(''); // NEW
+  const [subDay, setSubDay] = useState(''); 
 
   const [isSpendModalOpen, setIsSpendModalOpen] = useState(false);
   const [selectedBudgetId, setSelectedBudgetId] = useState('');
@@ -32,13 +32,11 @@ export const Budget = () => {
       frequency: freq,
       category: 'General',
       autoDeduct: true,
-      subscriptionDay: subDay ? parseInt(subDay) : undefined // NEW
+      subscriptionDay: subDay ? parseInt(subDay) : undefined 
     });
     setName(''); setAmount(''); setSubDay('');
   };
 
-  // ... (handleSpend and resetBudgetCycle logic remain same)
-  // Just copying for context
   const handleSpend = () => {
     const val = parseFloat(spendAmount);
     if (!val) return;
@@ -73,7 +71,6 @@ export const Budget = () => {
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 pb-20">
 
-      {/* Spend Modal remains same... */}
       {isSpendModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-fade-in">
           <GlassCard className="w-full max-w-md p-6 relative">
@@ -136,7 +133,6 @@ export const Budget = () => {
               </button>
             </div>
 
-            {/* NEW: Subscription Day Input */}
             {freq === 'monthly' && (
               <div className="p-3 bg-white/5 rounded-xl border border-white/10">
                 <GlassInput 
@@ -164,7 +160,6 @@ export const Budget = () => {
                   <div className="font-bold text-white flex items-center gap-2">
                     {b.name}
                     {b.frequency === 'one-time' && <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 rounded">1x</span>}
-                    {/* Display Sub Day */}
                     {b.subscriptionDay && <span className="text-[10px] bg-purple-500/20 text-purple-400 px-1.5 rounded border border-purple-500/30">Day {b.subscriptionDay}</span>}
                   </div>
                   <div className="text-xs text-gray-500 flex items-center gap-1">

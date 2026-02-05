@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useAnalytics } from '../hooks/useAnalytics';
 import { useLedger } from '../context/LedgerContext';
 import { useUser } from '../context/UserContext';
@@ -6,7 +5,7 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
 import { Naira } from '../components/ui/Naira';
 import { formatNumber } from '../utils/format';
-import { Download, TrendingUp, Activity, PieChart as PieIcon, Target, Calendar } from 'lucide-react';
+import { Download, TrendingUp, PieChart as PieIcon, Target, Calendar } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   BarChart, Bar, Cell, ScatterChart, Scatter, ZAxis, Legend
@@ -17,7 +16,6 @@ export const Analytics = () => {
   const { history, budgets } = useLedger();
   const { burnHistory, categorySplit, signalPerformance, comparisonData } = useAnalytics();
   
-  // --- RESTORED: DATA SOVEREIGNTY ---
   const handleExport = () => {
     const data = JSON.stringify({ user, history, budgets }, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
@@ -114,7 +112,7 @@ export const Analytics = () => {
               <YAxis dataKey="name" type="category" stroke="#fff" fontSize={10} width={70}/>
               <Tooltip content={<CustomTooltip />}/>
               <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} name="Spent">
-                {categorySplit.map((entry, index) => (
+                {categorySplit.map((_entry, index) => (
                   <Cell key={`cell-${index}`} fill={index === 0 ? '#ef4444' : '#8b5cf6'} />
                 ))}
               </Bar>

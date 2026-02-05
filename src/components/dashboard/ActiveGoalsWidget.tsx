@@ -4,7 +4,7 @@ import { GlassProgressBar } from '../ui/GlassProgressBar';
 import { EmptyState } from '../ui/EmptyState';
 import { formatNumber } from '../../utils/format';
 import { Naira } from '../ui/Naira';
-import { Target, PlusCircle } from 'lucide-react';
+import { Target } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const ActiveGoalsWidget = () => {

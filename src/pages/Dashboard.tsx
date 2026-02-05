@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
 import { useLedger } from '../context/LedgerContext';
 import { useSystemEngine } from '../hooks/useSystemEngine';
-import { useAnalytics } from '../hooks/useAnalytics'; // INTELLIGENCE ENGINE
+import { useAnalytics } from '../hooks/useAnalytics';
 import { formatNumber } from '../utils/format'; 
 import { Naira } from '../components/ui/Naira'; 
 
@@ -17,7 +17,7 @@ import { RunwayWeather } from '../components/layout/RunwayWeather';
 import { MonthlyCheckpointModal } from '../components/modals/MonthlyCheckpointModal';
 
 import { Clock, AlertTriangle, ArrowRight, Lock, Activity, ShieldCheck, BarChart3 } from 'lucide-react';
-import { AreaChart, Area, ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'; // VISUALS
+import { AreaChart, Area, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 export const Dashboard = () => {
   const { isGhostMode } = useUser();
@@ -26,7 +26,7 @@ export const Dashboard = () => {
     unallocatedCash, history, isSyncing 
   } = useLedger();
 
-  const { burnHistory } = useAnalytics(); // DATA LAYER
+  const { burnHistory } = useAnalytics();
   const { showModal, monthsMissed, pendingBurn, confirmReconciliation } = useSystemEngine();
 
   const navigate = useNavigate();
@@ -37,13 +37,11 @@ export const Dashboard = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Calculate Asset Composition
   const buffer = accounts.find(a => a.type === 'buffer')?.balance || 0;
   const lockedGoals = goals.reduce((sum, g) => sum + g.currentAmount, 0);
   const totalLocked = buffer + lockedGoals;
   const netWorth = totalLiquid + totalLocked + unallocatedCash;
 
-  // Donut Data
   const allocationData = [
     { name: 'Liquid', value: totalLiquid, color: '#10b981' },
     { name: 'Locked', value: totalLocked, color: '#3b82f6' },
@@ -58,7 +56,6 @@ export const Dashboard = () => {
     <RunwayWeather months={runwayMonths}>
       <div className={`p-4 md:p-8 space-y-8 pb-20 max-w-7xl mx-auto transition-all duration-1000 ${isGhostMode ? 'grayscale contrast-125' : ''}`}>
 
-        {/* MODAL */}
         {showModal && (
           <MonthlyCheckpointModal 
             monthsMissed={monthsMissed}
@@ -87,7 +84,7 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        {/* UNALLOCATED ALERT */}
+        {/* UNALLOCATED CAPITAL */}
         {unallocatedCash > 0 && (
           <div className="bg-yellow-500/10 border border-yellow-500/50 p-6 rounded-2xl flex items-center justify-between animate-pulse shadow-[0_0_20px_rgba(234,179,8,0.2)]">
             <div className="flex items-center gap-4">
@@ -108,7 +105,7 @@ export const Dashboard = () => {
           </div>
         )}
 
-        {/* ASSET METRICS (Enhanced with Mini Charts) */}
+        {/* ASSETS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <MetricCard 
             title="Liquid Runway" 
@@ -122,7 +119,6 @@ export const Dashboard = () => {
             subValue="Buffer & Goals" 
             icon={<Lock size={20}/>} 
           />
-          {/* NET WORTH + MINI DONUT */}
           <div className="relative">
             <MetricCard 
               title="Net Worth" 
@@ -131,7 +127,6 @@ export const Dashboard = () => {
               icon={<ShieldCheck size={20}/>} 
               isPrivate 
             />
-            {/* Visual Overlay for Net Worth Composition */}
             <div className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 opacity-50 pointer-events-none">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -146,9 +141,8 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        {/* RUNWAY COCKPIT (Main Visualizer) */}
+        {/* RUNWAY COCKPIT */}
         <GlassCard className="p-0 overflow-hidden relative group h-48">
-          {/* Data Layer */}
           <div className="absolute inset-0 p-8 z-10 flex flex-col justify-between">
             <div className="flex justify-between items-start">
               <div>
@@ -165,7 +159,6 @@ export const Dashboard = () => {
             <GlassProgressBar value={runwayMonths} max={12} color={runwayMonths < 3 ? 'danger' : runwayMonths < 6 ? 'warning' : 'success'} size="lg" showPercentage={false} />
           </div>
 
-          {/* Visual Layer (Background Chart) */}
           <div className="absolute bottom-0 left-0 right-0 h-32 opacity-20 group-hover:opacity-30 transition-opacity pointer-events-none">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={burnHistory}>

@@ -3,7 +3,7 @@ import { GlassCard } from '../ui/GlassCard';
 import { EmptyState } from '../ui/EmptyState';
 import { Naira } from '../ui/Naira';
 import { formatNumber } from '../../utils/format';
-import { Flame, Plus } from 'lucide-react';
+import { Flame } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const BudgetBurnWidget = () => {

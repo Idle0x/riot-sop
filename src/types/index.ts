@@ -27,7 +27,7 @@ export interface UserProfile {
 }
 
 // --- ACCOUNTING ---
-export type AccountType = 'treasury' | 'payroll' | 'buffer' | 'holding' | 'vault';
+export type AccountType = 'treasury' | 'payroll' | 'buffer' | 'holding' | 'vault' | 'generosity';
 
 export interface Account {
   id: string; 

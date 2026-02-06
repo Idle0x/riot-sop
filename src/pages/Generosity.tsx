@@ -1,30 +1,57 @@
 import { useState } from 'react';
 import { useLedger } from '../context/LedgerContext';
 import { GlassCard } from '../components/ui/GlassCard';
+import { GlassButton } from '../components/ui/GlassButton';
+import { GlassInput } from '../components/ui/GlassInput';
 import { Naira } from '../components/ui/Naira';
 import { calculateGenerosityCap, getTierColor } from '../utils/finance';
 import { formatNumber } from '../utils/format';
-import { Shield, Users, AlertTriangle, Search, Ban } from 'lucide-react';
+import { Shield, Users, AlertTriangle, Search, Ban, Send, Wallet } from 'lucide-react';
 
 export const Generosity = () => {
-  const { history, runwayMonths } = useLedger();
+  const { history, runwayMonths, accounts, updateAccount, commitAction } = useLedger();
   const [searchTerm, setSearchTerm] = useState('');
 
-  // 1. Calculate Caps
+  // 1. Get Wallet Balance
+  const generosityWallet = accounts.find(a => a.type === 'generosity');
+  const availableBalance = generosityWallet?.balance || 0;
+
+  // 2. Form State
+  const [recipient, setRecipient] = useState('');
+  const [tier, setTier] = useState('T3');
+  const [amount, setAmount] = useState('');
+
+  // 3. Math & Caps
   const dynamicCap = calculateGenerosityCap(runwayMonths);
-  const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-
-  // 2. Filter History for Generosity logs
-  const generosityLogs = history.filter(h => h.tags?.includes('generosity'));
-
-  // 3. Calculate Month-to-Date Giving
+  const currentMonth = new Date().toISOString().slice(0, 7); 
+  const generosityLogs = history.filter(h => h.type === 'GENEROSITY');
+  
   const monthTotal = generosityLogs
     .filter(log => log.date.startsWith(currentMonth))
     .reduce((sum, log) => sum + (log.amount || 0), 0);
 
-  const remainingCap = Math.max(0, dynamicCap - monthTotal);
+  // 4. Distribution Handler
+  const handleGive = () => {
+    const val = parseFloat(amount);
+    if (!val || val <= 0 || val > availableBalance) return;
 
-  // 4. Search Logic
+    // Spend from Generosity Account
+    updateAccount('generosity', -val);
+    
+    // Log the act
+    commitAction({
+      date: new Date().toISOString(),
+      type: 'GENEROSITY',
+      title: 'Generosity Gift',
+      amount: val,
+      description: `${recipient} | [${tier}]`,
+      tags: ['generosity', tier]
+    });
+
+    setRecipient('');
+    setAmount('');
+  };
+
   const filteredLogs = generosityLogs.filter(log => 
     (log.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     log.title.toLowerCase().includes(searchTerm.toLowerCase())
@@ -43,16 +70,48 @@ export const Generosity = () => {
         </div>
 
         <GlassCard className="p-4 min-w-[250px] border-blue-500/30">
-          <div className="text-xs text-gray-400 uppercase font-bold mb-1">Available to Give (This Month)</div>
-          <div className={`text-2xl font-mono font-bold flex items-center gap-1 ${remainingCap === 0 ? 'text-red-500' : 'text-white'}`}>
-            <Naira/>{formatNumber(remainingCap)}
+          <div className="text-xs text-gray-400 uppercase font-bold mb-1 flex items-center gap-2">
+            <Wallet size={12}/> Wallet Balance
+          </div>
+          <div className={`text-2xl font-mono font-bold flex items-center gap-1 text-white`}>
+            <Naira/>{formatNumber(availableBalance)}
           </div>
           <div className="text-[10px] text-gray-500 mt-1 flex justify-between">
-            <span className="flex items-center gap-0.5">Cap: <Naira/>{formatNumber(dynamicCap)}</span>
-            <span className="flex items-center gap-0.5">Used: <Naira/>{formatNumber(monthTotal)}</span>
+            <span className="flex items-center gap-0.5">Monthly Cap: <Naira/>{formatNumber(dynamicCap)}</span>
+            <span className="flex items-center gap-0.5">Sent this Month: <Naira/>{formatNumber(monthTotal)}</span>
           </div>
         </GlassCard>
       </div>
+
+      {/* DISTRIBUTION FORM */}
+      {availableBalance > 0 && (
+        <GlassCard className="p-6 border-green-500/20 bg-green-500/5">
+          <h3 className="font-bold text-white mb-4 flex items-center gap-2">
+            <Send size={16} className="text-green-400"/> Distribute Funds
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+             <div className="md:col-span-1">
+               <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Tier</label>
+               <select className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white text-sm" value={tier} onChange={(e) => setTier(e.target.value)}>
+                  <option value="T1">T1 (Family)</option>
+                  <option value="T2">T2 (Inner Circle)</option>
+                  <option value="T3">T3 (One-off)</option>
+               </select>
+             </div>
+             <div className="md:col-span-1">
+                <GlassInput label="Recipient" value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="Name"/>
+             </div>
+             <div className="md:col-span-1">
+                <GlassInput label="Amount (NGN)" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0"/>
+             </div>
+             <div className="md:col-span-1">
+               <GlassButton className="w-full" onClick={handleGive} disabled={!amount || parseFloat(amount) > availableBalance}>
+                 Give
+               </GlassButton>
+             </div>
+          </div>
+        </GlassCard>
+      )}
 
       {/* POLICY REMINDER */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -85,11 +144,9 @@ export const Generosity = () => {
           <h3 className="font-bold text-white mb-3 flex items-center gap-2">
              <AlertTriangle size={16} className="text-red-500"/> Auto-No Protocol
           </h3>
-          <p className="text-sm text-gray-300 mb-2">If they say:</p>
           <ul className="text-xs text-gray-400 space-y-1 mb-4 italic">
             <li>"You have money now..."</li>
             <li>"I'll pay you back soon..." (It's a loan)</li>
-            <li>"You've changed..."</li>
           </ul>
           <div className="p-2 bg-white/5 rounded border border-white/10 text-xs text-center font-mono text-white">
             "Budget finished. Next month."
@@ -117,7 +174,6 @@ export const Generosity = () => {
             <div className="text-center py-8 text-gray-500 text-sm">No records found.</div>
           ) : (
             filteredLogs.map(log => {
-               // Extract Tier from description if saved, or default
                const tier = log.description?.match(/\[(T\d)\]/)?.[1] || 'T3'; 
                const name = log.description?.split('|')[0] || 'Unknown';
                return (

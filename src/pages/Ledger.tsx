@@ -5,8 +5,8 @@ import { Naira } from '../components/ui/Naira';
 import { formatNumber } from '../utils/format';
 import { 
   Clock, Undo2, Search, Filter, ArrowDown, 
-  Target, Flame, Skull, Zap, Heart, ShieldCheck, Wallet, RefreshCw 
-} from 'lucide-react';
+  Target, Flame, Skull, Zap, Heart, ShieldCheck, Wallet 
+} from 'lucide-react'; // FIX: Removed 'RefreshCw'
 
 export const Ledger = () => {
   const { history, deleteTransaction } = useLedger();

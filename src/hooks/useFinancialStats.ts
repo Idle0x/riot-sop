@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { useLedger } from '../context/LedgerContext';
-import { format } from 'date-fns'; // Ensure you have date-fns or use native Intl
 
 export const useFinancialStats = () => {
   const { history, accounts, signals } = useLedger();

@@ -5,10 +5,10 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
 import { DrillModeModal } from '../components/signals/DrillModeModal'; 
 import { SignalDossierModal } from '../components/signals/SignalDossierModal'; 
-import { Naira } from '../components/ui/Naira';
+// REMOVED: Naira import
 import { formatNumber } from '../utils/format';
 import { type Signal, type SignalPhase } from '../types';
-import { Clock, Zap, Maximize2, X, Skull, Trophy } from 'lucide-react';
+import { Zap, Maximize2, Skull, Trophy } from 'lucide-react';
 
 export const Signals = () => {
   const { signals, updateSignal, addSignal, commitAction } = useLedger();
@@ -16,11 +16,8 @@ export const Signals = () => {
   const [isDrillOpen, setIsDrillOpen] = useState(false);
   const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null); 
   const [dossierSignal, setDossierSignal] = useState<Signal | null>(null);       
-  
-  // KILL PROTOCOL STATE
   const [killCandidate, setKillCandidate] = useState<Signal | null>(null);
 
-  // --- ANALYTICS ---
   const analytics = useMemo(() => {
     const totalSignals = signals.length;
     const wins = signals.filter(s => s.phase === 'delivered' || s.phase === 'harvested');
@@ -28,8 +25,6 @@ export const Signals = () => {
     return { winRate };
   }, [signals]);
 
-  // --- ACTIONS ---
-  
   const handleDossierUpdate = async (updatedSignal: Signal, logContent: string) => {
     updateSignal(updatedSignal);
     await supabase.from('signal_logs').insert({
@@ -69,13 +64,10 @@ export const Signals = () => {
     setIsDrillOpen(false);
   };
 
-  // --- THE SMART KILL PROTOCOL ---
   const initiateKill = (signal: Signal) => {
     if (signal.totalGenerated > 0) {
-      // It made money -> Ask user to classify outcome
       setKillCandidate(signal);
     } else {
-      // It made nothing -> Auto-Kill to Graveyard
       updateSignal({ ...signal, phase: 'graveyard', updatedAt: new Date().toISOString() });
       commitAction({ date: new Date().toISOString(), type: 'SIGNAL_KILL', title: `Killed: ${signal.title}`, description: 'Moved to graveyard (No Revenue)', linkedSignalId: signal.id });
       setSelectedSignalId(null);
@@ -84,7 +76,6 @@ export const Signals = () => {
 
   const confirmKillDecision = (decision: 'GRAVEYARD' | 'HARVEST') => {
     if (!killCandidate) return;
-    
     const phase = decision === 'HARVEST' ? 'harvested' : 'graveyard';
     const desc = decision === 'HARVEST' ? 'Retired as Winner (Harvested)' : 'Retired to Graveyard (despite revenue)';
     
@@ -105,11 +96,9 @@ export const Signals = () => {
   return (
     <div className="h-[calc(100vh-100px)] flex flex-col p-4 md:p-8 pb-20" onClick={() => setSelectedSignalId(null)}>
       
-      {/* MODALS */}
       {isDrillOpen && <DrillModeModal onClose={() => setIsDrillOpen(false)} onSave={handleCreateFromDrill} />}
       {dossierSignal && <SignalDossierModal signal={dossierSignal} onClose={() => setDossierSignal(null)} onUpdate={handleDossierUpdate}/>}
 
-      {/* KILL PROTOCOL MODAL */}
       {killCandidate && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-fade-in">
            <GlassCard className="max-w-md w-full p-6 border-white/20">
@@ -118,7 +107,7 @@ export const Signals = () => {
                <h2 className="text-xl font-bold text-white">Classify Outcome</h2>
              </div>
              <p className="text-sm text-gray-300 mb-6">
-               <strong className="text-white">{killCandidate.title}</strong> has generated <span className="text-green-400 font-mono"><Naira/>{formatNumber(killCandidate.totalGenerated)}</span>.
+               <strong className="text-white">{killCandidate.title}</strong> has generated <span className="text-green-400 font-mono">${formatNumber(killCandidate.totalGenerated)}</span>.
                <br/><br/>
                Are you retiring this as a <strong>Win</strong> (Harvest) or a <strong>Loss</strong>?
              </p>
@@ -137,7 +126,6 @@ export const Signals = () => {
         </div>
       )}
 
-      {/* HEADER */}
       <div className="flex justify-between items-end gap-6 mb-6">
         <div>
            <h1 className="text-3xl font-bold text-white mb-2">Deal Flow</h1>
@@ -150,7 +138,6 @@ export const Signals = () => {
         </GlassButton>
       </div>
 
-      {/* KANBAN */}
       <div className="flex-1 flex gap-4 overflow-x-auto pb-4">
         {activeColumns.map(col => (
           <div key={col.id} className="min-w-[300px] flex flex-col gap-3">
@@ -162,15 +149,14 @@ export const Signals = () => {
             <div className="flex-1 space-y-3 overflow-y-auto pb-20">
               {signals.filter(s => s.phase === col.id).map(s => {
                 const isSelected = selectedSignalId === s.id;
-                
                 return (
                   <div key={s.id} onClick={(e) => { e.stopPropagation(); setSelectedSignalId(isSelected ? null : s.id); }}>
                     <GlassCard className={`p-4 cursor-pointer relative transition-all duration-300 ${isSelected ? 'border-green-500/50 shadow-[0_0_20px_rgba(16,185,129,0.1)] scale-[1.02] z-10' : 'hover:border-white/30'}`}>
                       
-                      {/* --- PRICE TAG (TOP LEFT) --- */}
+                      {/* --- PRICE TAG: DOLLAR MODE --- */}
                       {s.totalGenerated > 0 && (
                         <div className="absolute top-2 left-2 z-20 bg-green-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded shadow-lg flex items-center gap-0.5">
-                          <Naira isBlack/>{formatNumber(s.totalGenerated)}
+                          ${formatNumber(s.totalGenerated)}
                         </div>
                       )}
 
@@ -185,13 +171,11 @@ export const Signals = () => {
                         <span className={`${s.confidence > 7 ? 'text-green-500' : 'text-orange-500'}`}>{s.confidence}/10 Conf</span>
                       </div>
 
-                      {/* ACTION BAR (PEEK) */}
                       {isSelected && (
                         <div className="mt-4 pt-3 border-t border-white/10 flex justify-between items-center animate-fade-in">
                            <button onClick={(e) => { e.stopPropagation(); setDossierSignal(s); }} className="text-xs font-bold text-white bg-green-600/20 hover:bg-green-600/40 px-3 py-1.5 rounded-lg flex items-center gap-2 border border-green-500/30">
                              <Maximize2 size={12}/> Dossier
                            </button>
-                           
                            <button onClick={(e) => { e.stopPropagation(); initiateKill(s); }} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1 px-2">
                              <Skull size={14}/> Kill
                            </button>

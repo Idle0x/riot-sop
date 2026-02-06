@@ -1,194 +1,188 @@
-import { useState, useMemo } from 'react';
-import { useLedger } from '../context/LedgerContext';
-import { supabase } from '../lib/supabase'; 
-import { GlassCard } from '../components/ui/GlassCard';
-import { GlassButton } from '../components/ui/GlassButton';
-import { DrillModeModal } from '../components/signals/DrillModeModal'; 
-import { SignalDossierModal } from '../components/signals/SignalDossierModal'; 
+import { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
+import { GlassCard } from '../ui/GlassCard';
+import { GlassButton } from '../ui/GlassButton';
+import { GlassInput } from '../ui/GlassInput';
 // REMOVED: Naira import
-import { formatNumber } from '../utils/format';
-import { type Signal, type SignalPhase } from '../types';
-import { Zap, Maximize2, Skull, Trophy } from 'lucide-react';
+import { formatNumber } from '../../utils/format';
+import { type Signal, type SignalPhase, type HistoryLog } from '../../types';
+import { X, Save, AlertTriangle, ExternalLink, Wallet, TrendingUp, ArrowDownRight } from 'lucide-react';
 
-export const Signals = () => {
-  const { signals, updateSignal, addSignal, commitAction } = useLedger();
+interface Props {
+  signal: Signal;
+  onClose: () => void;
+  onUpdate: (updatedSignal: Signal, logEntry: string) => void;
+}
 
-  const [isDrillOpen, setIsDrillOpen] = useState(false);
-  const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null); 
-  const [dossierSignal, setDossierSignal] = useState<Signal | null>(null);       
-  const [killCandidate, setKillCandidate] = useState<Signal | null>(null);
+export const SignalDossierModal = ({ signal, onClose, onUpdate }: Props) => {
+  const [activeTab, setActiveTab] = useState<'INTEL' | 'TIMELINE' | 'FINANCE'>('INTEL');
+  const [logs, setLogs] = useState<any[]>([]);
+  const [incomeHistory, setIncomeHistory] = useState<HistoryLog[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const analytics = useMemo(() => {
-    const totalSignals = signals.length;
-    const wins = signals.filter(s => s.phase === 'delivered' || s.phase === 'harvested');
-    const winRate = totalSignals > 0 ? (wins.length / totalSignals) * 100 : 0;
-    return { winRate };
-  }, [signals]);
+  const [note, setNote] = useState('');
+  const [newUrl, setNewUrl] = useState(signal.research.links.website || '');
+  const [newPhase, setNewPhase] = useState<SignalPhase>(signal.phase);
+  const [isRedFlag, setIsRedFlag] = useState(false);
 
-  const handleDossierUpdate = async (updatedSignal: Signal, logContent: string) => {
-    updateSignal(updatedSignal);
-    await supabase.from('signal_logs').insert({
-      signal_id: updatedSignal.id,
-      user_id: (await supabase.auth.getUser()).data.user?.id,
-      type: 'FIELD_REPORT',
-      content: logContent
-    });
-    commitAction({
-      date: new Date().toISOString(),
-      type: 'SIGNAL_UPDATE',
-      title: `Updated: ${updatedSignal.title}`,
-      description: logContent,
-      linkedSignalId: updatedSignal.id
-    });
-  };
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      const { data: logData } = await supabase
+        .from('signal_logs')
+        .select('*')
+        .eq('signal_id', signal.id)
+        .order('created_at', { ascending: false });
+      setLogs(logData || []);
 
-  const handleCreateFromDrill = (data: Partial<Signal>) => {
-    if (!data.title) { alert("Title required"); return; }
-    addSignal({
-        title: data.title,
-        sector: data.sector || 'General',
-        phase: 'discovery',
-        confidence: data.confidence || 5,
-        effort: 'low',
-        hoursLogged: 0,
-        totalGenerated: 0,
-        redFlags: [],
-        proofOfWork: [],
-        thesis: { alpha: '', catalyst: '', invalidation: '', expectedValue: 0 },
-        research: { links: {}, token: { status: 'none' }, findings: '', pickReason: '', drillNotes: {} },
-        timeline: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        ...data as any
-    });
-    setIsDrillOpen(false);
-  };
+      const { data: financeData } = await supabase
+        .from('history')
+        .select('*')
+        .eq('linked_signal_id', signal.id)
+        .eq('type', 'DROP')
+        .order('date', { ascending: false });
+      setIncomeHistory(financeData || []);
+      setLoading(false);
+    };
+    fetchData();
+  }, [signal.id]);
 
-  const initiateKill = (signal: Signal) => {
-    if (signal.totalGenerated > 0) {
-      setKillCandidate(signal);
-    } else {
-      updateSignal({ ...signal, phase: 'graveyard', updatedAt: new Date().toISOString() });
-      commitAction({ date: new Date().toISOString(), type: 'SIGNAL_KILL', title: `Killed: ${signal.title}`, description: 'Moved to graveyard (No Revenue)', linkedSignalId: signal.id });
-      setSelectedSignalId(null);
+  const handleSubmit = () => {
+    const changes: string[] = [];
+    const updatedSignal = { ...signal };
+
+    if (note) changes.push(`Analyst Note: "${note}"`);
+    if (newUrl !== signal.research.links.website) {
+      changes.push(`URL Change: ${signal.research.links.website} -> ${newUrl}`);
+      updatedSignal.research = { ...signal.research, links: { ...signal.research.links, website: newUrl } };
     }
-  };
+    if (newPhase !== signal.phase) {
+      changes.push(`Phase Shift: ${signal.phase} -> ${newPhase}`);
+      updatedSignal.phase = newPhase;
+    }
+    if (isRedFlag) {
+      changes.push("Flagged as High Risk");
+      updatedSignal.redFlags = [...(signal.redFlags || []), `Flagged on ${new Date().toLocaleDateString()}: ${note}`];
+    }
 
-  const confirmKillDecision = (decision: 'GRAVEYARD' | 'HARVEST') => {
-    if (!killCandidate) return;
-    const phase = decision === 'HARVEST' ? 'harvested' : 'graveyard';
-    const desc = decision === 'HARVEST' ? 'Retired as Winner (Harvested)' : 'Retired to Graveyard (despite revenue)';
-    
-    updateSignal({ ...killCandidate, phase, updatedAt: new Date().toISOString() });
-    commitAction({ date: new Date().toISOString(), type: decision === 'HARVEST' ? 'SIGNAL_HARVEST' : 'SIGNAL_KILL', title: `${decision === 'HARVEST' ? 'Harvested' : 'Killed'}: ${killCandidate.title}`, description: desc, linkedSignalId: killCandidate.id });
-    
-    setKillCandidate(null);
-    setSelectedSignalId(null);
+    if (changes.length === 0) return;
+    onUpdate(updatedSignal, changes.join(' | '));
+    onClose();
   };
-
-  const activeColumns: { id: SignalPhase; label: string; color: string }[] = [
-    { id: 'discovery', label: 'Discovery', color: 'bg-blue-500' },
-    { id: 'validation', label: 'Validation', color: 'bg-yellow-500' },
-    { id: 'contribution', label: 'Contribution', color: 'bg-purple-500' },
-    { id: 'delivered', label: 'Delivered', color: 'bg-green-500' },
-  ];
 
   return (
-    <div className="h-[calc(100vh-100px)] flex flex-col p-4 md:p-8 pb-20" onClick={() => setSelectedSignalId(null)}>
-      
-      {isDrillOpen && <DrillModeModal onClose={() => setIsDrillOpen(false)} onSave={handleCreateFromDrill} />}
-      {dossierSignal && <SignalDossierModal signal={dossierSignal} onClose={() => setDossierSignal(null)} onUpdate={handleDossierUpdate}/>}
-
-      {killCandidate && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-fade-in">
-           <GlassCard className="max-w-md w-full p-6 border-white/20">
-             <div className="flex items-center gap-3 mb-4">
-               <Zap className="text-yellow-500" size={24} />
-               <h2 className="text-xl font-bold text-white">Classify Outcome</h2>
-             </div>
-             <p className="text-sm text-gray-300 mb-6">
-               <strong className="text-white">{killCandidate.title}</strong> has generated <span className="text-green-400 font-mono">${formatNumber(killCandidate.totalGenerated)}</span>.
-               <br/><br/>
-               Are you retiring this as a <strong>Win</strong> (Harvest) or a <strong>Loss</strong>?
-             </p>
-             <div className="flex gap-3">
-               <button onClick={() => confirmKillDecision('GRAVEYARD')} className="flex-1 p-3 rounded-xl border border-white/10 hover:bg-white/5 flex flex-col items-center gap-2 group">
-                 <Skull className="text-gray-500 group-hover:text-red-500" />
-                 <span className="text-xs font-bold text-gray-500 group-hover:text-white">Graveyard</span>
-               </button>
-               <button onClick={() => confirmKillDecision('HARVEST')} className="flex-1 p-3 rounded-xl border border-green-500/30 bg-green-500/10 hover:bg-green-500/20 flex flex-col items-center gap-2 group">
-                 <Trophy className="text-green-500" />
-                 <span className="text-xs font-bold text-green-400 group-hover:text-white">Harvest (Win)</span>
-               </button>
-             </div>
-             <button onClick={() => setKillCandidate(null)} className="w-full mt-4 text-xs text-gray-500 hover:text-white">Cancel</button>
-           </GlassCard>
-        </div>
-      )}
-
-      <div className="flex justify-between items-end gap-6 mb-6">
-        <div>
-           <h1 className="text-3xl font-bold text-white mb-2">Deal Flow</h1>
-           <div className="text-xs text-gray-500 flex gap-4">
-             <span>Win Rate: <span className="text-green-400">{analytics.winRate.toFixed(1)}%</span></span>
-           </div>
-        </div>
-        <GlassButton size="sm" onClick={(e) => { e.stopPropagation(); setIsDrillOpen(true); }}>
-           <Zap size={16} className="mr-2"/> New Drill
-        </GlassButton>
-      </div>
-
-      <div className="flex-1 flex gap-4 overflow-x-auto pb-4">
-        {activeColumns.map(col => (
-          <div key={col.id} className="min-w-[300px] flex flex-col gap-3">
-            <div className="flex items-center gap-2 pb-2 border-b border-white/10">
-              <div className={`w-2 h-2 rounded-full ${col.color}`}/>
-              <span className="font-bold text-xs uppercase text-gray-400">{col.label}</span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fade-in">
+      <GlassCard className="w-full max-w-2xl h-[85vh] flex flex-col relative border-white/20 shadow-2xl">
+        
+        <div className="p-6 border-b border-white/10 flex justify-between items-start">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <h2 className="text-2xl font-bold text-white">{signal.title}</h2>
+              <span className="text-xs bg-white/10 px-2 py-0.5 rounded text-gray-400 font-mono uppercase">{signal.sector}</span>
             </div>
-
-            <div className="flex-1 space-y-3 overflow-y-auto pb-20">
-              {signals.filter(s => s.phase === col.id).map(s => {
-                const isSelected = selectedSignalId === s.id;
-                return (
-                  <div key={s.id} onClick={(e) => { e.stopPropagation(); setSelectedSignalId(isSelected ? null : s.id); }}>
-                    <GlassCard className={`p-4 cursor-pointer relative transition-all duration-300 ${isSelected ? 'border-green-500/50 shadow-[0_0_20px_rgba(16,185,129,0.1)] scale-[1.02] z-10' : 'hover:border-white/30'}`}>
-                      
-                      {/* --- PRICE TAG: DOLLAR MODE --- */}
-                      {s.totalGenerated > 0 && (
-                        <div className="absolute top-2 left-2 z-20 bg-green-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded shadow-lg flex items-center gap-0.5">
-                          ${formatNumber(s.totalGenerated)}
-                        </div>
-                      )}
-
-                      <div className="flex justify-end mb-2 h-4">
-                        {s.redFlags && s.redFlags.length > 0 && <span className="text-[10px] text-red-500 flex items-center gap-1">🚩 Flagged</span>}
-                      </div>
-
-                      <h4 className="font-bold text-white text-sm mb-2 mt-1">{s.title}</h4>
-
-                      <div className="flex gap-2 text-[10px] mb-2">
-                        <span className="bg-white/10 px-1.5 py-0.5 rounded text-gray-300 font-mono">{s.sector}</span>
-                        <span className={`${s.confidence > 7 ? 'text-green-500' : 'text-orange-500'}`}>{s.confidence}/10 Conf</span>
-                      </div>
-
-                      {isSelected && (
-                        <div className="mt-4 pt-3 border-t border-white/10 flex justify-between items-center animate-fade-in">
-                           <button onClick={(e) => { e.stopPropagation(); setDossierSignal(s); }} className="text-xs font-bold text-white bg-green-600/20 hover:bg-green-600/40 px-3 py-1.5 rounded-lg flex items-center gap-2 border border-green-500/30">
-                             <Maximize2 size={12}/> Dossier
-                           </button>
-                           <button onClick={(e) => { e.stopPropagation(); initiateKill(s); }} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1 px-2">
-                             <Skull size={14}/> Kill
-                           </button>
-                        </div>
-                      )}
-                    </GlassCard>
-                  </div>
-                );
-              })}
+            {/* DOLLAR HEADER BADGE */}
+            <div className="flex items-center gap-4 mt-2">
+               <div className="flex items-center gap-1.5 text-green-400 bg-green-400/10 px-2 py-1 rounded-lg">
+                 <Wallet size={14}/>
+                 <span className="font-mono font-bold text-sm">${formatNumber(signal.totalGenerated)} Generated</span>
+               </div>
+               <div className="text-xs text-gray-500">
+                  Total ROI: ${signal.hoursLogged > 0 ? formatNumber(signal.totalGenerated / signal.hoursLogged) : 0}/hr
+               </div>
             </div>
           </div>
-        ))}
-      </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={24}/></button>
+        </div>
+
+        <div className="flex border-b border-white/10 overflow-x-auto">
+          <button onClick={() => setActiveTab('INTEL')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest min-w-[100px] ${activeTab === 'INTEL' ? 'bg-white/5 text-white border-b-2 border-green-500' : 'text-gray-500'}`}>Update Intel</button>
+          <button onClick={() => setActiveTab('TIMELINE')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest min-w-[100px] ${activeTab === 'TIMELINE' ? 'bg-white/5 text-white border-b-2 border-blue-500' : 'text-gray-500'}`}>History ({logs.length})</button>
+          <button onClick={() => setActiveTab('FINANCE')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest min-w-[100px] ${activeTab === 'FINANCE' ? 'bg-white/5 text-white border-b-2 border-yellow-500' : 'text-gray-500'}`}>Revenue ({incomeHistory.length})</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          
+          {activeTab === 'INTEL' && (
+            <div className="space-y-6">
+              <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+                <label className="text-xs text-gray-500 font-bold uppercase mb-3 block">Signal Phase</label>
+                <div className="flex gap-2 overflow-x-auto pb-2">
+                  {['discovery', 'validation', 'contribution', 'delivered', 'graveyard'].map((p) => (
+                    <button key={p} onClick={() => setNewPhase(p as SignalPhase)} className={`px-3 py-1.5 rounded-lg text-xs whitespace-nowrap border transition-all ${newPhase === p ? 'bg-white text-black border-white' : 'border-white/20 text-gray-400 hover:border-white/50'}`}>
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <GlassInput label="Official Website" value={newUrl} onChange={(e) => setNewUrl(e.target.value)} />
+                 <div className="flex items-end pb-1"><a href={newUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-400 hover:underline flex items-center gap-1">Test Link <ExternalLink size={10}/></a></div>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-500 font-bold uppercase mb-2 block">Field Report</label>
+                <textarea className="w-full h-32 bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-white focus:border-green-500/50 focus:outline-none resize-none" placeholder="What changed? Why are we updating this?" value={note} onChange={(e) => setNote(e.target.value)}/>
+              </div>
+
+              <div className={`p-3 rounded-lg border cursor-pointer flex items-center gap-3 transition-colors ${isRedFlag ? 'bg-red-500/10 border-red-500/50' : 'bg-transparent border-white/10 hover:bg-white/5'}`} onClick={() => setIsRedFlag(!isRedFlag)}>
+                <div className={`p-2 rounded-full ${isRedFlag ? 'bg-red-500 text-white' : 'bg-white/10 text-gray-500'}`}><AlertTriangle size={18}/></div>
+                <div><div className={`text-sm font-bold ${isRedFlag ? 'text-red-400' : 'text-gray-400'}`}>Mark as High Risk</div><div className="text-[10px] text-gray-500">Adds a visible warning flag to the dashboard.</div></div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'TIMELINE' && (
+            <div className="space-y-4 relative pl-4 border-l border-white/10">
+              {logs.map((log) => (
+                <div key={log.id} className="relative group">
+                  <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-gray-600 border border-black group-hover:bg-green-500 transition-colors"/>
+                  <div className="text-[10px] text-gray-500 mb-1">{new Date(log.created_at).toLocaleString()}</div>
+                  <div className="text-sm text-gray-300 bg-white/5 p-3 rounded-lg border border-white/5">{log.content}</div>
+                </div>
+              ))}
+              {logs.length === 0 && !loading && <div className="text-gray-500 text-xs italic">No prior field reports found.</div>}
+            </div>
+          )}
+
+          {activeTab === 'FINANCE' && (
+             <div className="space-y-3">
+               {incomeHistory.map((h) => (
+                 <div key={h.id} className="flex justify-between items-center p-3 bg-white/5 rounded-lg border border-white/5">
+                   <div className="flex items-center gap-3">
+                     <div className="p-2 bg-green-500/10 text-green-500 rounded-full"><ArrowDownRight size={16}/></div>
+                     <div>
+                       <div className="text-sm font-bold text-white">{h.title}</div>
+                       <div className="text-[10px] text-gray-500">{new Date(h.date).toLocaleDateString()}</div>
+                     </div>
+                   </div>
+                   {/* DOLLAR ROW ITEM */}
+                   <div className="font-mono font-bold text-green-400 flex items-center gap-1">
+                     +${formatNumber(h.amount || 0)}
+                   </div>
+                 </div>
+               ))}
+               {incomeHistory.length === 0 && !loading && (
+                 <div className="text-center py-8">
+                   <TrendingUp className="mx-auto text-gray-600 mb-2" size={32}/>
+                   <p className="text-gray-500 text-xs">No income generated yet.</p>
+                   <p className="text-gray-600 text-[10px]">Use Triage to drop funds into this signal.</p>
+                 </div>
+               )}
+             </div>
+          )}
+        </div>
+
+        <div className="p-6 border-t border-white/10 flex justify-end gap-3 bg-black/40">
+           <GlassButton size="sm" variant="secondary" onClick={onClose}>Cancel</GlassButton>
+           {activeTab === 'INTEL' && (
+             <GlassButton size="sm" onClick={handleSubmit} disabled={!note && newPhase === signal.phase && newUrl === signal.research.links.website}>
+               <Save size={16} className="mr-2"/> Update Dossier
+             </GlassButton>
+           )}
+        </div>
+
+      </GlassCard>
     </div>
   );
 };

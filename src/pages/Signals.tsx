@@ -10,7 +10,7 @@ import { Clock, DollarSign, ArrowRight, Zap, Archive, Trophy, X } from 'lucide-r
 
 export const Signals = () => {
   const navigate = useNavigate();
-  // FIX 1: Grab addSignal from the hook
+  // Ensure we have addSignal
   const { signals, updateSignal, addSignal, commitAction } = useLedger();
 
   const [isDrillOpen, setIsDrillOpen] = useState(false);
@@ -75,31 +75,37 @@ export const Signals = () => {
     navigate(`/triage?source=${encodeURIComponent(harvestSignal.title)}&amount=${amount}`);
   };
 
-  // FIX 2: Actually save the signal
+  // --- FIXED: ROBUST SAVE LOGIC ---
   const handleCreateFromDrill = (data: Partial<Signal>) => {
-    // Note: The modal returns a partial object, but our addSignal expects specific fields.
-    // We cast it or map it. Based on DrillModeModal (which we assume creates valid structure):
-    if (data.title && data.sector) {
-         addSignal({
-            title: data.title,
-            sector: data.sector,
-            // Defaults for new signals
-            phase: 'discovery',
-            confidence: data.confidence || 5,
-            effort: 'low',
-            hoursLogged: 0,
-            totalGenerated: 0,
-            redFlags: [],
-            proofOfWork: [],
-            thesis: { alpha: '', catalyst: '', invalidation: '', expectedValue: 0 },
-            research: { links: { token: { status: 'none' } }, token: { status: 'none' }, findings: '', pickReason: '', drillNotes: {} },
-            timeline: [],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            // Override with any other data passed from modal
-            ...data as any 
-         });
+    // 1. Validation Alert (Loud Failure)
+    if (!data.title) {
+        alert("Signal creation failed: Title is required.");
+        return;
     }
+
+    // 2. Aggressive Defaults
+    const newSignal = {
+        title: data.title,
+        sector: data.sector || 'General', // Fallback if missing
+        phase: 'discovery' as SignalPhase,
+        confidence: data.confidence || 5,
+        effort: 'low' as const,
+        hoursLogged: 0,
+        totalGenerated: 0,
+        redFlags: [],
+        proofOfWork: [],
+        thesis: { alpha: '', catalyst: '', invalidation: '', expectedValue: 0 },
+        research: { links: {}, token: { status: 'none' }, findings: '', pickReason: '', drillNotes: {} },
+        timeline: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        ...data as any // Merge actual data
+    };
+
+    // 3. Execute
+    addSignal(newSignal);
+    
+    // 4. Close
     setIsDrillOpen(false);
   };
 

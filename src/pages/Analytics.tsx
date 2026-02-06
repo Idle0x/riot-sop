@@ -188,7 +188,7 @@ export const Analytics = () => {
                     <YAxis stroke="#555" fontSize={10} tickFormatter={(val) => `${val/1000}k`} />
                     <Tooltip content={<CustomTooltip />}/>
                     <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]}>
-                        {comparisonData.map((entry, index) => (
+                        {comparisonData.map((_entry, index) => ( // FIXED: Renamed entry to _entry
                             <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#3b82f6' : '#60a5fa'} />
                         ))}
                     </Bar>

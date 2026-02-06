@@ -10,7 +10,8 @@ import { Clock, DollarSign, ArrowRight, Zap, Archive, Trophy, X } from 'lucide-r
 
 export const Signals = () => {
   const navigate = useNavigate();
-  const { signals, updateSignal, commitAction } = useLedger();
+  // FIX 1: Grab addSignal from the hook
+  const { signals, updateSignal, addSignal, commitAction } = useLedger();
 
   const [isDrillOpen, setIsDrillOpen] = useState(false);
   const [harvestSignal, setHarvestSignal] = useState<Signal | null>(null); 
@@ -41,7 +42,7 @@ export const Signals = () => {
     }
 
     updateSignal({ ...signal, phase, updatedAt: new Date().toISOString() });
-    
+
     commitAction({
       date: new Date().toISOString(),
       type: 'SIGNAL_UPDATE',
@@ -74,8 +75,31 @@ export const Signals = () => {
     navigate(`/triage?source=${encodeURIComponent(harvestSignal.title)}&amount=${amount}`);
   };
 
+  // FIX 2: Actually save the signal
   const handleCreateFromDrill = (data: Partial<Signal>) => {
-    console.log("Creating signal:", data);
+    // Note: The modal returns a partial object, but our addSignal expects specific fields.
+    // We cast it or map it. Based on DrillModeModal (which we assume creates valid structure):
+    if (data.title && data.sector) {
+         addSignal({
+            title: data.title,
+            sector: data.sector,
+            // Defaults for new signals
+            phase: 'discovery',
+            confidence: data.confidence || 5,
+            effort: 'low',
+            hoursLogged: 0,
+            totalGenerated: 0,
+            redFlags: [],
+            proofOfWork: [],
+            thesis: { alpha: '', catalyst: '', invalidation: '', expectedValue: 0 },
+            research: { links: { token: { status: 'none' } }, token: { status: 'none' }, findings: '', pickReason: '', drillNotes: {} },
+            timeline: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            // Override with any other data passed from modal
+            ...data as any 
+         });
+    }
     setIsDrillOpen(false);
   };
 
@@ -95,7 +119,7 @@ export const Signals = () => {
     <div className="h-[calc(100vh-100px)] flex flex-col p-4 md:p-8 pb-20">
 
       {isDrillOpen && <DrillModeModal onClose={() => setIsDrillOpen(false)} onSave={handleCreateFromDrill} />}
-      
+
       {harvestSignal && (
         <HarvestModal 
           signalTitle={harvestSignal.title} 

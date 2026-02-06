@@ -6,39 +6,38 @@ import { GlassInput } from '../components/ui/GlassInput';
 import { Naira } from '../components/ui/Naira';
 import { calculateGenerosityCap, getTierColor } from '../utils/finance';
 import { formatNumber } from '../utils/format';
-import { Shield, Users, AlertTriangle, Search, Ban, Send, Wallet } from 'lucide-react';
+import { Shield, Users, AlertTriangle, Search, Ban, Send, Wallet, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 
 export const Generosity = () => {
   const { history, runwayMonths, accounts, updateAccount, commitAction } = useLedger();
   const [searchTerm, setSearchTerm] = useState('');
+  const [filter, setFilter] = useState<'ALL' | 'IN' | 'OUT'>('ALL'); // VIEW STATE
 
-  // 1. Get Wallet Balance
   const generosityWallet = accounts.find(a => a.type === 'generosity');
   const availableBalance = generosityWallet?.balance || 0;
 
-  // 2. Form State
   const [recipient, setRecipient] = useState('');
   const [tier, setTier] = useState('T3');
   const [amount, setAmount] = useState('');
 
-  // 3. Math & Caps
   const dynamicCap = calculateGenerosityCap(runwayMonths);
   const currentMonth = new Date().toISOString().slice(0, 7); 
-  const generosityLogs = history.filter(h => h.type === 'GENEROSITY');
   
-  const monthTotal = generosityLogs
+  // HISTORY FILTERS
+  const outflowLogs = history.filter(h => h.type === 'GENEROSITY');
+  const inflowLogs = history.filter(h => h.type === 'TRANSFER' && h.tags?.includes('generosity_fund'));
+  
+  const allLogs = [...outflowLogs, ...inflowLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const monthTotal = outflowLogs
     .filter(log => log.date.startsWith(currentMonth))
     .reduce((sum, log) => sum + (log.amount || 0), 0);
 
-  // 4. Distribution Handler
   const handleGive = () => {
     const val = parseFloat(amount);
     if (!val || val <= 0 || val > availableBalance) return;
 
-    // Spend from Generosity Account
     updateAccount('generosity', -val);
-    
-    // Log the act
     commitAction({
       date: new Date().toISOString(),
       type: 'GENEROSITY',
@@ -52,7 +51,7 @@ export const Generosity = () => {
     setAmount('');
   };
 
-  const filteredLogs = generosityLogs.filter(log => 
+  const displayedLogs = (filter === 'ALL' ? allLogs : filter === 'IN' ? inflowLogs : outflowLogs).filter(log => 
     (log.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     log.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -113,51 +112,17 @@ export const Generosity = () => {
         </GlassCard>
       )}
 
-      {/* POLICY REMINDER */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <GlassCard className="p-6">
-          <h3 className="font-bold text-white mb-3 flex items-center gap-2">
-            <Users size={16}/> The Tier System
-          </h3>
-          <ul className="space-y-2 text-sm">
-            <li className="flex justify-between">
-              <span className="text-green-400 font-bold">T1 (Parents)</span>
-              <span className="text-gray-400">Priority. Anytime.</span>
-            </li>
-            <li className="flex justify-between">
-              <span className="text-blue-400 font-bold">T2 (Inner Circle)</span>
-              <span className="text-gray-400">2-3 People Max.</span>
-            </li>
-            <li className="flex justify-between">
-              <span className="text-yellow-400 font-bold">T3 (Everyone Else)</span>
-              <span className="text-gray-400">One Time Only.</span>
-            </li>
-            <li className="flex justify-between">
-              <span className="text-red-500 font-bold">T4 (Banned)</span>
-              <span className="text-gray-400">Never.</span>
-            </li>
-          </ul>
-        </GlassCard>
-
-        <GlassCard className="p-6 relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-10"><Ban size={64}/></div>
-          <h3 className="font-bold text-white mb-3 flex items-center gap-2">
-             <AlertTriangle size={16} className="text-red-500"/> Auto-No Protocol
-          </h3>
-          <ul className="text-xs text-gray-400 space-y-1 mb-4 italic">
-            <li>"You have money now..."</li>
-            <li>"I'll pay you back soon..." (It's a loan)</li>
-          </ul>
-          <div className="p-2 bg-white/5 rounded border border-white/10 text-xs text-center font-mono text-white">
-            "Budget finished. Next month."
-          </div>
-        </GlassCard>
-      </div>
-
       {/* HISTORY & LOOKUP */}
       <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="font-bold text-white">Giving Ledger</h3>
+        <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+          <h3 className="font-bold text-white">Passbook</h3>
+          
+          <div className="flex gap-2">
+             <button onClick={() => setFilter('ALL')} className={`px-3 py-1 text-xs rounded-lg transition-colors ${filter === 'ALL' ? 'bg-white text-black' : 'bg-white/5 text-gray-400'}`}>All</button>
+             <button onClick={() => setFilter('IN')} className={`px-3 py-1 text-xs rounded-lg transition-colors ${filter === 'IN' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-white/5 text-gray-400'}`}>Inflows</button>
+             <button onClick={() => setFilter('OUT')} className={`px-3 py-1 text-xs rounded-lg transition-colors ${filter === 'OUT' ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30' : 'bg-white/5 text-gray-400'}`}>Gifts</button>
+          </div>
+
           <div className="relative w-48">
              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14}/>
              <input 
@@ -170,26 +135,50 @@ export const Generosity = () => {
         </div>
 
         <div className="space-y-2">
-          {filteredLogs.length === 0 ? (
+          {displayedLogs.length === 0 ? (
             <div className="text-center py-8 text-gray-500 text-sm">No records found.</div>
           ) : (
-            filteredLogs.map(log => {
-               const tier = log.description?.match(/\[(T\d)\]/)?.[1] || 'T3'; 
-               const name = log.description?.split('|')[0] || 'Unknown';
-               return (
-                <GlassCard key={log.id} className="p-4 flex justify-between items-center">
-                  <div>
-                    <div className="font-bold text-white flex items-center gap-2">
-                      {name} 
-                      <span className={`text-[10px] px-1.5 rounded border ${getTierColor(tier)}`}>{tier}</span>
-                    </div>
-                    <div className="text-xs text-gray-500">{new Date(log.date).toLocaleDateString()}</div>
-                  </div>
-                  <div className="font-mono font-bold text-white flex items-center gap-1">
-                    <Naira/>{formatNumber(log.amount || 0)}
-                  </div>
-                </GlassCard>
-               );
+            displayedLogs.map(log => {
+               // Render differently for Inflows vs Outflows
+               const isOutflow = log.type === 'GENEROSITY';
+               
+               if (isOutflow) {
+                   const tier = log.description?.match(/\[(T\d)\]/)?.[1] || 'T3'; 
+                   const name = log.description?.split('|')[0] || 'Unknown';
+                   return (
+                    <GlassCard key={log.id} className="p-4 flex justify-between items-center border-pink-500/10">
+                      <div className="flex items-center gap-3">
+                         <div className="p-2 bg-pink-500/10 text-pink-500 rounded-full"><ArrowUpRight size={16}/></div>
+                         <div>
+                            <div className="font-bold text-white flex items-center gap-2">
+                            {name} 
+                            <span className={`text-[10px] px-1.5 rounded border ${getTierColor(tier)}`}>{tier}</span>
+                            </div>
+                            <div className="text-xs text-gray-500">{new Date(log.date).toLocaleDateString()}</div>
+                         </div>
+                      </div>
+                      <div className="font-mono font-bold text-pink-400 flex items-center gap-1">
+                        -<Naira/>{formatNumber(log.amount || 0)}
+                      </div>
+                    </GlassCard>
+                   );
+               } else {
+                   // Inflow
+                   return (
+                    <GlassCard key={log.id} className="p-4 flex justify-between items-center border-green-500/10">
+                      <div className="flex items-center gap-3">
+                         <div className="p-2 bg-green-500/10 text-green-500 rounded-full"><ArrowDownLeft size={16}/></div>
+                         <div>
+                            <div className="font-bold text-white">Wallet Allocation</div>
+                            <div className="text-xs text-gray-500">{new Date(log.date).toLocaleDateString()} • From Triage</div>
+                         </div>
+                      </div>
+                      <div className="font-mono font-bold text-green-400 flex items-center gap-1">
+                        +<Naira/>{formatNumber(log.amount || 0)}
+                      </div>
+                    </GlassCard>
+                   );
+               }
             })
           )}
         </div>

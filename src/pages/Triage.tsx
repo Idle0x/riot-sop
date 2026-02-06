@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '../context/UserContext';
 import { useLedger } from '../context/LedgerContext';
-import { useExchangeRate } from '../hooks/useExchangeRate'; // NEW HOOK
+import { useExchangeRate } from '../hooks/useExchangeRate'; 
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
@@ -20,7 +20,7 @@ export const Triage = () => {
     updateAccount, commitAction, updateSignal, fundGoal 
   } = useLedger();
 
-  const { rate, setRate, fetchLiveRate } = useExchangeRate(); // SMART RATE
+  const { rate, setRate, fetchLiveRate } = useExchangeRate(); 
   const [isFetchingRate, setIsFetchingRate] = useState(false);
 
   const [step, setStep] = useState(1);
@@ -28,14 +28,12 @@ export const Triage = () => {
   const [costBasisUSD, setCostBasisUSD] = useState('0'); 
   const [selectedSignalId, setSelectedSignalId] = useState('');
 
-  // AUTO-FILL FROM HARVEST
+  // AUTO-FILL
   useEffect(() => {
     const paramAmount = searchParams.get('amount');
     const paramSource = searchParams.get('source');
 
-    if (paramAmount) {
-      setAmountUSD(paramAmount);
-    }
+    if (paramAmount) setAmountUSD(paramAmount);
     if (paramSource) {
       const found = signals.find(s => s.title === paramSource);
       if (found) setSelectedSignalId(found.id);
@@ -49,8 +47,6 @@ export const Triage = () => {
   // STEP 2 STATES
   const [generosity, setGenerosity] = useState('0');
   const [runwayAlloc, setRunwayAlloc] = useState('0'); 
-  const [recipientName, setRecipientName] = useState(''); 
-  const [recipientTier, setRecipientTier] = useState('T3');
   const [allocations, setAllocations] = useState<Record<string, number>>({});
 
   // --- MATH ENGINE ---
@@ -123,7 +119,7 @@ export const Triage = () => {
 
   const handleCommit = () => {
     const timestamp = new Date().toISOString();
-    
+
     if (dropUSD > 0) {
         updateAccount('holding', grossNGN); 
     }
@@ -139,11 +135,13 @@ export const Triage = () => {
       commitAction({ date: timestamp, type: 'TRANSFER', title: 'Vault Deposit', amount: vaultAmount, tags: ['wealth_defense'] });
     }
 
+    // --- NEW: GENEROSITY TRANSFER ---
     if (genAmount > 0) {
-        updateAccount('payroll', genAmount);
+        // Move from Holding -> Generosity Account
+        updateAccount('generosity', genAmount);
         commitAction({ 
-            date: timestamp, type: 'SPEND', title: 'Generosity', 
-            amount: genAmount, description: `${recipientName} | [${recipientTier}]`, tags: ['generosity'] 
+            date: timestamp, type: 'TRANSFER', title: 'Funded Generosity Wallet', 
+            amount: genAmount, description: 'Allocated for future giving', tags: ['generosity_fund'] 
         });
     }
 
@@ -155,7 +153,7 @@ export const Triage = () => {
     Object.entries(allocations).forEach(([goalId, amount]) => {
        if (amount > 0) {
          updateAccount('buffer', amount);
-         fundGoal(goalId, amount); // Updates Progress Bar
+         fundGoal(goalId, amount); 
          commitAction({ date: timestamp, type: 'GOAL_FUND', title: 'Goal Allocation', amount, linkedGoalId: goalId });
        }
     });
@@ -281,11 +279,11 @@ export const Triage = () => {
 
             <div className={`p-4 rounded-xl border transition-colors ${isGenerosityLocked ? 'bg-red-500/5 border-red-500/30' : isOverCap ? 'bg-red-500/10 border-red-500' : 'bg-white/5 border-white/10'}`}>
               <div className="flex justify-between mb-2">
-                <span className="flex items-center gap-2 font-bold text-white"><Heart size={16} className={isGenerosityLocked ? 'text-gray-500' : 'text-accent-info'}/> Generosity</span>
+                <span className="flex items-center gap-2 font-bold text-white"><Heart size={16} className={isGenerosityLocked ? 'text-gray-500' : 'text-accent-info'}/> Generosity Wallet</span>
                 {isGenerosityLocked ? (
                     <span className="text-xs font-bold text-red-500 flex items-center gap-1"><Lock size={12}/> LOCKED</span>
                 ) : (
-                    <span className={`text-xs font-bold ${isOverCap ? 'text-red-500' : 'text-gray-500'} flex items-center gap-1`}>Cap: <Naira/>{formatNumber(dynamicGenCap)}</span>
+                    <span className={`text-xs font-bold ${isOverCap ? 'text-red-500' : 'text-gray-500'} flex items-center gap-1`}>Cap: <Naira/>{formatNumber(dynamicCap)}</span>
                 )}
               </div>
 
@@ -294,19 +292,8 @@ export const Triage = () => {
               ) : (
                   <>
                       <GlassInput value={generosity} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGenerosity(e.target.value)} className="text-right mb-3" placeholder="0" />
-                      {genAmount > 0 && (
-                          <div className="grid grid-cols-3 gap-2 animate-fade-in">
-                              <div className="col-span-2">
-                                  <input className="w-full bg-black/20 border border-white/10 rounded-lg p-2 text-xs text-white" placeholder="Recipient Name" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} />
-                              </div>
-                              <select className="bg-black/20 border border-white/10 rounded-lg p-2 text-xs text-white" value={recipientTier} onChange={(e) => setRecipientTier(e.target.value)}>
-                                  <option value="T1">T1 (Family)</option>
-                                  <option value="T2">T2 (Close)</option>
-                                  <option value="T3">T3 (One-off)</option>
-                              </select>
-                          </div>
-                      )}
-                      {isOverCap && <div className="mt-2 text-[10px] text-red-400 flex items-center gap-1"><AlertTriangle size={10}/> Exceeds Cap</div>}
+                      <div className="text-[10px] text-gray-500 text-right">Funds will be moved to the Generosity Wallet for later distribution.</div>
+                      {isOverCap && <div className="mt-2 text-[10px] text-red-400 flex items-center gap-1 justify-end"><AlertTriangle size={10}/> Exceeds Cap</div>}
                   </>
               )}
             </div>

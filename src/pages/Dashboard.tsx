@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useLedger } from '../context/LedgerContext';
-import { useUser } from '../context/UserContext';
+// REMOVED: useUser import (unused)
 import { useFinancialStats } from '../hooks/useFinancialStats'; 
 import { GlassCard } from '../components/ui/GlassCard';
-import { GlassButton } from '../components/ui/GlassButton';
+// REMOVED: GlassButton import (unused)
 import { Naira } from '../components/ui/Naira';
 import { formatNumber } from '../utils/format';
 import { CashFlowChart } from '../components/dashboard/CashFlowChart'; 
@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 
 export const Dashboard = () => {
   const navigate = useNavigate();
-  const { user } = useUser();
+  // REMOVED: const { user } = useUser(); (unused)
   const { runwayMonths, history } = useLedger();
   const { 
     netFlow, inflow, outflow, burnDelta, chartData, allocation 

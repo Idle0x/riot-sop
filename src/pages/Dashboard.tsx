@@ -1,226 +1,294 @@
-import { useState } from 'react';
-import { useLedger } from '../context/LedgerContext';
-// REMOVED: useUser import (unused)
-import { useFinancialStats } from '../hooks/useFinancialStats'; 
-import { GlassCard } from '../components/ui/GlassCard';
-// REMOVED: GlassButton import (unused)
-import { Naira } from '../components/ui/Naira';
-import { formatNumber } from '../utils/format';
-import { CashFlowChart } from '../components/dashboard/CashFlowChart'; 
-import { 
-  TrendingUp, TrendingDown, Activity, Wallet, ShieldCheck, 
-  Heart, Zap, ArrowRight, AlertTriangle, ArrowDownLeft, ArrowUpRight 
-} from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+
+// Context & Hooks
+import { useUser } from '../context/UserContext';
+import { useLedger } from '../context/LedgerContext';
+import { useFinancialStats } from '../hooks/useFinancialStats';
+import { useSystemEngine } from '../hooks/useSystemEngine';
+
+// Formatting & UI Components
+import { formatNumber } from '../utils/format';
+import { Naira } from '../components/ui/Naira';
+import { GlassCard } from '../components/ui/GlassCard';
+import { GlassButton } from '../components/ui/GlassButton';
+import { GlassProgressBar } from '../components/ui/GlassProgressBar';
+import { MetricCard } from '../components/ui/MetricCard';
+
+// Dashboard Widgets
+import { CashFlowChart } from '../components/dashboard/CashFlowChart';
+import { ActiveGoalsWidget } from '../components/dashboard/ActiveGoalsWidget';
+import { BudgetBurnWidget } from '../components/dashboard/BudgetBurnWidget';
+import { RunwayWeather } from '../components/layout/RunwayWeather';
+import { MonthlyCheckpointModal } from '../components/modals/MonthlyCheckpointModal';
+
+// Icons
+import { 
+  Clock, AlertTriangle, ArrowRight, Lock, Activity, ShieldCheck, 
+  BarChart3, TrendingUp, TrendingDown, Wallet, Heart, Zap, 
+  ArrowDownLeft, ArrowUpRight 
+} from 'lucide-react';
 
 export const Dashboard = () => {
   const navigate = useNavigate();
-  // REMOVED: const { user } = useUser(); (unused)
-  const { runwayMonths, history } = useLedger();
-  const { 
-    netFlow, inflow, outflow, burnDelta, chartData, allocation 
-  } = useFinancialStats();
+  const { isGhostMode } = useUser();
+  const { runwayMonths, history, isSyncing } = useLedger();
+  const { showModal, monthsMissed, pendingBurn, confirmReconciliation } = useSystemEngine();
+  const { netFlow, inflow, outflow, burnDelta, chartData, allocation } = useFinancialStats();
 
-  // --- MINI-LEDGER STATE ---
+  // --- INTERNAL STATE ---
+  const [time, setTime] = useState(new Date());
   const [activityFilter, setActivityFilter] = useState<'ALL' | 'IN' | 'OUT'>('ALL');
 
-  // Filter Logic
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Calculation for Old Metrics
+  const totalNetWorth = allocation.liquid + allocation.reserved + allocation.generosity + allocation.idle;
+
+  // Filter Logic for Ledger
   const filteredActivity = history.filter(log => {
     if (activityFilter === 'ALL') return true;
     if (activityFilter === 'IN') return log.type === 'DROP' || log.type === 'TRIAGE_SESSION';
     if (activityFilter === 'OUT') return log.type === 'SPEND' || log.type === 'GENEROSITY' || log.type === 'TRANSFER';
     return true;
-  }).slice(0, 5); // Show last 5 of specific type
+  }).slice(0, 5);
+
+  if (isSyncing) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-gray-500 gap-4">
+        <div className="w-12 h-12 border-4 border-white/10 border-t-white rounded-full animate-spin" />
+        <span className="font-mono text-xs uppercase tracking-widest">Syncing Systems...</span>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-8 pb-20 space-y-6 animate-fade-in">
-      
-      {/* HEADER */}
-      <div className="flex justify-between items-end">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Command Center</h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Runway: <span className={`${runwayMonths < 3 ? 'text-red-500 font-bold' : 'text-green-400'}`}>
-              {runwayMonths === Infinity ? '∞' : runwayMonths.toFixed(1)} Months
-            </span>
-          </p>
-        </div>
-        <div className="text-right">
-           <div className="text-[10px] uppercase text-gray-500 font-bold tracking-widest">Net Worth (Est)</div>
-           <div className="text-xl font-mono font-bold text-white">
-             <Naira/>{formatNumber(allocation.liquid + allocation.reserved + allocation.generosity + allocation.idle)}
-           </div>
-        </div>
-      </div>
-
-      {/* DECK A: HUD */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Metric 1: Net Flow */}
-        <GlassCard className="p-4 relative overflow-hidden group">
-          <div className={`absolute right-0 top-0 p-3 opacity-10 ${netFlow >= 0 ? 'bg-green-500' : 'bg-red-500'} blur-xl rounded-bl-full w-24 h-24 transition-all group-hover:opacity-20`}/>
-          <div className="flex items-center gap-2 mb-2">
-            {netFlow >= 0 ? <TrendingUp size={16} className="text-green-400"/> : <TrendingDown size={16} className="text-red-400"/>}
-            <span className="text-xs font-bold text-gray-400 uppercase">Net Flow (Mo)</span>
-          </div>
-          <div className={`text-2xl font-mono font-bold ${netFlow >= 0 ? 'text-white' : 'text-red-400'}`}>
-            {netFlow >= 0 ? '+' : ''}<Naira/>{formatNumber(netFlow)}
-          </div>
-          <div className="text-[10px] text-gray-500 mt-2 flex justify-between">
-            <span className="text-green-400">In: {formatNumber(inflow)}</span>
-            <span className="text-red-400">Out: {formatNumber(outflow)}</span>
-          </div>
-        </GlassCard>
-
-        {/* Metric 2: Burn Velocity */}
-        <GlassCard className="p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Activity size={16} className="text-blue-400"/>
-            <span className="text-xs font-bold text-gray-400 uppercase">Burn Velocity</span>
-          </div>
-          <div className="text-2xl font-mono font-bold text-white">
-            <Naira/>{formatNumber(outflow)}
-          </div>
-          <div className="text-[10px] text-gray-500 mt-2">
-            {burnDelta > 0 ? (
-              <span className="text-red-400 flex items-center gap-1">▲ {burnDelta.toFixed(1)}% vs Last Month</span>
-            ) : (
-              <span className="text-green-400 flex items-center gap-1">▼ {Math.abs(burnDelta).toFixed(1)}% vs Last Month</span>
-            )}
-          </div>
-        </GlassCard>
-
-        {/* Metric 3: Idle Capital */}
-        <GlassCard className={`p-4 ${allocation.idle > 100000 ? 'border-yellow-500/30' : ''}`}>
-           <div className="flex items-center gap-2 mb-2">
-            {allocation.idle > 100000 ? <AlertTriangle size={16} className="text-yellow-500"/> : <Wallet size={16} className="text-gray-400"/>}
-            <span className="text-xs font-bold text-gray-400 uppercase">Unallocated (Idle)</span>
-          </div>
-          <div className={`text-2xl font-mono font-bold ${allocation.idle > 100000 ? 'text-yellow-400' : 'text-white'}`}>
-            <Naira/>{formatNumber(allocation.idle)}
-          </div>
-          {allocation.idle > 0 ? (
-             <button onClick={() => navigate('/triage')} className="text-[10px] text-yellow-500 mt-2 hover:underline flex items-center gap-1">
-               Action Required: Triage Funds <ArrowRight size={10}/>
-             </button>
-          ) : (
-             <div className="text-[10px] text-green-500 mt-2">All funds deployed efficienty.</div>
-          )}
-        </GlassCard>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <RunwayWeather months={runwayMonths}>
+      <div className={`p-4 md:p-8 space-y-8 pb-20 max-w-7xl mx-auto transition-all duration-1000 ${isGhostMode ? 'grayscale contrast-125' : ''}`}>
         
-        {/* DECK B: VISUALIZATION */}
-        <div className="lg:col-span-2 space-y-6">
-          <GlassCard className="p-6 h-full">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-white flex items-center gap-2"><Activity size={16} className="text-purple-400"/> Cash Flow Trend</h3>
-              <div className="flex gap-2 text-[10px]">
-                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-green-500/50"/> Income</div>
-                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500/50"/> Expense</div>
+        {showModal && (
+          <MonthlyCheckpointModal 
+            monthsMissed={monthsMissed}
+            burnAmount={pendingBurn}
+            currentBalance={allocation.liquid}
+            onConfirm={confirmReconciliation}
+          />
+        )}
+
+        {/* --- HEADER (OLD STYLE) --- */}
+        <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-gray-500 font-mono text-xs mb-1">
+              <Clock size={12} />
+              {time.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </div>
+            <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tighter tabular-nums">
+              {time.toLocaleTimeString()}
+            </h1>
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10">
+              <div className={`h-2 w-2 rounded-full animate-pulse ${isGhostMode ? 'bg-red-500' : 'bg-green-500'}`} />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                {isGhostMode ? 'GHOST MODE' : 'SYSTEM ONLINE'}
+              </span>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] uppercase text-gray-500 font-bold tracking-widest">Net Worth (System Value)</div>
+              <div className="text-xl font-mono font-bold text-white"><Naira/>{formatNumber(totalNetWorth)}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* --- UNALLOCATED CAPITAL ALERT (OLD STYLE) --- */}
+        {allocation.idle > 0 && (
+          <div className="bg-yellow-500/10 border border-yellow-500/50 p-6 rounded-2xl flex items-center justify-between animate-pulse shadow-[0_0_20px_rgba(234,179,8,0.2)]">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-yellow-500/20 rounded-xl text-yellow-500"><AlertTriangle size={24}/></div>
+              <div>
+                <h3 className="font-bold text-white text-lg">Unallocated Capital Detected</h3>
+                <p className="text-sm text-yellow-500/80">Money is sitting idle in the Holding Pen.</p>
               </div>
             </div>
-            <CashFlowChart data={chartData} />
-          </GlassCard>
+            <div className="text-right">
+              <div className="font-mono font-bold text-yellow-500 text-xl flex items-center justify-end gap-1">
+                <Naira/>{formatNumber(allocation.idle)}
+              </div>
+              <GlassButton size="sm" onClick={() => navigate('/triage')} className="mt-2 border-yellow-500/50 text-yellow-500 hover:bg-yellow-500 hover:text-black">
+                Triage Now <ArrowRight size={14} className="ml-1"/>
+              </GlassButton>
+            </div>
+          </div>
+        )}
+
+        {/* --- HUD: METRIC DECK --- */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Net Flow (New Card) */}
+          <MetricCard 
+            title="Net Flow (Monthly)" 
+            value={<div className={`flex items-center gap-1 ${netFlow >= 0 ? 'text-white' : 'text-red-400'}`}><Naira/>{formatNumber(netFlow)}</div>} 
+            subValue={
+              <div className="flex justify-between w-full text-[10px]">
+                <span className="text-green-400">In: {formatNumber(inflow)}</span>
+                <span className="text-red-400">Out: {formatNumber(outflow)}</span>
+              </div>
+            }
+            icon={netFlow >= 0 ? <TrendingUp size={20} className="text-green-400"/> : <TrendingDown size={20} className="text-red-400"/>} 
+          />
+
+          {/* Burn Velocity (New Card) */}
+          <MetricCard 
+            title="Burn Velocity" 
+            value={<div className="flex items-center gap-1"><Naira/>{formatNumber(outflow)}</div>} 
+            subValue={
+              burnDelta > 0 
+                ? <span className="text-red-400">▲ {burnDelta.toFixed(1)}% vs Last Month</span> 
+                : <span className="text-green-400">▼ {Math.abs(burnDelta).toFixed(1)}% vs Last Month</span>
+            } 
+            icon={<Activity size={20} className="text-blue-400"/>} 
+          />
+
+          {/* Locked Assets (From Old) */}
+          <MetricCard 
+            title="Locked Assets" 
+            value={<div className="flex items-center gap-1"><Naira/>{formatNumber(allocation.reserved)}</div>} 
+            subValue="Vault & Buffer" 
+            icon={<Lock size={20} className="text-indigo-400"/>} 
+          />
         </div>
 
-        {/* DECK C: ASSET STACK */}
-        <div className="space-y-4">
-           <div className="text-xs font-bold text-gray-500 uppercase tracking-widest">Asset Allocation</div>
-           
-           <div className="p-3 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center group hover:bg-white/10 transition-colors">
-              <div className="flex items-center gap-3">
-                 <div className="p-2 bg-blue-500/20 text-blue-400 rounded-lg"><Wallet size={16}/></div>
-                 <div>
-                   <div className="text-sm font-bold text-white">Operations</div>
-                   <div className="text-[10px] text-gray-500">Liquid Cash</div>
-                 </div>
+        {/* --- RUNWAY COCKPIT (OLD DESIGN) --- */}
+        <GlassCard className="p-0 overflow-hidden relative group h-48 border-white/10">
+          <div className="absolute inset-0 p-8 z-10 flex flex-col justify-between">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                  Survival Horizon
+                  <button onClick={() => navigate('/analytics')} className="text-gray-500 hover:text-white transition-colors"><BarChart3 size={14}/></button>
+                </h3>
+                <p className="text-sm text-gray-400">Current Runway Capacity</p>
               </div>
-              <div className="font-mono font-bold text-white"><Naira/>{formatNumber(allocation.liquid)}</div>
-           </div>
+              <div className={`text-4xl font-mono font-bold ${runwayMonths < 3 ? 'text-red-500' : runwayMonths < 6 ? 'text-orange-500' : 'text-green-500'}`}>
+                {runwayMonths === Infinity ? '∞' : runwayMonths.toFixed(2)} Mo
+              </div>
+            </div>
+            <GlassProgressBar 
+              value={runwayMonths} 
+              max={12} 
+              color={runwayMonths < 3 ? 'danger' : runwayMonths < 6 ? 'warning' : 'success'} 
+              size="lg" 
+              showPercentage={false} 
+            />
+          </div>
+          {/* Subtle Background Chart Effect */}
+          <div className="absolute bottom-0 left-0 right-0 h-32 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
+             <CashFlowChart data={chartData} simpleView />
+          </div>
+        </GlassCard>
 
-           <div className="p-3 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center group hover:bg-white/10 transition-colors">
-              <div className="flex items-center gap-3">
-                 <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-lg"><ShieldCheck size={16}/></div>
-                 <div>
-                   <div className="text-sm font-bold text-white">Defense</div>
-                   <div className="text-[10px] text-gray-500">Vault + Buffer</div>
-                 </div>
+        {/* --- MAIN GRID --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* LEFT: VISUALIZATIONS & WIDGETS */}
+          <div className="lg:col-span-2 space-y-8">
+            <GlassCard className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-bold text-white flex items-center gap-2 text-lg">
+                  <Activity size={18} className="text-purple-400"/> 
+                  Cash Flow Trend
+                </h3>
               </div>
-              <div className="font-mono font-bold text-white"><Naira/>{formatNumber(allocation.reserved)}</div>
-           </div>
+              <div className="h-64">
+                <CashFlowChart data={chartData} />
+              </div>
+            </GlassCard>
 
-           <div className="p-3 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center group hover:bg-white/10 transition-colors">
-              <div className="flex items-center gap-3">
-                 <div className="p-2 bg-pink-500/20 text-pink-400 rounded-lg"><Heart size={16}/></div>
-                 <div>
-                   <div className="text-sm font-bold text-white">Generosity</div>
-                   <div className="text-[10px] text-gray-500">Wallet Balance</div>
-                 </div>
-              </div>
-              <div className="font-mono font-bold text-white"><Naira/>{formatNumber(allocation.generosity)}</div>
-           </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <ActiveGoalsWidget />
+              <BudgetBurnWidget />
+            </div>
+          </div>
 
-           <div className="p-3 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center group hover:bg-white/10 transition-colors">
-              <div className="flex items-center gap-3">
-                 <div className="p-2 bg-yellow-500/20 text-yellow-400 rounded-lg"><Zap size={16}/></div>
-                 <div>
-                   <div className="text-sm font-bold text-white">Signals</div>
-                   <div className="text-[10px] text-gray-500">Total Generated</div>
-                 </div>
+          {/* RIGHT: ALLOCATION & LEDGER */}
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Asset Allocation</h3>
+              {[
+                { label: 'Operations', sub: 'Liquid Cash', val: allocation.liquid, icon: <Wallet/>, color: 'blue' },
+                { label: 'Defense', sub: 'Vault + Buffer', val: allocation.reserved, icon: <ShieldCheck/>, color: 'indigo' },
+                { label: 'Generosity', sub: 'Wallet Balance', val: allocation.generosity, icon: <Heart/>, color: 'pink' },
+                { label: 'Signals', sub: 'Total Generated', val: allocation.signals, icon: <Zap/>, color: 'yellow' }
+              ].map((item, idx) => (
+                <div key={idx} className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center group hover:bg-white/10 transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 bg-${item.color}-500/20 text-${item.color}-400 rounded-lg transition-transform group-hover:scale-110`}>
+                      {item.icon}
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-white">{item.label}</div>
+                      <div className="text-[10px] text-gray-500">{item.sub}</div>
+                    </div>
+                  </div>
+                  <div className="font-mono font-bold text-white"><Naira/>{formatNumber(item.val)}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* SMART MINI-LEDGER (NEW FEATURE) */}
+            <GlassCard className="p-6 border-white/5">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-white text-sm">Recent Activity</h3>
+                <div className="flex gap-1">
+                  {['ALL', 'IN', 'OUT'].map((f) => (
+                    <button 
+                      key={f}
+                      onClick={() => setActivityFilter(f as any)}
+                      className={`px-2 py-1 text-[9px] font-bold rounded uppercase transition-all ${activityFilter === f ? 'bg-white text-black' : 'bg-white/5 text-gray-500 hover:text-white'}`}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="font-mono font-bold text-white"><Naira/>{formatNumber(allocation.signals)}</div>
-           </div>
+
+              <div className="space-y-2">
+                {filteredActivity.length === 0 ? (
+                  <div className="text-center py-6 text-gray-500 text-[10px] uppercase tracking-widest">No Activity Records</div>
+                ) : (
+                  filteredActivity.map(log => {
+                    const isIncome = log.type === 'DROP' || log.type === 'TRIAGE_SESSION';
+                    const isSpend = log.type === 'SPEND' || log.type === 'GENEROSITY';
+                    return (
+                      <div key={log.id} className="flex justify-between items-center p-2 hover:bg-white/5 rounded-lg transition-colors group">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-1.5 rounded-full ${isIncome ? 'bg-green-500/10 text-green-500' : isSpend ? 'bg-red-500/10 text-red-500' : 'bg-blue-500/10 text-blue-500'}`}>
+                            {isIncome ? <ArrowDownLeft size={12}/> : isSpend ? <ArrowUpRight size={12}/> : <Activity size={12}/>}
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-white group-hover:text-blue-400 transition-colors truncate w-24 md:w-full">{log.title}</div>
+                            <div className="text-[9px] text-gray-500 font-mono uppercase">{new Date(log.date).toLocaleDateString()}</div>
+                          </div>
+                        </div>
+                        <div className={`font-mono font-bold text-xs ${isIncome ? 'text-green-400' : isSpend ? 'text-red-400' : 'text-white'}`}>
+                          {isIncome ? '+' : isSpend ? '-' : ''}<Naira/>{formatNumber(log.amount)}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              
+              <button onClick={() => navigate('/ledger')} className="w-full mt-4 pt-3 border-t border-white/5 text-[10px] uppercase tracking-widest text-gray-500 hover:text-white transition-colors">
+                Open Full Ledger
+              </button>
+            </GlassCard>
+          </div>
         </div>
+
       </div>
-
-      {/* DECK D: SMART MINI-LEDGER */}
-      <GlassCard className="p-6">
-        <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-4">
-           <h3 className="font-bold text-white">Recent Activity</h3>
-           
-           {/* THE TOGGLES */}
-           <div className="flex gap-2">
-              <button onClick={() => setActivityFilter('ALL')} className={`px-3 py-1 text-xs rounded-lg transition-colors border ${activityFilter === 'ALL' ? 'bg-white text-black border-white' : 'bg-white/5 text-gray-400 border-transparent hover:border-white/20'}`}>All</button>
-              <button onClick={() => setActivityFilter('IN')} className={`px-3 py-1 text-xs rounded-lg transition-colors border ${activityFilter === 'IN' ? 'bg-green-500/20 text-green-400 border-green-500/50' : 'bg-white/5 text-gray-400 border-transparent hover:border-white/20'}`}>Inflow</button>
-              <button onClick={() => setActivityFilter('OUT')} className={`px-3 py-1 text-xs rounded-lg transition-colors border ${activityFilter === 'OUT' ? 'bg-red-500/20 text-red-400 border-red-500/50' : 'bg-white/5 text-gray-400 border-transparent hover:border-white/20'}`}>Outflow</button>
-           </div>
-        </div>
-
-        <div className="space-y-2">
-           {filteredActivity.length === 0 ? (
-             <div className="text-center py-6 text-gray-500 text-xs">No recent activity found for this filter.</div>
-           ) : (
-             filteredActivity.map(log => {
-               // Determine Logic
-               const isIncome = log.type === 'DROP' || log.type === 'TRIAGE_SESSION';
-               const isSpend = log.type === 'SPEND' || log.type === 'GENEROSITY';
-               
-               return (
-                 <div key={log.id} className="flex justify-between items-center p-3 hover:bg-white/5 rounded-lg transition-colors border-b border-white/5 last:border-0 group">
-                    <div className="flex items-center gap-3">
-                       <div className={`p-2 rounded-full ${isIncome ? 'bg-green-500/10 text-green-500' : isSpend ? 'bg-red-500/10 text-red-500' : 'bg-blue-500/10 text-blue-500'}`}>
-                         {isIncome ? <ArrowDownLeft size={14}/> : isSpend ? <ArrowUpRight size={14}/> : <Activity size={14}/>}
-                       </div>
-                       <div>
-                         <div className="text-sm font-bold text-white group-hover:text-gray-200 transition-colors">{log.title}</div>
-                         <div className="text-[10px] text-gray-500">{new Date(log.date).toLocaleDateString()} • {log.type}</div>
-                       </div>
-                    </div>
-                    <div className={`font-mono font-bold text-sm ${isIncome ? 'text-green-400' : isSpend ? 'text-red-400' : 'text-white'}`}>
-                       {isIncome ? '+' : isSpend ? '-' : ''}{log.amount ? <><Naira/>{formatNumber(log.amount)}</> : '-'}
-                    </div>
-                 </div>
-               );
-             })
-           )}
-        </div>
-        
-        <div className="mt-4 pt-2 border-t border-white/5 text-center">
-            <button onClick={() => navigate('/ledger')} className="text-xs text-gray-500 hover:text-white transition-colors">View Full Ledger History</button>
-        </div>
-      </GlassCard>
-
-    </div>
+    </RunwayWeather>
   );
 };

@@ -3,7 +3,10 @@ import { useLedger } from '../context/LedgerContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Naira } from '../components/ui/Naira';
 import { formatNumber } from '../utils/format';
-import { Clock, Undo2, Search, Filter, ArrowDown } from 'lucide-react';
+import { 
+  Clock, Undo2, Search, Filter, ArrowDown, 
+  Target, Flame, Skull, Zap, Heart, ShieldCheck, Wallet, RefreshCw 
+} from 'lucide-react';
 
 export const Ledger = () => {
   const { history, deleteTransaction } = useLedger();
@@ -11,8 +14,11 @@ export const Ledger = () => {
   const [filterType, setFilterType] = useState('ALL');
   const [limit, setLimit] = useState(50);
 
-  const isUndoable = (date: string) => {
-    return (new Date().getTime() - new Date(date).getTime()) < (60 * 60 * 1000);
+  const isUndoable = (date: string, type: string) => {
+    // Only allow undo for financial moves (SPEND/DROP) within 1 hour
+    const isRecent = (new Date().getTime() - new Date(date).getTime()) < (60 * 60 * 1000);
+    const isReversible = type === 'SPEND' || type === 'DROP';
+    return isRecent && isReversible;
   };
 
   const filteredHistory = useMemo(() => {
@@ -26,8 +32,29 @@ export const Ledger = () => {
 
   const visibleHistory = filteredHistory.slice(0, limit);
 
+  // Icon Mapper
+  const getIcon = (type: string) => {
+    if (type.includes('SIGNAL_KILL')) return <Skull size={20}/>;
+    if (type.includes('SIGNAL')) return <Zap size={20}/>;
+    if (type.includes('GOAL')) return <Target size={20}/>;
+    if (type.includes('BUDGET')) return <Flame size={20}/>;
+    if (type === 'GENEROSITY') return <Heart size={20}/>;
+    if (type === 'TAX_ALLOCATION') return <ShieldCheck size={20}/>;
+    if (type === 'DROP') return <Wallet size={20}/>;
+    return <Clock size={20}/>;
+  };
+
+  // Color Mapper
+  const getColor = (type: string) => {
+    if (type.includes('KILL') || type.includes('DELETE') || type === 'SPEND') return 'bg-red-500/10 text-red-500';
+    if (type === 'DROP' || type.includes('HARVEST') || type.includes('CREATE')) return 'bg-green-500/10 text-green-500';
+    if (type.includes('PROMOTE') || type === 'TRIAGE') return 'bg-blue-500/10 text-blue-400';
+    if (type === 'GENEROSITY') return 'bg-pink-500/10 text-pink-500';
+    return 'bg-white/5 text-gray-400';
+  };
+
   return (
-    <div className="max-w-4xl mx-auto p-4 md:p-8 pb-20 space-y-6">
+    <div className="max-w-4xl mx-auto p-4 md:p-8 pb-20 space-y-6 animate-fade-in">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <h1 className="text-3xl font-bold text-white">Universal Black Box</h1>
         <div className="text-xs text-gray-500 font-mono">{history.length} Total Records</div>
@@ -56,7 +83,8 @@ export const Ledger = () => {
             <option value="SPEND">Spending</option>
             <option value="DROP">Income Drops</option>
             <option value="TRIAGE">Triage Operations</option>
-            <option value="SYSTEM_EVENT">System Events</option>
+            <option value="SIGNAL_UPDATE">Signals</option>
+            <option value="GOAL_FUND">Goals</option>
           </select>
         </div>
       </GlassCard>
@@ -66,8 +94,8 @@ export const Ledger = () => {
         {visibleHistory.map(log => (
           <GlassCard key={log.id} className="p-4 flex justify-between items-center group hover:border-white/20 transition-colors">
             <div className="flex items-center gap-4">
-               <div className={`p-3 rounded-full ${log.type === 'SPEND' ? 'bg-red-500/10 text-red-500' : log.type === 'DROP' ? 'bg-green-500/10 text-green-500' : 'bg-white/5 text-gray-400'}`}>
-                 <Clock size={20}/>
+               <div className={`p-3 rounded-full ${getColor(log.type)}`}>
+                 {getIcon(log.type)}
                </div>
                <div>
                  <div className="font-bold text-white flex items-center gap-2">
@@ -80,14 +108,14 @@ export const Ledger = () => {
 
             <div className="text-right">
               <div className={`font-mono font-bold flex items-center justify-end gap-1 ${log.amount && log.amount < 0 ? 'text-red-400' : 'text-white'}`}>
-                {log.amount ? <><Naira/>{formatNumber(Math.abs(log.amount))}</> : '-'}
+                {log.amount ? <><Naira/>{formatNumber(Math.abs(log.amount))}</> : ''}
               </div>
-              {isUndoable(log.date) && (
+              {isUndoable(log.date, log.type) && (
                 <button 
                   onClick={() => deleteTransaction(log.id)}
                   className="text-xs text-red-400 hover:underline flex items-center gap-1 ml-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
-                  <Undo2 size={10}/> Undo
+                  <Undo2 size={10}/> Reverse
                 </button>
               )}
             </div>

@@ -5,7 +5,7 @@ import { useUser } from './UserContext';
 import { calculateMonthlyBurn } from '../utils/finance';
 import { 
   type Account, type Budget, type Goal, type Signal, type HistoryLog, 
-  type AccountType 
+  type AccountType, type LogType 
 } from '../types';
 
 interface LedgerContextType {
@@ -118,6 +118,21 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     }
   });
 
+  // --- HELPER: AUTO LOGGER ---
+  const autoLog = async (type: LogType, title: string, desc?: string, amount?: number, signalId?: string, goalId?: string) => {
+    await supabase.from('history').insert({
+      user_id: userId,
+      date: new Date().toISOString(),
+      type,
+      title,
+      description: desc || '',
+      amount: amount || 0,
+      linked_signal_id: signalId,
+      linked_goal_id: goalId
+    });
+    queryClient.invalidateQueries({ queryKey: ['history'] });
+  };
+
   // --- MUTATIONS ---
 
   const updateAccountMutation = useMutation({
@@ -159,18 +174,16 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
       if (!goal) return;
 
       if (reclaimAmount && goal.currentAmount > 0) {
-         // Simplified reclaim logic for stability
-         const { error: rpcError } = await supabase.rpc('increment_balance', { 
-           account_type: 'holding', 
-           amount: goal.currentAmount,
-           uid: userId 
-         });
-         // Fallback if RPC missing
-         if (rpcError) {
-             console.log("RPC fallback: Manual holding update");
-             // Manual update logic would go here, skipping for brevity to focus on budgets
+         // Auto-reclaim to Holding
+         const { data: current } = await supabase.from('accounts').select('balance').eq('type', 'holding').eq('user_id', userId).single();
+         if (current) {
+             await supabase.from('accounts').update({ balance: current.balance + goal.currentAmount }).eq('type', 'holding').eq('user_id', userId);
+             autoLog('GOAL_DELETE', `Reclaimed Funds: ${goal.title}`, 'Moved funds back to Holding', goal.currentAmount);
          }
+      } else {
+        autoLog('GOAL_DELETE', `Deleted Goal: ${goal.title}`, 'No funds reclaimed');
       }
+
       const { error } = await supabase.from('goals').delete().eq('id', id);
       if (error) throw error;
     },
@@ -193,10 +206,8 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['history'] })
   });
   
-  // FIX 1: Clean Budget Insert
   const addBudgetMutation = useMutation({
     mutationFn: async (budget: Omit<Budget, 'id'>) => {
-      // Manually construct the DB object. DO NOT spread ...budget
       const dbBudget = {
         user_id: userId,
         name: budget.name,
@@ -204,13 +215,15 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         spent: budget.spent,
         frequency: budget.frequency,
         category: budget.category,
-        expiry_date: budget.expiryDate,      // Map camel to snake
-        auto_deduct: budget.autoDeduct,      // Map camel to snake
-        subscription_day: budget.subscriptionDay // Map camel to snake
+        expiry_date: budget.expiryDate,
+        auto_deduct: budget.autoDeduct,
+        subscription_day: budget.subscriptionDay
       };
-
       const { error } = await supabase.from('budgets').insert(dbBudget);
       if (error) throw error;
+      
+      // INTERCEPTOR LOG
+      autoLog('BUDGET_CREATE', `Budget: ${budget.name}`, `Cap: ${budget.amount} | Freq: ${budget.frequency}`, budget.amount);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budgets'] }),
     onError: (e) => alert(`Failed to add budget: ${e.message}`)
@@ -218,8 +231,10 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteBudgetMutation = useMutation({
     mutationFn: async (id: string) => {
+      const budget = budgets.find(b => b.id === id);
       const { error } = await supabase.from('budgets').delete().eq('id', id);
       if (error) throw error;
+      if (budget) autoLog('BUDGET_DELETE', `Deleted Budget: ${budget.name}`);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budgets'] })
   });
@@ -244,8 +259,21 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const updateSignalMutation = useMutation({
     mutationFn: async (signal: Signal) => {
+      // INTERCEPTOR LOGIC FOR SIGNALS
+      const oldSignal = signals.find(s => s.id === signal.id);
+      let logType: LogType = 'SIGNAL_UPDATE';
+      let desc = 'Updated details';
+
+      if (oldSignal) {
+        if (oldSignal.phase !== signal.phase) {
+          if (signal.phase === 'graveyard') logType = 'SIGNAL_KILL';
+          else if (oldSignal.phase === 'graveyard') logType = 'SIGNAL_REVIVE';
+          else logType = 'SIGNAL_PROMOTE';
+          desc = `Moved from ${oldSignal.phase} to ${signal.phase}`;
+        }
+      }
+
       const { id, ...rest } = signal;
-      // Manual construct is already correct here
       const dbSignal = {
         title: rest.title,
         sector: rest.sector,
@@ -264,11 +292,13 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
       };
       const { error } = await supabase.from('signals').update(dbSignal).eq('id', id);
       if (error) throw error;
+
+      // Log it
+      autoLog(logType, `Signal: ${signal.title}`, desc, 0, id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['signals'] })
   });
 
-  // FIX 2: Ensure Signal Insert is Clean
   const addSignalMutation = useMutation({
     mutationFn: async (signal: Omit<Signal, 'id'>) => {
        const dbSignal = {
@@ -289,8 +319,11 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         created_at: signal.createdAt,
         updated_at: signal.updatedAt
       };
-      const { error } = await supabase.from('signals').insert(dbSignal);
+      const { data, error } = await supabase.from('signals').insert(dbSignal).select('id').single();
       if (error) throw error;
+
+      // INTERCEPTOR LOG
+      if (data) autoLog('SIGNAL_CREATE', `New Signal: ${signal.title}`, `Sector: ${signal.sector}`, 0, data.id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['signals'] }),
     onError: (e) => alert(`Signal Create Failed: ${e.message}`)
@@ -307,8 +340,10 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
          type: goal.type,
          sub_goals: goal.subGoals
        };
-       const { error } = await supabase.from('goals').insert(dbGoal);
+       const { data, error } = await supabase.from('goals').insert(dbGoal).select('id').single();
        if (error) throw error;
+       
+       if (data) autoLog('GOAL_CREATE', `New Mission: ${goal.title}`, `Target: ${goal.targetAmount}`, goal.targetAmount, undefined, data.id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['goals'] }),
     onError: (e) => alert(`Goal Create Failed: ${e.message}`)
@@ -325,12 +360,32 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['goals'] })
   });
 
+  // --- SMART UNDO (REVERSAL ENGINE) ---
   const deleteTransactionMutation = useMutation({
     mutationFn: async (id: string) => {
+      const log = history.find(h => h.id === id);
+      if (!log) return;
+
+      // Reverse Money Logic
+      if (log.type === 'SPEND' && log.amount) {
+         // Money left payroll, so put it back
+         const { data: pay } = await supabase.from('accounts').select('balance').eq('type', 'payroll').eq('user_id', userId).single();
+         if(pay) await supabase.from('accounts').update({ balance: pay.balance + log.amount }).eq('type', 'payroll').eq('user_id', userId);
+      }
+      if (log.type === 'DROP' && log.amount) {
+         // Money entered holding, so remove it
+         const { data: hold } = await supabase.from('accounts').select('balance').eq('type', 'holding').eq('user_id', userId).single();
+         if(hold) await supabase.from('accounts').update({ balance: hold.balance - log.amount }).eq('type', 'holding').eq('user_id', userId);
+      }
+
+      // Finally delete the record
       const { error } = await supabase.from('history').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['history'] })
+    onSuccess: () => {
+       queryClient.invalidateQueries({ queryKey: ['history'] });
+       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+    }
   });
 
   // --- COMPUTED LOGIC ---

@@ -6,12 +6,12 @@ import { GlassInput } from '../components/ui/GlassInput';
 import { Naira } from '../components/ui/Naira';
 import { calculateGenerosityCap, getTierColor } from '../utils/finance';
 import { formatNumber } from '../utils/format';
-import { Shield, Users, AlertTriangle, Search, Ban, Send, Wallet, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { Shield, Search, Send, Wallet, ArrowDownLeft, ArrowUpRight } from 'lucide-react'; // FIXED: Removed unused imports
 
 export const Generosity = () => {
   const { history, runwayMonths, accounts, updateAccount, commitAction } = useLedger();
   const [searchTerm, setSearchTerm] = useState('');
-  const [filter, setFilter] = useState<'ALL' | 'IN' | 'OUT'>('ALL'); // VIEW STATE
+  const [filter, setFilter] = useState<'ALL' | 'IN' | 'OUT'>('ALL'); 
 
   const generosityWallet = accounts.find(a => a.type === 'generosity');
   const availableBalance = generosityWallet?.balance || 0;
@@ -23,7 +23,6 @@ export const Generosity = () => {
   const dynamicCap = calculateGenerosityCap(runwayMonths);
   const currentMonth = new Date().toISOString().slice(0, 7); 
   
-  // HISTORY FILTERS
   const outflowLogs = history.filter(h => h.type === 'GENEROSITY');
   const inflowLogs = history.filter(h => h.type === 'TRANSFER' && h.tags?.includes('generosity_fund'));
   
@@ -139,7 +138,6 @@ export const Generosity = () => {
             <div className="text-center py-8 text-gray-500 text-sm">No records found.</div>
           ) : (
             displayedLogs.map(log => {
-               // Render differently for Inflows vs Outflows
                const isOutflow = log.type === 'GENEROSITY';
                
                if (isOutflow) {
@@ -163,7 +161,6 @@ export const Generosity = () => {
                     </GlassCard>
                    );
                } else {
-                   // Inflow
                    return (
                     <GlassCard key={log.id} className="p-4 flex justify-between items-center border-green-500/10">
                       <div className="flex items-center gap-3">

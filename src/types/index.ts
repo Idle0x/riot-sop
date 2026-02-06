@@ -1,5 +1,3 @@
-// src/types/index.ts
-
 export type Currency = 'USD' | 'NGN';
 
 // --- USER & SYSTEM STATE ---
@@ -7,11 +5,11 @@ export interface PendingChange {
   id: string;
   key: keyof UserProfile;
   value: any;
-  effectiveDate: string; // ISO String
+  effectiveDate: string; 
 }
 
 export interface UserProfile {
-  id: string; // NEW: Added to match Supabase Auth ID
+  id: string; 
   burnCap: number;           
   annualRent: number; 
   inflationRate: number;     
@@ -20,7 +18,6 @@ export interface UserProfile {
   runwayEmptySince: string | null;
   systemVersion: string;     
   pendingChanges: PendingChange[];
-  // NEW V2 FIELDS
   currencyCode?: string; 
   settings?: {
     allowNegativeBalance: boolean;
@@ -54,7 +51,7 @@ export interface Budget {
   category: string;
   autoDeduct?: boolean;
   lastProcessedAt?: string; 
-  subscriptionDay?: number; // NEW: 1-31 for fixed bills
+  subscriptionDay?: number; 
 }
 
 // --- GOALS ---
@@ -144,8 +141,18 @@ export interface Signal {
   updatedAt: string;
 }
 
-// --- HISTORY ---
-export type LogType = 'DROP' | 'SPEND' | 'TRANSFER' | 'TRIAGE' | 'SIGNAL_UPDATE' | 'GOAL_FUND' | 'SYSTEM_EVENT' | 'JOURNAL' | 'EMERGENCY_ACCESS';
+// --- HISTORY (BLACK BOX) ---
+// UPDATED: Comprehensive Log Types
+export type LogType = 
+  // Financial
+  'DROP' | 'SPEND' | 'TRANSFER' | 'TRIAGE' | 'TAX_ALLOCATION' | 'GENEROSITY' |
+  // Signals
+  'SIGNAL_CREATE' | 'SIGNAL_PROMOTE' | 'SIGNAL_KILL' | 'SIGNAL_REVIVE' | 'SIGNAL_UPDATE' | 'SIGNAL_HARVEST' |
+  // Goals & Budgets
+  'GOAL_CREATE' | 'GOAL_FUND' | 'GOAL_DELETE' | 
+  'BUDGET_CREATE' | 'BUDGET_DELETE' |
+  // System
+  'SYSTEM_EVENT' | 'JOURNAL' | 'EMERGENCY_ACCESS';
 
 export interface HistoryLog {
   id: string;
@@ -158,12 +165,4 @@ export interface HistoryLog {
   linkedSignalId?: string;
   linkedGoalId?: string;
   tags?: string[];
-}
-
-export interface JournalEntry {
-  id: string;
-  date: string;
-  content: string;
-  tags: string[];
-  linkedLogId?: string;
 }

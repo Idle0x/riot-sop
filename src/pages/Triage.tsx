@@ -8,7 +8,7 @@ import { GlassButton } from '../components/ui/GlassButton';
 import { Naira } from '../components/ui/Naira';
 import { getFinancialState, calculateGenerosityCap } from '../utils/finance';
 import { formatNumber } from '../utils/format';
-import { ArrowRight, ArrowLeft, Flame, Heart, AlertTriangle, CheckCircle2, Lock, Wand2, Landmark, ShieldCheck, Wallet, RefreshCw } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Flame, Heart, AlertTriangle, CheckCircle2, Lock, Wand2, Landmark, ShieldCheck, Wallet, RefreshCw, History, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 export const Triage = () => {
@@ -16,12 +16,13 @@ export const Triage = () => {
   const [searchParams] = useSearchParams();
   const { user } = useUser();
   const { 
-    runwayMonths, goals, signals, unallocatedCash,
+    runwayMonths, goals, signals, unallocatedCash, history,
     updateAccount, commitAction, updateSignal, fundGoal 
   } = useLedger();
 
   const { rate, setRate, fetchLiveRate } = useExchangeRate(); 
   const [isFetchingRate, setIsFetchingRate] = useState(false);
+  const [showHistory, setShowHistory] = useState(false); // HISTORY MODAL STATE
 
   const [step, setStep] = useState(1);
   const [amountUSD, setAmountUSD] = useState('');
@@ -119,10 +120,25 @@ export const Triage = () => {
 
   const handleCommit = () => {
     const timestamp = new Date().toISOString();
-
+    const signal = signals.find(s => s.id === selectedSignalId);
+    
+    // 1. MASTER LOG (The History Entry)
     if (dropUSD > 0) {
-        updateAccount('holding', grossNGN); 
+      commitAction({
+        date: timestamp,
+        type: 'TRIAGE_SESSION', // New Type
+        title: `Income Drop: $${formatNumber(dropUSD)}`,
+        description: `Source: ${signal?.title || 'External'} @ ₦${rateVal}/$`,
+        amount: grossNGN,
+        linkedSignalId: selectedSignalId
+      });
+      
+      // Update Signal
+      if (signal) updateSignal({ ...signal, totalGenerated: signal.totalGenerated + dropUSD, updatedAt: timestamp });
     }
+
+    // 2. FUND MOVEMENTS
+    if (dropUSD > 0) updateAccount('holding', grossNGN); 
     updateAccount('holding', -sourceFunds); 
 
     if (taxAmount > 0) {
@@ -135,9 +151,7 @@ export const Triage = () => {
       commitAction({ date: timestamp, type: 'TRANSFER', title: 'Vault Deposit', amount: vaultAmount, tags: ['wealth_defense'] });
     }
 
-    // --- NEW: GENEROSITY TRANSFER ---
     if (genAmount > 0) {
-        // Move from Holding -> Generosity Account
         updateAccount('generosity', genAmount);
         commitAction({ 
             date: timestamp, type: 'TRANSFER', title: 'Funded Generosity Wallet', 
@@ -158,21 +172,55 @@ export const Triage = () => {
        }
     });
 
-    if (remaining > 0) {
-       updateAccount('holding', remaining);
-    }
-
-    const signal = signals.find(s => s.id === selectedSignalId);
-    if (signal && dropUSD > 0) updateSignal({ ...signal, totalGenerated: signal.totalGenerated + dropUSD, updatedAt: timestamp });
+    if (remaining > 0) updateAccount('holding', remaining);
 
     navigate('/');
   };
 
+  // History Filter
+  const triageHistory = history.filter(h => h.type === 'TRIAGE_SESSION');
+
   return (
-    <div className="max-w-3xl mx-auto p-4 md:p-8 pb-20 space-y-8 animate-fade-in">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-white">The Accountant</h1>
-        <p className={`text-sm font-bold uppercase tracking-wider ${state === 'critical' ? 'text-red-500' : 'text-green-500'}`}>{state.toUpperCase()} STATE DETECTED</p>
+    <div className="max-w-3xl mx-auto p-4 md:p-8 pb-20 space-y-8 animate-fade-in relative">
+      
+      {/* HISTORY MODAL */}
+      {showHistory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+          <GlassCard className="w-full max-w-md max-h-[70vh] flex flex-col relative">
+            <button onClick={() => setShowHistory(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X size={20}/></button>
+            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><History size={20}/> Triage History</h3>
+            
+            <div className="flex-1 overflow-y-auto space-y-3">
+              {triageHistory.length === 0 ? (
+                <div className="text-gray-500 text-sm text-center py-8">No triage sessions recorded yet.</div>
+              ) : (
+                triageHistory.map(log => (
+                  <div key={log.id} className="p-3 bg-white/5 rounded-lg border border-white/5">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="font-bold text-white text-sm">{log.title}</span>
+                      <span className="text-[10px] text-gray-400">{new Date(log.date).toLocaleDateString()}</span>
+                    </div>
+                    <div className="text-xs text-gray-500">{log.description}</div>
+                    <div className="text-right font-mono text-green-400 text-sm mt-1">
+                      <Naira/>{formatNumber(log.amount || 0)}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </GlassCard>
+        </div>
+      )}
+
+      {/* HEADER */}
+      <div className="flex justify-between items-start">
+        <div className="text-center flex-1">
+          <h1 className="text-3xl font-bold text-white">The Accountant</h1>
+          <p className={`text-sm font-bold uppercase tracking-wider ${state === 'critical' ? 'text-red-500' : 'text-green-500'}`}>{state.toUpperCase()} STATE DETECTED</p>
+        </div>
+        <button onClick={() => setShowHistory(true)} className="p-2 bg-white/5 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+          <History size={20}/>
+        </button>
       </div>
 
       <GlassCard className="p-6">

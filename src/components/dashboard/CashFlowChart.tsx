@@ -37,12 +37,12 @@ export const CashFlowChart = ({ data }: Props) => {
           />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
           <Bar dataKey="income" radius={[4, 4, 0, 0]}>
-            {data.map((entry, index) => (
+            {data.map((_entry, index) => (
               <Cell key={`cell-in-${index}`} fill="rgba(34, 197, 94, 0.5)" />
             ))}
           </Bar>
           <Bar dataKey="expense" radius={[4, 4, 0, 0]}>
-            {data.map((entry, index) => (
+            {data.map((_entry, index) => (
               <Cell key={`cell-out-${index}`} fill="rgba(239, 68, 68, 0.5)" />
             ))}
           </Bar>

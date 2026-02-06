@@ -10,7 +10,7 @@ import { formatNumber } from '../utils/format';
 
 import { 
   Download, TrendingUp, PieChart as PieIcon, Target, Calendar, 
-  Zap, AlertTriangle, ShieldCheck, Plus, X, BarChart2 
+  Zap, AlertTriangle, ShieldCheck, Plus, BarChart2 
 } from 'lucide-react';
 
 import { 

@@ -22,7 +22,7 @@ export const Triage = () => {
 
   const { rate, setRate, fetchLiveRate } = useExchangeRate(); 
   const [isFetchingRate, setIsFetchingRate] = useState(false);
-  const [showHistory, setShowHistory] = useState(false); // HISTORY MODAL STATE
+  const [showHistory, setShowHistory] = useState(false); 
 
   const [step, setStep] = useState(1);
   const [amountUSD, setAmountUSD] = useState('');
@@ -122,18 +122,16 @@ export const Triage = () => {
     const timestamp = new Date().toISOString();
     const signal = signals.find(s => s.id === selectedSignalId);
     
-    // 1. MASTER LOG (The History Entry)
+    // 1. MASTER LOG
     if (dropUSD > 0) {
       commitAction({
         date: timestamp,
-        type: 'TRIAGE_SESSION', // New Type
+        type: 'TRIAGE_SESSION',
         title: `Income Drop: $${formatNumber(dropUSD)}`,
         description: `Source: ${signal?.title || 'External'} @ ₦${rateVal}/$`,
         amount: grossNGN,
         linkedSignalId: selectedSignalId
       });
-      
-      // Update Signal
       if (signal) updateSignal({ ...signal, totalGenerated: signal.totalGenerated + dropUSD, updatedAt: timestamp });
     }
 
@@ -177,7 +175,6 @@ export const Triage = () => {
     navigate('/');
   };
 
-  // History Filter
   const triageHistory = history.filter(h => h.type === 'TRIAGE_SESSION');
 
   return (
@@ -256,7 +253,6 @@ export const Triage = () => {
             </div>
 
             <div className="space-y-4">
-                {/* Tax Shield */}
                 <div className="p-4 bg-slate-500/10 rounded-xl border border-slate-500/20">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-slate-400"><ShieldCheck size={16}/> Tax Shield (NTA 2026)</span>
@@ -269,7 +265,6 @@ export const Triage = () => {
                     </div>
                 </div>
 
-                {/* Venture Tax */}
                 <div className="p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-red-500"><Flame size={16}/> Venture Tax</span>
@@ -278,7 +273,6 @@ export const Triage = () => {
                     <input type="range" min="0" max="20" value={ventureTax} onChange={(e) => setVentureTax(Number(e.target.value))} className="w-full accent-red-500"/>
                 </div>
 
-                {/* Vault Tax */}
                 <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-blue-400"><Landmark size={16}/> The Vault</span>
@@ -331,7 +325,8 @@ export const Triage = () => {
                 {isGenerosityLocked ? (
                     <span className="text-xs font-bold text-red-500 flex items-center gap-1"><Lock size={12}/> LOCKED</span>
                 ) : (
-                    <span className={`text-xs font-bold ${isOverCap ? 'text-red-500' : 'text-gray-500'} flex items-center gap-1`}>Cap: <Naira/>{formatNumber(dynamicCap)}</span>
+                    // FIX: Changed dynamicCap to dynamicGenCap here
+                    <span className={`text-xs font-bold ${isOverCap ? 'text-red-500' : 'text-gray-500'} flex items-center gap-1`}>Cap: <Naira/>{formatNumber(dynamicGenCap)}</span>
                 )}
               </div>
 

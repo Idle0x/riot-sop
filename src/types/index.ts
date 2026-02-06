@@ -27,6 +27,7 @@ export interface UserProfile {
 }
 
 // --- ACCOUNTING ---
+// UPDATED: Added 'generosity'
 export type AccountType = 'treasury' | 'payroll' | 'buffer' | 'holding' | 'vault' | 'generosity';
 
 export interface Account {
@@ -142,12 +143,12 @@ export interface Signal {
 }
 
 // --- HISTORY (BLACK BOX) ---
-// UPDATED: Comprehensive Log Types
+// UPDATED: Comprehensive Log Types including TRIAGE_SESSION
 export type LogType = 
   // Financial
-  'DROP' | 'SPEND' | 'TRANSFER' | 'TRIAGE' | 'TAX_ALLOCATION' | 'GENEROSITY' |
+  'DROP' | 'SPEND' | 'TRANSFER' | 'TRIAGE' | 'TRIAGE_SESSION' | 'TAX_ALLOCATION' | 'GENEROSITY' |
   // Signals
-  'SIGNAL_CREATE' | 'SIGNAL_PROMOTE' | 'SIGNAL_KILL' | 'SIGNAL_REVIVE' | 'SIGNAL_UPDATE' | 'SIGNAL_HARVEST' |
+  'SIGNAL_CREATE' | 'SIGNAL_PROMOTE' | 'SIGNAL_KILL' | 'SIGNAL_REVIVE' | 'SIGNAL_UPDATE' | 'SIGNAL_HARVEST' | 'FIELD_REPORT' |
   // Goals & Budgets
   'GOAL_CREATE' | 'GOAL_FUND' | 'GOAL_DELETE' | 
   'BUDGET_CREATE' | 'BUDGET_DELETE' |

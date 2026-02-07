@@ -21,7 +21,7 @@ import { ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recha
 
 // ICONS
 import { 
-  Clock, AlertTriangle, ArrowRight, Lock, Activity, ShieldCheck, 
+  Clock, AlertTriangle, ArrowRight, Activity, ShieldCheck, 
   BarChart3, Wallet, Heart, Zap, TrendingUp, TrendingDown, 
   ArrowDownLeft, ArrowUpRight 
 } from 'lucide-react';

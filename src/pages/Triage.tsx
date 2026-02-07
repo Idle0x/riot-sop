@@ -17,7 +17,7 @@ import { formatNumber } from '../utils/format';
 
 // ICONS
 import { 
-  ArrowRight, ArrowLeft, Flame, Heart, AlertTriangle, 
+  ArrowRight, ArrowLeft, Flame, Heart, 
   CheckCircle2, Lock, Wand2, Landmark, ShieldCheck, 
   Wallet, RefreshCw, History, X, AlertOctagon, FileText, BookOpen, HelpCircle 
 } from 'lucide-react';
@@ -32,7 +32,7 @@ export const Triage = () => {
   } = useLedger();
 
   // --- STATE 1: EXCHANGE RATE ---
-  const { rate, setRate, loading: isFetchingRate, error: rateError, fetchLiveRate } = useExchangeRate(); 
+  const { rate, setRate, loading: isFetchingRate, fetchLiveRate } = useExchangeRate(); 
 
   // --- STATE 2: FORM DATA ---
   const [step, setStep] = useState(1);
@@ -80,37 +80,10 @@ export const Triage = () => {
 
   // --- MATH ENGINE ---
   const dropUSD = parseFloat(amountUSD) || 0;
-  const costUSD = parseFloat(costBasisUSD) || 0;
   const rateVal = parseFloat(rate) || 0;
 
   const grossNGN = dropUSD * rateVal;
   const sourceFunds = dropUSD > 0 ? grossNGN : unallocatedCash;
-
-  const profitNGN = Math.max(0, (dropUSD - costUSD) * rateVal);
-
-  const calculateTaxEstimate = (profit: number) => {
-    const annualRent = user?.annualRent || 0;
-    const rentRelief = Math.min(500000, annualRent * 0.20);
-    const chargeableProfit = Math.max(0, profit - rentRelief);
-
-    let tax = 0;
-    let remaining = chargeableProfit;
-
-    remaining -= 800000;
-    if (remaining > 0) {
-      const band2 = Math.min(remaining, 2200000);
-      tax += band2 * 0.15;
-      remaining -= band2;
-    }
-    if (remaining > 0) {
-      const band3 = Math.min(remaining, 9000000);
-      tax += band3 * 0.18;
-      remaining -= band3;
-    }
-    return profit > 0 ? (tax / profit) * 100 : 0;
-  };
-
-  const estTaxPercent = calculateTaxEstimate(profitNGN);
 
   const taxAmount = sourceFunds * (taxProvision / 100);
   const ventureAmount = sourceFunds * (ventureTax / 100);
@@ -236,14 +209,12 @@ export const Triage = () => {
   return (
     <div className="max-w-3xl mx-auto p-4 md:p-8 pb-20 space-y-8 animate-fade-in relative">
 
-      {/* MODAL TRIGGERED ONLY ON CLICK */}
       <OperatorsManual 
         isOpen={showManual} 
         onClose={() => setShowManual(false)} 
         initialChapterId={manualChapter} 
       />
 
-      {/* --- SILENCE PROTOCOL --- */}
       {showSilenceProtocol && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-fade-in">
               <div className="w-full max-w-md bg-zinc-900 border border-red-500/50 rounded-2xl p-6 shadow-[0_0_50px_rgba(239,68,68,0.2)]">
@@ -288,7 +259,6 @@ export const Triage = () => {
           </div>
       )}
 
-      {/* --- HISTORY MODAL --- */}
       {showHistory && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-fade-in">
           <GlassCard className="w-full max-w-md max-h-[70vh] flex flex-col relative">
@@ -316,7 +286,6 @@ export const Triage = () => {
         </div>
       )}
 
-      {/* --- HEADER --- */}
       <div className="flex justify-between items-start">
         <div className="text-center flex-1">
           <h1 className="text-3xl font-bold text-white">The Accountant</h1>
@@ -351,7 +320,6 @@ export const Triage = () => {
             </div>
 
             <div className="space-y-4 pt-2">
-                {/* 1. Tax Shield */}
                 <div className="p-4 bg-slate-500/10 rounded-xl border border-slate-500/20">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-slate-400"><ShieldCheck size={16}/> Tax Shield</span>
@@ -362,7 +330,6 @@ export const Triage = () => {
                     <input type="range" min="0" max="25" value={taxProvision} onChange={(e) => setTaxProvision(Number(e.target.value))} className="w-full accent-slate-500 cursor-pointer"/>
                 </div>
 
-                {/* 2. Venture Tax */}
                 <div className="p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-red-500"><Flame size={16}/> Venture Tax</span>
@@ -373,7 +340,6 @@ export const Triage = () => {
                     <input type="range" min="0" max="20" value={ventureTax} onChange={(e) => setVentureTax(Number(e.target.value))} className="w-full accent-red-500 cursor-pointer"/>
                 </div>
 
-                {/* 3. The Vault */}
                 <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-blue-400"><Landmark size={16}/> The Vault</span>

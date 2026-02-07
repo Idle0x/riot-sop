@@ -100,6 +100,16 @@ export interface SignalSession {
   type: 'active' | 'adjustment';
 }
 
+// NEW: Lifecycle Engine Structure
+export interface LifecycleChapter {
+  phase: SignalPhase;
+  enteredAt: string;        // ISO Date
+  exitedAt?: string;        // ISO Date (undefined = currently active)
+  hoursAtEntry: number;     // Total hours logged when this phase started
+  hoursAtExit?: number;     // Total hours logged when this phase ended
+  notes?: string;           // Optional context
+}
+
 export interface Signal {
   id: string;
   title: string;
@@ -116,6 +126,9 @@ export interface Signal {
   };
   sessionLogs?: SignalSession[]; 
   lastSessionAt?: string;      
+
+  // NEW: Lifecycle History
+  lifecycle: LifecycleChapter[]; 
 
   thesis: {
     alpha: string;        
@@ -178,14 +191,23 @@ export interface HistoryLog {
   amount?: number; // Used for Currency OR Hours (context dependent)
   currency?: Currency;
   description?: string;
-  
+
   // Linkage
   linkedSignalId?: string;
   linkedGoalId?: string;
   tags?: string[];
 
-  // Forensic Metadata (New)
+  // Forensic Metadata
   efficiencyRating?: number; // $/hr
   recipientName?: string;    // Generosity
   recipientTier?: 'T1' | 'T2' | 'T3' | 'T4'; // Generosity
+  
+  // Snapshot Data (Treasury)
+  metadata?: {
+    phase?: SignalPhase;
+    hoursLogged?: number;
+    efficiency?: number;
+    sector?: string;
+    [key: string]: any;
+  };
 }

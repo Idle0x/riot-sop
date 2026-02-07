@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { GlassCard } from '../components/ui/GlassCard'; // Adjust path if needed
+import { GlassCard } from '../ui/GlassCard';
 import { 
   X, ChevronRight, BookOpen, Anchor, Activity, Dumbbell, 
   ShieldAlert, Wrench, Archive, Zap, ArrowRight, Copy 
 } from 'lucide-react';
 
-// --- TYPES ---
+// Define the Chapter Structure Types
 interface ManualBlock {
   type: 'header' | 'action' | 'section' | 'callout' | 'card_grid' | 'code_block' | 'table' | 'accordion' | 'process_flow';
   [key: string]: any;
@@ -18,14 +18,7 @@ interface ManualChapter {
   content: ManualBlock[];
 }
 
-interface Props {
-  isOpen: boolean;
-  onClose: () => void;
-  initialChapterId?: string; 
-  onAction?: (actionId: string) => void;
-}
-
-// --- DATA: THE CODEX CONTENT ---
+// --- CONTENT DATA ---
 export const MANUAL_CHAPTERS: ManualChapter[] = [
   {
     id: 'manifesto',
@@ -205,11 +198,16 @@ export const MANUAL_CHAPTERS: ManualChapter[] = [
   }
 ];
 
-// --- COMPONENT ---
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  initialChapterId?: string; 
+  onAction?: (actionId: string) => void;
+}
+
 export const OperatorsManual = ({ isOpen, onClose, initialChapterId, onAction }: Props) => {
   const [activeChapterId, setActiveChapterId] = useState(initialChapterId || MANUAL_CHAPTERS[0].id);
 
-  // Sync prop changes to state
   useEffect(() => { 
     if (initialChapterId) {
       setActiveChapterId(initialChapterId);
@@ -240,7 +238,6 @@ export const OperatorsManual = ({ isOpen, onClose, initialChapterId, onAction }:
         ${isOpen ? 'translate-y-0' : 'translate-y-full'}
       `}
     >
-      {/* Close Button */}
       <button 
         onClick={onClose} 
         className="absolute top-6 right-6 z-[210] p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors shadow-lg border border-white/10"

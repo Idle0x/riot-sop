@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUser } from '../context/UserContext';
 import { useLedger, type ResetModule } from '../context/LedgerContext';
+import { generateSecurityPhrase } from '../utils/security'; // NEW IMPORT
 
 // COMPONENTS
 import { GlassCard } from '../components/ui/GlassCard';
@@ -10,7 +11,7 @@ import { GlassButton } from '../components/ui/GlassButton';
 // ICONS
 import { 
   Settings as Gear, ShieldAlert, Landmark, Lock, 
-  Trash2, AlertTriangle, XCircle 
+  Trash2, AlertTriangle, XCircle, Unlock, RefreshCw 
 } from 'lucide-react';
 
 export const Settings = () => {
@@ -23,17 +24,38 @@ export const Settings = () => {
   const [reason, setReason] = useState('');
   const [rent, setRent] = useState(user?.annualRent?.toString() || '0');
 
-  // Security States
-  const [nuclearStep, setNuclearStep] = useState(0); // 0=Idle, 1=Key, 2=FinalConfirm
+  // --- NEW: SOVEREIGN TYPER STATE ---
+  const [isZoneUnlocked, setIsZoneUnlocked] = useState(false);
+  const [challengePhrase, setChallengePhrase] = useState('');
+  const [typerInput, setTyperInput] = useState('');
+
+  // Nuclear & Security States (Existing)
+  const [nuclearStep, setNuclearStep] = useState(0); // 0=Selection, 1=Key, 2=Confirm
   const [masterPassInput, setMasterPassInput] = useState('');
   const [newMasterKey, setNewMasterKey] = useState('');
-  
-  // Reset Selection
   const [selectedReset, setSelectedReset] = useState<ResetModule | null>(null);
 
   const hasMasterKey = !!user?.settings?.masterKey;
 
-  // --- HANDLERS ---
+  // Initialize Challenge
+  useEffect(() => {
+    setChallengePhrase(generateSecurityPhrase());
+  }, []);
+
+  // Real-Time Validation
+  useEffect(() => {
+    if (typerInput === challengePhrase && challengePhrase !== '') {
+        setIsZoneUnlocked(true);
+        setTyperInput(''); // Clear for cleanliness
+    }
+  }, [typerInput, challengePhrase]);
+
+  const handleRefreshChallenge = () => {
+      setChallengePhrase(generateSecurityPhrase());
+      setTyperInput('');
+  };
+
+  // --- EXISTING HANDLERS ---
 
   const handleUpdateProfile = async () => {
     const effectiveDate = new Date();
@@ -41,7 +63,6 @@ export const Settings = () => {
 
     if (!user) return;
 
-    // Log the changes if significant
     if (parseFloat(newBurn) !== user.burnCap) {
         commitAction({ date: new Date().toISOString(), type: 'SYSTEM_EVENT', title: 'Burn Cap Updated', description: `${user.burnCap} -> ${newBurn}` });
     }
@@ -99,6 +120,8 @@ export const Settings = () => {
           setNuclearStep(0);
           setMasterPassInput('');
           setSelectedReset(null);
+          setIsZoneUnlocked(false); // Re-lock the zone for safety
+          setChallengePhrase(generateSecurityPhrase()); // New challenge
       }
   };
 
@@ -150,7 +173,7 @@ export const Settings = () => {
         </div>
       </GlassCard>
 
-      {/* TAX PROFILE CARD (NTA 2026) */}
+      {/* TAX PROFILE */}
       <GlassCard className="p-6">
         <div className="flex items-center gap-3 mb-6">
           <Landmark className="text-accent-info" />
@@ -176,7 +199,7 @@ export const Settings = () => {
         </div>
       </GlassCard>
 
-      {/* DANGER ZONE: PROTOCOL SELECTION */}
+      {/* DANGER ZONE */}
       <GlassCard className="p-6 border-red-900/30 relative overflow-hidden">
           <h3 className="font-bold text-red-500 mb-4 flex items-center gap-2">
             <ShieldAlert size={18}/> Danger Zone: Factory Resets
@@ -201,94 +224,133 @@ export const Settings = () => {
             </div>
           ) : (
             <>
-              {/* STEP 0: SELECTION GRID */}
-              {nuclearStep === 0 && (
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-fade-in">
-                    <button onClick={() => initiateReset('dashboard')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
-                        <div className="font-bold text-white group-hover:text-red-400">Wipe Dashboard</div>
-                        <div className="text-[10px] text-gray-500">Resets all account balances to 0.</div>
-                    </button>
-                    <button onClick={() => initiateReset('generosity')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
-                        <div className="font-bold text-white group-hover:text-red-400">Wipe Generosity</div>
-                        <div className="text-[10px] text-gray-500">Empties the Generosity Wallet.</div>
-                    </button>
-                    <button onClick={() => initiateReset('goals')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
-                        <div className="font-bold text-white group-hover:text-red-400">Wipe Goals</div>
-                        <div className="text-[10px] text-gray-500">Deletes all active missions.</div>
-                    </button>
-                    <button onClick={() => initiateReset('signals')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
-                        <div className="font-bold text-white group-hover:text-red-400">Wipe Signals</div>
-                        <div className="text-[10px] text-gray-500">Deletes all deal flow data.</div>
-                    </button>
-                    <button onClick={() => initiateReset('budgets')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
-                        <div className="font-bold text-white group-hover:text-red-400">Wipe Budgets</div>
-                        <div className="text-[10px] text-gray-500">Removes recurring expenses.</div>
-                    </button>
-                    <button onClick={() => initiateReset('journal')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
-                        <div className="font-bold text-white group-hover:text-red-400">Wipe Journal</div>
-                        <div className="text-[10px] text-gray-500">Deletes personal entries.</div>
-                    </button>
-                    
-                    <div className="md:col-span-2 mt-2">
-                        <button onClick={() => initiateReset('all')} className="w-full py-4 border border-red-500 text-red-500 hover:bg-red-500 hover:text-white rounded-xl text-sm font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2">
-                            <Trash2 size={16}/> Factory Reset (Total Wipe)
+              {/* --- LEVEL 1: COGNITIVE FRICTION (THE TYPER) --- */}
+              {!isZoneUnlocked ? (
+                 <div className="space-y-6 animate-fade-in py-4">
+                    <div className="text-center">
+                        <Lock className="mx-auto text-gray-600 mb-2 w-12 h-12"/>
+                        <h4 className="text-white font-bold uppercase tracking-widest text-sm">Protocols Locked</h4>
+                        <p className="text-xs text-gray-500 mt-2">Type the phrase below exactly to unlock manual overrides.</p>
+                    </div>
+
+                    <div className="bg-black/40 p-4 rounded-xl border border-white/5 relative group">
+                        <p className="text-center font-mono text-sm md:text-base text-red-400 select-none tracking-tight leading-relaxed">
+                            {challengePhrase}
+                        </p>
+                        <button onClick={handleRefreshChallenge} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 hover:text-white p-2">
+                            <RefreshCw size={14}/>
                         </button>
                     </div>
+
+                    <div className="relative">
+                        <input 
+                            value={typerInput}
+                            onChange={(e) => setTyperInput(e.target.value)}
+                            className={`w-full bg-transparent border-b-2 py-2 text-center font-mono text-white focus:outline-none transition-colors ${
+                                typerInput && challengePhrase.startsWith(typerInput) 
+                                    ? 'border-blue-500' 
+                                    : typerInput ? 'border-red-500' : 'border-gray-700'
+                            }`}
+                            placeholder="Type to unlock..."
+                            autoComplete="off"
+                            autoCorrect="off"
+                            spellCheck="false"
+                        />
+                    </div>
                  </div>
-              )}
+              ) : (
+                /* --- LEVEL 2: THE EXISTING LOGIC (UNLOCKED) --- */
+                <div className="animate-fade-in">
+                    {/* STEP 0: SELECTION GRID */}
+                    {nuclearStep === 0 && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <button onClick={() => initiateReset('dashboard')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
+                                <div className="font-bold text-white group-hover:text-red-400">Wipe Dashboard</div>
+                                <div className="text-[10px] text-gray-500">Resets all account balances to 0.</div>
+                            </button>
+                            <button onClick={() => initiateReset('generosity')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
+                                <div className="font-bold text-white group-hover:text-red-400">Wipe Generosity</div>
+                                <div className="text-[10px] text-gray-500">Empties the Generosity Wallet.</div>
+                            </button>
+                            <button onClick={() => initiateReset('goals')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
+                                <div className="font-bold text-white group-hover:text-red-400">Wipe Goals</div>
+                                <div className="text-[10px] text-gray-500">Deletes all active missions.</div>
+                            </button>
+                            <button onClick={() => initiateReset('signals')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
+                                <div className="font-bold text-white group-hover:text-red-400">Wipe Signals</div>
+                                <div className="text-[10px] text-gray-500">Deletes all deal flow data.</div>
+                            </button>
+                            <button onClick={() => initiateReset('budgets')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
+                                <div className="font-bold text-white group-hover:text-red-400">Wipe Budgets</div>
+                                <div className="text-[10px] text-gray-500">Removes recurring expenses.</div>
+                            </button>
+                            <button onClick={() => initiateReset('journal')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
+                                <div className="font-bold text-white group-hover:text-red-400">Wipe Journal</div>
+                                <div className="text-[10px] text-gray-500">Deletes personal entries.</div>
+                            </button>
+                            
+                            <div className="md:col-span-2 mt-2">
+                                <button onClick={() => initiateReset('all')} className="w-full py-4 border border-red-500 text-red-500 hover:bg-red-500 hover:text-white rounded-xl text-sm font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2">
+                                    <Trash2 size={16}/> Factory Reset (Total Wipe)
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
-              {/* STEP 1: VERIFY KEY */}
-              {nuclearStep === 1 && (
-                <div className="space-y-4 animate-fade-in bg-black/40 p-6 rounded-xl border border-red-500/30">
-                  <div className="text-center">
-                      <Lock size={32} className="mx-auto text-red-500 mb-2"/>
-                      <p className="text-sm text-white font-bold uppercase">Security Check</p>
-                      <p className="text-xs text-gray-400">Enter Master Key to proceed with {selectedReset?.toUpperCase()} Reset.</p>
-                  </div>
-                  
-                  <GlassInput 
-                    type="password" 
-                    placeholder="Enter Master Key" 
-                    value={masterPassInput} 
-                    onChange={(e) => setMasterPassInput(e.target.value)} 
-                    className="text-center border-red-500/50"
-                    autoFocus
-                  />
-                  
-                  <div className="flex gap-2">
-                    <GlassButton variant="ghost" onClick={cancelReset} className="flex-1">Cancel</GlassButton>
-                    <GlassButton variant="danger" onClick={verifyKey} className="flex-1">Verify</GlassButton>
-                  </div>
-                </div>
-              )}
+                    {/* STEP 1: VERIFY KEY */}
+                    {nuclearStep === 1 && (
+                        <div className="space-y-4 animate-fade-in bg-black/40 p-6 rounded-xl border border-red-500/30">
+                        <div className="text-center">
+                            <Lock size={32} className="mx-auto text-red-500 mb-2"/>
+                            <p className="text-sm text-white font-bold uppercase">Security Check</p>
+                            <p className="text-xs text-gray-400">Enter Master Key to proceed with {selectedReset?.toUpperCase()} Reset.</p>
+                        </div>
+                        
+                        <GlassInput 
+                            type="password" 
+                            placeholder="Enter Master Key" 
+                            value={masterPassInput} 
+                            onChange={(e) => setMasterPassInput(e.target.value)} 
+                            className="text-center border-red-500/50"
+                            autoFocus
+                        />
+                        
+                        <div className="flex gap-2">
+                            <GlassButton variant="ghost" onClick={cancelReset} className="flex-1">Cancel</GlassButton>
+                            <GlassButton variant="danger" onClick={verifyKey} className="flex-1">Verify</GlassButton>
+                        </div>
+                        </div>
+                    )}
 
-              {/* STEP 2: FINAL CONFIRMATION */}
-              {nuclearStep === 2 && (
-                <div className="space-y-6 animate-fade-in bg-red-950/20 p-6 rounded-xl border border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.2)]">
-                  <div className="text-center space-y-2">
-                      <AlertTriangle size={48} className="mx-auto text-red-500 animate-pulse"/>
-                      <h3 className="text-xl text-white font-bold uppercase tracking-wider">Final Warning</h3>
-                      <p className="text-sm text-red-300 px-4">
-                        Are you absolutely sure you want to wipe 
-                        <strong className="text-white block text-lg my-1">{selectedReset?.toUpperCase()}</strong>
-                        This action cannot be undone. History will be logged.
-                      </p>
-                  </div>
-                  
-                  <div className="flex flex-col gap-3">
-                    <button 
-                      onClick={executeReset} 
-                      className="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg transition-all scale-100 hover:scale-[1.02]"
-                    >
-                      YES, DELETE DATA
-                    </button>
-                    <button 
-                      onClick={cancelReset} 
-                      className="w-full py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2"
-                    >
-                      <XCircle size={16}/> ABORT MISSION
-                    </button>
-                  </div>
+                    {/* STEP 2: FINAL CONFIRMATION */}
+                    {nuclearStep === 2 && (
+                        <div className="space-y-6 animate-fade-in bg-red-950/20 p-6 rounded-xl border border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.2)]">
+                        <div className="text-center space-y-2">
+                            <AlertTriangle size={48} className="mx-auto text-red-500 animate-pulse"/>
+                            <h3 className="text-xl text-white font-bold uppercase tracking-wider">Final Warning</h3>
+                            <p className="text-sm text-red-300 px-4">
+                                Are you absolutely sure you want to wipe 
+                                <strong className="text-white block text-lg my-1">{selectedReset?.toUpperCase()}</strong>
+                                This action cannot be undone. History will be logged.
+                            </p>
+                        </div>
+                        
+                        <div className="flex flex-col gap-3">
+                            <button 
+                            onClick={executeReset} 
+                            className="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg transition-all scale-100 hover:scale-[1.02]"
+                            >
+                            YES, DELETE DATA
+                            </button>
+                            <button 
+                            onClick={cancelReset} 
+                            className="w-full py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+                            >
+                            <XCircle size={16}/> ABORT MISSION
+                            </button>
+                        </div>
+                        </div>
+                    )}
                 </div>
               )}
             </>

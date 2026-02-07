@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '../context/UserContext';
 import { useLedger, type ResetModule } from '../context/LedgerContext';
-import { generateSecurityPhrase } from '../utils/security'; // NEW IMPORT
+import { generateSecurityPhrase } from '../utils/security'; 
 
 // COMPONENTS
 import { GlassCard } from '../components/ui/GlassCard';
@@ -11,8 +11,9 @@ import { GlassButton } from '../components/ui/GlassButton';
 // ICONS
 import { 
   Settings as Gear, ShieldAlert, Landmark, Lock, 
-  Trash2, AlertTriangle, XCircle, Unlock, RefreshCw 
-} from 'lucide-react';
+  Trash2, AlertTriangle, XCircle, RefreshCw 
+} from 'lucide-react'; 
+// FIX: Removed 'Unlock' from imports above
 
 export const Settings = () => {
   const { user, updateProfile } = useUser();
@@ -204,7 +205,7 @@ export const Settings = () => {
           <h3 className="font-bold text-red-500 mb-4 flex items-center gap-2">
             <ShieldAlert size={18}/> Danger Zone: Factory Resets
           </h3>
-          
+
           {!hasMasterKey ? (
             <div className="space-y-4 animate-fade-in">
               <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-yellow-500 text-xs">
@@ -288,7 +289,7 @@ export const Settings = () => {
                                 <div className="font-bold text-white group-hover:text-red-400">Wipe Journal</div>
                                 <div className="text-[10px] text-gray-500">Deletes personal entries.</div>
                             </button>
-                            
+
                             <div className="md:col-span-2 mt-2">
                                 <button onClick={() => initiateReset('all')} className="w-full py-4 border border-red-500 text-red-500 hover:bg-red-500 hover:text-white rounded-xl text-sm font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2">
                                     <Trash2 size={16}/> Factory Reset (Total Wipe)
@@ -305,7 +306,7 @@ export const Settings = () => {
                             <p className="text-sm text-white font-bold uppercase">Security Check</p>
                             <p className="text-xs text-gray-400">Enter Master Key to proceed with {selectedReset?.toUpperCase()} Reset.</p>
                         </div>
-                        
+
                         <GlassInput 
                             type="password" 
                             placeholder="Enter Master Key" 
@@ -314,7 +315,7 @@ export const Settings = () => {
                             className="text-center border-red-500/50"
                             autoFocus
                         />
-                        
+
                         <div className="flex gap-2">
                             <GlassButton variant="ghost" onClick={cancelReset} className="flex-1">Cancel</GlassButton>
                             <GlassButton variant="danger" onClick={verifyKey} className="flex-1">Verify</GlassButton>
@@ -334,7 +335,7 @@ export const Settings = () => {
                                 This action cannot be undone. History will be logged.
                             </p>
                         </div>
-                        
+
                         <div className="flex flex-col gap-3">
                             <button 
                             onClick={executeReset} 

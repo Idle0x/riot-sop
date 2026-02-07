@@ -17,88 +17,153 @@ import { TreasuryVault } from '../components/signals/TreasuryVault';
 // UTILS
 import { formatNumber } from '../utils/format';
 import { getSectorStyle, generateAssetID } from '../utils/colors'; 
-import { transitionLifecycle } from '../utils/lifecycle'; 
+import { transitionLifecycle } from '../utils/lifecycle'; // NEW: Lifecycle Engine
 import { type Signal, type SignalPhase } from '../types';
 
 // ICONS
 import { 
   Zap, Maximize2, Skull, Archive, 
-  DollarSign, ArrowRight, ArrowLeft, Flame, Snowflake, Landmark, BookOpen 
+  DollarSign, ArrowRight, ArrowLeft, Flame, Snowflake, Landmark 
 } from 'lucide-react';
 
 export const Signals = () => {
   const navigate = useNavigate();
   const { signals, updateSignal, addSignal, commitAction } = useLedger();
 
-  // --- MODAL STATE ---
+  // --- STATE MANAGEMENT ---
   const [isDrillOpen, setIsDrillOpen] = useState(false);
   const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null); 
   const [showGraveyard, setShowGraveyard] = useState(false);
   const [showTreasury, setShowTreasury] = useState(false); 
   const [showManual, setShowManual] = useState(false); 
 
+  // Active Modals
   const [dossierSignal, setDossierSignal] = useState<Signal | null>(null);       
   const [killSignal, setKillSignal] = useState<Signal | null>(null); 
   const [promoteSignal, setPromoteSignal] = useState<{signal: Signal, phase: SignalPhase} | null>(null);
 
-  // --- ANALYTICS ENGINE ---
+  // --- ANALYTICS ---
   const analytics = useMemo(() => {
-    const total = signals.length;
+    const totalSignals = signals.length;
+    // Wins are signals that have generated revenue > 0
     const wins = signals.filter(s => s.totalGenerated > 0);
-    const winRate = total > 0 ? (wins.length / total) * 100 : 0;
-    
+    const winRate = totalSignals > 0 ? (wins.length / totalSignals) * 100 : 0;
+
     const sectors: Record<string, { count: number, value: number }> = {};
     signals.forEach(s => {
-      const sec = s.sector || 'Uncategorized';
-      if (!sectors[sec]) sectors[sec] = { count: 0, value: 0 };
-      sectors[sec].count++;
-      sectors[sec].value += s.totalGenerated;
+      const sector = s.sector || 'Uncategorized';
+      if (!sectors[sector]) sectors[sector] = { count: 0, value: 0 };
+      sectors[sector].count++;
+      sectors[sector].value += s.totalGenerated;
     });
 
     const bestSector = Object.entries(sectors).sort((a, b) => b[1].value - a[1].value)[0];
     return { winRate, bestSector };
   }, [signals]);
 
-  // --- CORE HANDLERS ---
+  // --- NERVOUS SYSTEM ---
   const handleManualAction = (actionId: string) => {
     if (actionId === 'open_drill') setIsDrillOpen(true);
     if (actionId === 'open_triage') navigate('/triage');
   };
 
-  const handleHarvestClick = (signal: Signal) => {
-    // Deep-links the amount if known, or just the source ID
-    navigate(`/triage?source=${encodeURIComponent(signal.id)}`);
+  // --- ACTIONS ---
+
+  const handleDossierUpdate = async (updatedSignal: Signal, logContent: string) => {
+    updateSignal(updatedSignal);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+        await supabase.from('signal_logs').insert({
+          signal_id: updatedSignal.id,
+          user_id: user.id,
+          type: 'FIELD_REPORT',
+          content: logContent
+        });
+    }
+
+    commitAction({
+      date: new Date().toISOString(),
+      type: 'SIGNAL_UPDATE',
+      title: `Updated: ${updatedSignal.title}`,
+      description: logContent,
+      linkedSignalId: updatedSignal.id
+    });
   };
 
-  const initiateMove = (signal: Signal, currentPhase: SignalPhase, direction: 'next' | 'prev') => {
-    const activeColumns: SignalPhase[] = ['discovery', 'validation', 'contribution', 'delivered'];
-    const currentIndex = activeColumns.indexOf(currentPhase);
-    const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+  const handleCreateFromDrill = (data: Partial<Signal>) => {
+    if (!data.title) { alert("Title required"); return; }
 
+    const now = new Date().toISOString();
+
+    // Initialize Lifecycle
+    const initialLifecycle = [{
+        phase: 'discovery' as SignalPhase,
+        enteredAt: now,
+        hoursAtEntry: 0,
+        notes: 'Signal Created'
+    }];
+
+    addSignal({
+        title: data.title,
+        sector: data.sector || 'General',
+        phase: 'discovery',
+        confidence: data.confidence || 5,
+        effort: 'low',
+        hoursLogged: 0,
+        totalGenerated: 0,
+        redFlags: [],
+        proofOfWork: [],
+        thesis: { alpha: '', catalyst: '', invalidation: '', expectedValue: 0 },
+        research: { links: {}, token: { status: 'none' }, findings: '', pickReason: '', drillNotes: {} },
+        timeline: [],
+        createdAt: now,
+        updatedAt: now,
+        lifecycle: initialLifecycle, // Initialize History
+        ...data as any
+    });
+    setIsDrillOpen(false);
+  };
+
+  // UPDATED: Handle both Forward (Next) and Backward (Prev) movements
+  const initiateMove = (signal: Signal, currentPhase: SignalPhase, direction: 'next' | 'prev') => {
+    const currentIndex = activeColumns.findIndex(c => c.id === currentPhase);
+
+    let nextIndex = -1;
+    if (direction === 'next') nextIndex = currentIndex + 1;
+    if (direction === 'prev') nextIndex = currentIndex - 1;
+
+    // Boundary Check
     if (nextIndex >= 0 && nextIndex < activeColumns.length) {
-       setPromoteSignal({ signal, phase: activeColumns[nextIndex] });
+       const nextPhase = activeColumns[nextIndex].id;
+       setPromoteSignal({ signal, phase: nextPhase });
     }
   };
 
   const confirmMove = (notes: string, addedHours: number) => {
     if (!promoteSignal) return;
     const { signal, phase } = promoteSignal;
-    const newHours = (signal.hoursLogged || 0) + addedHours;
-    const updatedLifecycle = transitionLifecycle(signal, phase, newHours, notes);
+    const newTotalHours = (signal.hoursLogged || 0) + addedHours;
 
+    // 1. Calculate new Lifecycle Array using Utility
+    const updatedLifecycle = transitionLifecycle(signal, phase, newTotalHours, notes);
+
+    // 2. Update Signal
     updateSignal({ 
         ...signal, 
         phase, 
-        hoursLogged: newHours,
+        hoursLogged: newTotalHours,
         lifecycle: updatedLifecycle, 
         updatedAt: new Date().toISOString() 
     });
 
+    const isRegress = activeColumns.findIndex(c => c.id === phase) < activeColumns.findIndex(c => c.id === signal.phase);
+
     commitAction({
       date: new Date().toISOString(),
       type: 'SIGNAL_ADVANCE',
-      title: `Phase Shift: ${signal.title}`,
-      description: `Moved to ${phase.toUpperCase()} | ${notes}`,
+      title: isRegress ? `Regressed: ${signal.title}` : `Advanced: ${signal.title}`,
+      description: `To ${phase} | ${notes}`,
       linkedSignalId: signal.id
     });
     setPromoteSignal(null);
@@ -106,10 +171,37 @@ export const Signals = () => {
 
   const confirmKill = (outcome: any) => {
     if (!killSignal) return;
-    const updatedLifecycle = transitionLifecycle(killSignal, 'graveyard', killSignal.hoursLogged || 0, outcome.reason);
-    updateSignal({ ...killSignal, phase: 'graveyard', outcome, lifecycle: updatedLifecycle, updatedAt: new Date().toISOString() });
-    commitAction({ date: new Date().toISOString(), type: 'SIGNAL_KILL', title: `Killed: ${killSignal.title}`, description: outcome.reason, linkedSignalId: killSignal.id });
+
+    // 1. Transition to 'graveyard' phase
+    const updatedLifecycle = transitionLifecycle(
+        killSignal, 
+        'graveyard', 
+        killSignal.hoursLogged || 0, 
+        `Killed: ${outcome.reason}`
+    );
+
+    updateSignal({ 
+        ...killSignal, 
+        phase: 'graveyard', 
+        outcome,
+        lifecycle: updatedLifecycle,
+        updatedAt: new Date().toISOString() 
+    });
+
+    commitAction({ 
+        date: new Date().toISOString(), 
+        type: 'SIGNAL_KILL', 
+        title: `Killed: ${killSignal.title}`, 
+        description: `${outcome.status}: ${outcome.reason}`, 
+        linkedSignalId: killSignal.id 
+    });
     setKillSignal(null);
+    setSelectedSignalId(null);
+  };
+
+  // UPDATED: Redirect to Triage
+  const handleHarvestClick = (signal: Signal) => {
+    navigate(`/triage?amount=${signal.totalGenerated}&source=${encodeURIComponent(signal.id)}`);
   };
 
   const activeColumns: { id: SignalPhase; label: string; color: string }[] = [
@@ -120,91 +212,149 @@ export const Signals = () => {
   ];
 
   return (
-    <div className="h-[calc(100vh-100px)] flex flex-col p-4 md:p-8 pb-20 overflow-hidden" onClick={() => setSelectedSignalId(null)}>
-      
-      {/* MODALS */}
-      {isDrillOpen && <DrillModeModal onClose={() => setIsDrillOpen(false)} onSave={(data) => { addSignal(data as any); setIsDrillOpen(false); }} />}
-      {dossierSignal && <SignalDossierModal signal={dossierSignal} onClose={() => setDossierSignal(null)} onUpdate={(s) => updateSignal(s)}/>}
+    <div className="h-[calc(100vh-100px)] flex flex-col p-4 md:p-8 pb-20" onClick={() => setSelectedSignalId(null)}>
+
+      {/* --- MODAL MANAGER --- */}
+      {isDrillOpen && <DrillModeModal onClose={() => setIsDrillOpen(false)} onSave={handleCreateFromDrill} />}
+      {dossierSignal && <SignalDossierModal signal={dossierSignal} onClose={() => setDossierSignal(null)} onUpdate={handleDossierUpdate}/>}
       {killSignal && <ClosureModal signal={killSignal} onClose={() => setKillSignal(null)} onConfirm={confirmKill} />}
       {promoteSignal && <TransitionWizard signal={promoteSignal.signal} targetPhase={promoteSignal.phase} onClose={() => setPromoteSignal(null)} onConfirm={confirmMove} />}
-      {showGraveyard && <GraveyardVault onClose={() => setShowGraveyard(false)} onRevive={(s) => updateSignal({...s, phase: 'discovery'})} />}
+      {showGraveyard && <GraveyardVault onClose={() => setShowGraveyard(false)} onRevive={(s) => { updateSignal({...s, phase: 'discovery'}); setShowGraveyard(false); }} />}
       {showTreasury && <TreasuryVault onClose={() => setShowTreasury(false)} />}
       <OperatorsManual isOpen={showManual} onClose={() => setShowManual(false)} onAction={handleManualAction} />
 
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between md:items-end gap-6 mb-8">
+      {/* --- HEADER --- */}
+      <div className="flex flex-col md:flex-row justify-between md:items-end gap-6 mb-6">
         <div>
-           <h1 className="text-3xl font-bold text-white tracking-tight">Deal Flow</h1>
-           <div className="flex gap-4 text-[10px] mt-2 font-mono uppercase tracking-widest text-gray-500">
-             <span>Win Rate: <b className="text-green-400">{analytics.winRate.toFixed(1)}%</b></span>
-             {analytics.bestSector && <span>Alpha: <b className="text-blue-400">{analytics.bestSector[0]}</b></span>}
+           <h1 className="text-3xl font-bold text-white mb-2">Deal Flow</h1>
+           <div className="flex gap-4 text-xs">
+             <div className="flex items-center gap-2">
+               <span className="text-gray-500">Win Rate:</span>
+               <span className="font-mono font-bold text-green-400">{analytics.winRate.toFixed(1)}%</span>
+             </div>
+             {analytics.bestSector && (
+               <div className="flex items-center gap-2">
+                 <span className="text-gray-500">Top Sector:</span>
+                 <span className="font-mono font-bold text-blue-400">{analytics.bestSector[0]} (${formatNumber(analytics.bestSector[1].value)})</span>
+               </div>
+             )}
            </div>
         </div>
 
         <div className="flex gap-2">
-          <GlassButton size="sm" variant="secondary" onClick={() => setShowTreasury(true)} className="text-yellow-400 border-yellow-500/20">
-             <Landmark size={14} className="mr-2"/> Treasury
+          <GlassButton size="sm" variant="secondary" onClick={() => setShowTreasury(true)} className="text-yellow-400 border-yellow-500/20 hover:bg-yellow-500/10">
+             <Landmark size={16} className="mr-2"/> Treasury
           </GlassButton>
           <GlassButton size="sm" variant="secondary" onClick={() => setShowGraveyard(true)}>
-             <Archive size={14} className="mr-2"/> Crypt
+             <Archive size={16} className="mr-2"/> The Crypt
           </GlassButton>
           <GlassButton size="sm" onClick={(e) => { e.stopPropagation(); setIsDrillOpen(true); }}>
-             <Zap size={14} className="mr-2"/> New Drill
+             <Zap size={16} className="mr-2"/> New Drill
           </GlassButton>
         </div>
       </div>
 
-      {/* BOARD */}
-      <div className="flex-1 flex gap-6 overflow-x-auto pb-12">
+      {/* --- KANBAN BOARD --- */}
+      <div className="flex-1 flex gap-4 overflow-x-auto pb-12">
         {activeColumns.map(col => (
-          <div key={col.id} className="min-w-[320px] max-w-[320px] flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-2 border-b border-white/5">
-              <div className="flex items-center gap-2">
-                <div className={`w-1.5 h-1.5 rounded-full ${col.color} shadow-[0_0_8px] shadow-current`}/>
-                <span className="font-bold text-[10px] uppercase text-gray-400 tracking-tighter">{col.label}</span>
-              </div>
-              <span className="text-[10px] font-mono text-gray-600">{signals.filter(s => s.phase === col.id).length}</span>
+          <div key={col.id} className="min-w-[300px] flex flex-col gap-3">
+            <div className="flex items-center gap-2 pb-2 border-b border-white/10">
+              <div className={`w-2 h-2 rounded-full ${col.color}`}/>
+              <span className="font-bold text-xs uppercase text-gray-400">{col.label}</span>
             </div>
 
-            <div className="flex-1 space-y-4 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="flex-1 space-y-3 overflow-y-auto pb-20">
               {signals.filter(s => s.phase === col.id).map(s => {
                 const isSelected = selectedSignalId === s.id;
-                const sector = getSectorStyle(s.sector);
+                const sectorStyle = getSectorStyle(s.sector);
                 const assetID = generateAssetID(s.title, s.createdAt);
-                
-                // Activity Logic
-                const daysInactive = (new Date().getTime() - new Date(s.updatedAt).getTime()) / (1000*60*60*24);
+
+                const now = new Date().getTime();
+                const lastActive = new Date(s.lastSessionAt || s.updatedAt).getTime();
+                const daysInactive = (now - lastActive) / (1000 * 60 * 60 * 24);
                 const isStale = daysInactive > 14;
+                const isMissingIntel = !s.research.links.website || !s.research.findings || s.research.findings.length < 50;
+                const isHot = !isStale && daysInactive < 3;
 
                 return (
                   <div key={s.id} onClick={(e) => { e.stopPropagation(); setSelectedSignalId(isSelected ? null : s.id); }}>
-                    <GlassCard className={`p-4 cursor-pointer relative transition-all duration-500 border-l-2 ${sector.border} ${isSelected ? 'ring-1 ring-white/20 bg-white/10' : ''} ${isStale ? 'opacity-50' : ''}`}>
-                      <div className="flex justify-between items-start mb-3">
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-tighter ${sector.bg} ${sector.text}`}>
-                          {s.sector}
-                        </span>
-                        <span className="text-[9px] font-mono text-gray-600 uppercase">{assetID}</span>
+                    <GlassCard 
+                        className={`
+                            p-4 cursor-pointer relative transition-all duration-300 border-l-4
+                            ${sectorStyle.border} ${sectorStyle.shadow}
+                            ${isStale ? 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0' : 'hover:bg-white/5'}
+                            ${isSelected ? 'scale-[1.02] z-10 bg-white/10' : ''}
+                        `}
+                    >
+                      <div className="absolute top-2 right-2 text-[10px] font-mono text-gray-600 tracking-wider opacity-50">
+                          {assetID}
                       </div>
 
-                      <h4 className="font-bold text-white text-sm mb-4 line-clamp-1">{s.title}</h4>
+                      <div className="flex gap-1 absolute top-2 right-12">
+                          {isHot && <div title="Hot Streak"><Flame size={12} className="text-orange-500 animate-pulse"/></div>}
+                          {isStale && <div title="Stale / Frozen"><Snowflake size={12} className="text-blue-300"/></div>}
+                          {isMissingIntel && <div title="Incomplete Data" className="w-2 h-2 bg-orange-500 rounded-full animate-pulse mt-1"/>}
+                      </div>
 
-                      <div className="flex justify-between items-center text-[10px] font-mono">
-                        <div className="flex items-center gap-2">
-                           {daysInactive < 3 && <Flame size={12} className="text-orange-500 animate-pulse"/>}
-                           <span className="text-gray-500">{s.hoursLogged}h</span>
+                      {s.totalGenerated > 0 && (
+                        <div className={`absolute top-2 left-3 z-20 ${sectorStyle.bg} ${sectorStyle.text} text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm`}>
+                          ${formatNumber(s.totalGenerated)}
                         </div>
-                        {s.totalGenerated > 0 && <span className="text-green-400 font-bold">${formatNumber(s.totalGenerated)}</span>}
+                      )}
+
+                      <h4 className={`font-bold text-white text-sm mb-2 mt-4 truncate pr-8 ${isStale ? 'text-gray-400' : ''}`}>
+                          {s.title}
+                      </h4>
+
+                      <div className="flex justify-between items-center text-[10px]">
+                        <span className={`px-1.5 py-0.5 rounded font-mono ${sectorStyle.bg} ${sectorStyle.text}`}>
+                           {s.sector}
+                        </span>
+                        <span className={`${isMissingIntel ? 'text-orange-400' : s.confidence > 7 ? 'text-green-500' : 'text-gray-500'}`}>
+                           {s.confidence}/10 Conf
+                        </span>
                       </div>
 
                       {isSelected && (
-                        <div className="mt-4 pt-4 border-t border-white/5 space-y-3 animate-slide-up">
-                          <div className="flex gap-2">
-                             <button onClick={(e) => { e.stopPropagation(); initiateMove(s, col.id, 'prev'); }} disabled={col.id === 'discovery'} className="p-2 bg-white/5 rounded-lg text-gray-400 hover:text-white disabled:opacity-0"><ArrowLeft size={14}/></button>
-                             <button onClick={(e) => { e.stopPropagation(); setDossierSignal(s); }} className="flex-1 bg-white/10 hover:bg-white/20 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-2"><Maximize2 size={12}/> Dossier</button>
-                             <button onClick={(e) => { e.stopPropagation(); handleHarvestClick(s); }} className="p-2 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500/20"><DollarSign size={14}/></button>
-                             <button onClick={(e) => { e.stopPropagation(); initiateMove(s, col.id, 'next'); }} disabled={col.id === 'delivered'} className="p-2 bg-white/5 rounded-lg text-gray-400 hover:text-white disabled:opacity-0"><ArrowRight size={14}/></button>
-                          </div>
-                          <button onClick={(e) => { e.stopPropagation(); setKillSignal(s); }} className="w-full text-[10px] text-red-500/50 hover:text-red-500 flex items-center justify-center gap-1 py-1"><Skull size={10}/> TERMINATE SIGNAL</button>
+                        <div className="mt-4 pt-3 border-t border-white/10 flex flex-col gap-2 animate-fade-in">
+                           <div className="flex justify-between items-center gap-2">
+
+                             {col.id !== 'discovery' && (
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); initiateMove(s, col.id, 'prev'); }} 
+                                    className="text-xs font-bold text-orange-400 hover:text-white bg-orange-500/10 hover:bg-orange-500/30 px-3 py-1.5 rounded-lg border border-orange-500/20"
+                                    title="Regress Phase"
+                                >
+                                    <ArrowLeft size={14} />
+                                </button>
+                             )}
+
+                             <button onClick={(e) => { e.stopPropagation(); setDossierSignal(s); }} className="flex-1 text-xs font-bold text-white bg-green-600/20 hover:bg-green-600/40 px-3 py-1.5 rounded-lg flex items-center justify-center gap-2 border border-green-500/30">
+                               <Maximize2 size={12}/> Dossier
+                             </button>
+
+                             <button 
+                                onClick={(e) => { e.stopPropagation(); handleHarvestClick(s); }} 
+                                className="text-xs font-bold text-green-400 hover:text-white bg-green-500/10 hover:bg-green-500/30 px-3 py-1.5 rounded-lg border border-green-500/20"
+                                title="Harvest (Go to Triage)"
+                             >
+                                <DollarSign size={14} />
+                             </button>
+
+                             {col.id !== 'delivered' && (
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); initiateMove(s, col.id, 'next'); }} 
+                                    className="text-xs font-bold text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500/30 px-3 py-1.5 rounded-lg border border-blue-500/20"
+                                    title="Advance Phase"
+                                >
+                                    <ArrowRight size={14} />
+                                </button>
+                             )}
+                           </div>
+
+                           <button onClick={(e) => { e.stopPropagation(); setKillSignal(s); }} className="text-[10px] text-red-500 hover:text-red-400 flex items-center justify-center gap-1 w-full pt-1">
+                             <Skull size={12}/> Kill / End Signal
+                           </button>
                         </div>
                       )}
                     </GlassCard>
@@ -216,18 +366,17 @@ export const Signals = () => {
         ))}
       </div>
 
-      {/* OPERATING MANUAL BAR */}
+      {/* --- FOOTER MANUAL TRIGGER --- */}
       <div 
         onClick={() => setShowManual(true)}
-        className="fixed bottom-0 left-0 right-0 h-10 bg-black/90 backdrop-blur-xl border-t border-white/10 flex items-center justify-between px-6 cursor-pointer group z-50 hover:bg-zinc-900 transition-all"
+        className="fixed bottom-0 left-0 right-0 h-12 bg-black/80 backdrop-blur-md border-t border-white/10 flex items-center justify-between px-6 cursor-pointer hover:bg-black/90 transition-colors z-40 group"
       >
-        <div className="flex items-center gap-4">
-          <BookOpen size={14} className="text-gray-500 group-hover:text-green-400 transition-colors"/>
-          <span className="text-[10px] font-bold tracking-[0.2em] text-gray-500 group-hover:text-gray-200">OPERATOR'S MANUAL V2.0 // SYSTEM READY</span>
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"/>
+          <span className="text-xs font-bold tracking-widest text-gray-400 group-hover:text-white transition-colors">SIGNAL OPERATOR'S MANUAL [v2.0]</span>
         </div>
-        <div className="flex items-center gap-4">
-            <span className="text-[9px] font-mono text-gray-700">LVL_{analytics.winRate > 50 ? 'ELITE' : 'OPERATIVE'}</span>
-            <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]"/>
+        <div className="text-[10px] text-gray-600 font-mono hidden md:block">
+          SYSTEM_READY // CLICK_TO_INIT
         </div>
       </div>
 

@@ -5,7 +5,7 @@ import {
   ShieldAlert, Wrench, Archive, Zap, ArrowRight, Copy 
 } from 'lucide-react';
 
-// Define the Chapter Structure Types
+// --- DATA STRUCTURE ---
 interface ManualBlock {
   type: 'header' | 'action' | 'section' | 'callout' | 'card_grid' | 'code_block' | 'table' | 'accordion' | 'process_flow';
   [key: string]: any;
@@ -18,18 +18,14 @@ interface ManualChapter {
   content: ManualBlock[];
 }
 
-// --- CONTENT DATA ---
+// --- FULL CONTENT DATA ---
 export const MANUAL_CHAPTERS: ManualChapter[] = [
   {
     id: 'manifesto',
     title: 'I. The Manifesto',
     icon: 'Anchor',
     content: [
-      {
-        type: 'header',
-        text: 'The 4 Core Rules',
-        description: 'My operating philosophy.'
-      },
+      { type: 'header', text: 'The 4 Core Rules', description: 'My operating philosophy.' },
       {
         type: 'card_grid',
         items: [
@@ -56,11 +52,7 @@ export const MANUAL_CHAPTERS: ManualChapter[] = [
     title: 'II. The Engine',
     icon: 'Activity',
     content: [
-      {
-        type: 'header',
-        text: 'The Hunter-Creator Loop',
-        description: 'The two-part engine my daily habits serve.'
-      },
+      { type: 'header', text: 'The Hunter-Creator Loop', description: 'The two-part engine my daily habits serve.' },
       {
         type: 'process_flow',
         steps: [
@@ -88,17 +80,8 @@ export const MANUAL_CHAPTERS: ManualChapter[] = [
     title: 'III. The Gym',
     icon: 'Dumbbell',
     content: [
-      {
-        type: 'header',
-        text: 'The 10 Skills',
-        description: 'Menu for "Block 3: Skill Grind". Pick one to build your weekly asset.'
-      },
-      {
-        type: 'action',
-        actionId: 'open_drill',
-        label: '⚡ Initiate New Drill Sequence',
-        variant: 'primary'
-      },
+      { type: 'header', text: 'The 10 Skills', description: 'Menu for "Block 3: Skill Grind". Pick one to build your weekly asset.' },
+      { type: 'action', actionId: 'open_drill', label: '⚡ Initiate New Drill Sequence', variant: 'primary' },
       {
         type: 'accordion',
         items: [
@@ -114,17 +97,8 @@ export const MANUAL_CHAPTERS: ManualChapter[] = [
     title: 'IV. The Filters',
     icon: 'ShieldAlert',
     content: [
-      {
-        type: 'header',
-        text: 'Red Flag Library',
-        description: 'If you see these, RUN. Do not "fix" them.'
-      },
-      {
-        type: 'action',
-        actionId: 'open_triage',
-        label: '💸 Go to Triage (Secure Funds)',
-        variant: 'secondary'
-      },
+      { type: 'header', text: 'Red Flag Library', description: 'If you see these, RUN. Do not "fix" them.' },
+      { type: 'action', actionId: 'open_triage', label: '💸 Go to Triage (Secure Funds)', variant: 'secondary' },
       {
         type: 'card_grid',
         variant: 'danger',
@@ -145,11 +119,7 @@ export const MANUAL_CHAPTERS: ManualChapter[] = [
     title: 'V. The Toolkit',
     icon: 'Wrench',
     content: [
-      {
-        type: 'header',
-        text: 'Communication Templates',
-        description: 'Copy, paste, edit. Don\'t start from blank.'
-      },
+      { type: 'header', text: 'Communication Templates', description: 'Copy, paste, edit. Don\'t start from blank.' },
       {
         type: 'code_block',
         label: 'Discovery Post (X/Twitter)',
@@ -162,21 +132,13 @@ export const MANUAL_CHAPTERS: ManualChapter[] = [
     title: 'VII. Protocol Z',
     icon: 'Archive',
     content: [
-      {
-        type: 'header',
-        text: 'Maintenance & Compliance',
-        description: 'How to survive the game (Burnout & Taxes).'
-      },
+      { type: 'header', text: 'Maintenance & Compliance', description: 'How to survive the game (Burnout & Taxes).' },
       {
         type: 'section',
         title: 'The Burnout Protocol',
         body: `1. **Liquidate:** Close high-maintenance positions.\n2. **Disconnect:** Unfollow all "News" accounts.\n3. **Touch Grass:** 3 days minimum.`
       },
-      {
-        type: 'callout',
-        variant: 'warning',
-        text: 'NTA 2026 Tax Doctrine (Nigeria Context)',
-      },
+      { type: 'callout', variant: 'warning', text: 'NTA 2026 Tax Doctrine (Nigeria Context)' },
       {
         type: 'table',
         headers: ['Income Band', 'Tax Rate'],
@@ -208,11 +170,12 @@ interface Props {
 export const OperatorsManual = ({ isOpen, onClose, initialChapterId, onAction }: Props) => {
   const [activeChapterId, setActiveChapterId] = useState(initialChapterId || MANUAL_CHAPTERS[0].id);
 
+  // Deep Link Observer
   useEffect(() => { 
-    if (initialChapterId) {
+    if (initialChapterId && isOpen) {
       setActiveChapterId(initialChapterId);
     }
-  }, [initialChapterId]);
+  }, [initialChapterId, isOpen]);
 
   const activeChapter = MANUAL_CHAPTERS.find(c => c.id === activeChapterId) || MANUAL_CHAPTERS[0];
 
@@ -231,40 +194,36 @@ export const OperatorsManual = ({ isOpen, onClose, initialChapterId, onAction }:
   return (
     <div 
       className={`
-        fixed inset-0 z-[200] 
-        transition-transform duration-500 ease-in-out 
-        flex flex-col 
-        bg-black/95 backdrop-blur-xl 
+        fixed inset-0 z-[200] flex flex-col bg-black/95 backdrop-blur-xl 
+        transition-transform duration-500 ease-in-out
         ${isOpen ? 'translate-y-0' : 'translate-y-full'}
       `}
     >
       <button 
         onClick={onClose} 
-        className="absolute top-6 right-6 z-[210] p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors shadow-lg border border-white/10"
-        title="Close Manual"
+        className="absolute top-6 right-6 z-[210] p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors border border-white/10"
       >
         <X size={24}/>
       </button>
 
       <div className="flex-1 flex flex-col md:flex-row max-w-7xl mx-auto w-full md:p-8 overflow-hidden pt-16 md:pt-8">
-
+        
         {/* SIDEBAR NAVIGATION */}
-        <div className="w-full md:w-1/4 md:h-full border-b md:border-b-0 md:border-r border-white/10 overflow-y-auto p-4 bg-black/40 md:bg-transparent shrink-0">
+        <div className="w-full md:w-1/4 border-b md:border-b-0 md:border-r border-white/10 overflow-y-auto p-4 bg-black/40 md:bg-transparent shrink-0">
           <div className="mb-6 hidden md:block">
             <h2 className="text-2xl font-bold text-white">The Codex</h2>
             <p className="text-xs text-gray-500 uppercase tracking-widest mt-1">Operator's Manual v2.0</p>
           </div>
-
-          <div className="space-y-2 flex flex-row md:flex-col overflow-x-auto md:overflow-visible pb-2 md:pb-0 gap-2 md:gap-0">
+          <div className="space-y-2 flex flex-row md:flex-col overflow-x-auto gap-2 md:gap-0">
             {MANUAL_CHAPTERS.map(chapter => (
               <button 
                 key={chapter.id} 
                 onClick={() => setActiveChapterId(chapter.id)} 
                 className={`
-                  w-auto md:w-full flex items-center justify-between p-3 md:p-4 rounded-xl border transition-all whitespace-nowrap md:whitespace-normal
+                  w-auto md:w-full flex items-center justify-between p-3 md:p-4 rounded-xl border transition-all whitespace-nowrap
                   ${activeChapterId === chapter.id 
                     ? 'bg-white/10 border-white/20 text-white shadow-lg' 
-                    : 'bg-transparent border-transparent text-gray-500 hover:text-gray-300 hover:bg-white/5'}
+                    : 'bg-transparent border-transparent text-gray-500 hover:text-white hover:bg-white/5'}
                 `}
               >
                 <div className="flex items-center gap-3">
@@ -277,12 +236,11 @@ export const OperatorsManual = ({ isOpen, onClose, initialChapterId, onAction }:
           </div>
         </div>
 
-        {/* CONTENT AREA */}
+        {/* CONTENT RENDERING ENGINE */}
         <div className="flex-1 h-full overflow-y-auto p-6 md:pl-12 pb-32">
           <div className="max-w-3xl mx-auto space-y-8 animate-fade-in">
             {activeChapter.content.map((block: any, idx: number) => (
               <div key={idx}>
-
                 {block.type === 'header' && (
                   <div className="mb-6 border-b border-white/10 pb-4">
                     <h1 className="text-3xl font-bold text-white mb-2">{block.text}</h1>
@@ -308,7 +266,7 @@ export const OperatorsManual = ({ isOpen, onClose, initialChapterId, onAction }:
                 )}
 
                 {block.type === 'callout' && (
-                  <div className={`p-4 rounded-xl border-l-4 mb-4 ${block.variant === 'success' ? 'bg-green-500/10 border-green-500 text-green-300' : block.variant === 'warning' ? 'bg-yellow-500/10 border-yellow-500 text-yellow-300' : 'bg-blue-500/10 border-blue-500 text-blue-300'}`}>
+                  <div className={`p-4 rounded-xl border-l-4 mb-4 ${block.variant === 'success' ? 'bg-green-500/10 border-green-500 text-green-300' : 'bg-yellow-500/10 border-yellow-500 text-yellow-300'}`}>
                     <p className="font-bold text-sm italic">"{block.text}"</p>
                   </div>
                 )}
@@ -332,19 +290,17 @@ export const OperatorsManual = ({ isOpen, onClose, initialChapterId, onAction }:
                         <Copy size={12}/> Copy
                       </button>
                     </div>
-                    <pre className="bg-black/50 p-4 rounded-xl border border-white/10 text-xs text-gray-300 font-mono whitespace-pre-wrap overflow-x-auto">
-                      {block.code}
-                    </pre>
+                    <pre className="bg-black/50 p-4 rounded-xl border border-white/10 text-xs text-gray-300 font-mono whitespace-pre-wrap overflow-x-auto">{block.code}</pre>
                   </div>
                 )}
 
                 {block.type === 'table' && (
                   <div className="overflow-x-auto mb-6 rounded-xl border border-white/10">
-                    <table className="w-full text-left">
-                      <thead className="bg-white/10 text-white text-xs uppercase">
+                    <table className="w-full text-left text-sm text-gray-300">
+                      <thead className="bg-white/10 text-white uppercase text-xs">
                         <tr>{block.headers?.map((h: string, i: number) => (<th key={i} className="p-3 font-bold">{h}</th>))}</tr>
                       </thead>
-                      <tbody className="divide-y divide-white/5 text-sm text-gray-300">
+                      <tbody className="divide-y divide-white/5">
                         {block.rows?.map((row: string[], r: number) => (
                           <tr key={r} className="hover:bg-white/5">
                             {row.map((cell, c) => (<td key={c} className="p-3">{cell}</td>))}
@@ -376,7 +332,7 @@ export const OperatorsManual = ({ isOpen, onClose, initialChapterId, onAction }:
                                     <p className="text-xs text-gray-400 mb-2">{step.desc}</p>
                                     <div className="flex gap-2">
                                         {step.tools.map((t: any, k: number) => (
-                                            <a key={k} href={t.url} target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 hover:text-white border border-blue-400/30 px-2 py-0.5 rounded hover:bg-blue-400/20 transition-colors">
+                                            <a key={k} href={t.url} target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 hover:text-white border border-blue-400/30 px-2 py-0.5 rounded hover:bg-blue-400/20">
                                                 {t.label}
                                             </a>
                                         ))}
@@ -386,7 +342,6 @@ export const OperatorsManual = ({ isOpen, onClose, initialChapterId, onAction }:
                         ))}
                     </div>
                 )}
-
               </div>
             ))}
           </div>

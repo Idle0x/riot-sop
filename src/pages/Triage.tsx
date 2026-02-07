@@ -37,8 +37,8 @@ export const Triage = () => {
   // --- STATE 2: FORM DATA ---
   const [step, setStep] = useState(1);
   const [showHistory, setShowHistory] = useState(false); 
-  
-  // Manual Modal State
+
+  // Manual & Protocol State
   const [showManual, setShowManual] = useState(false);
   const [manualChapter, setManualChapter] = useState<string | undefined>(undefined);
 
@@ -46,7 +46,7 @@ export const Triage = () => {
   const [amountUSD, setAmountUSD] = useState('');
   const [costBasisUSD, setCostBasisUSD] = useState('0'); 
   const [selectedSignalId, setSelectedSignalId] = useState('');
-
+  
   // Tax Sliders
   const [taxProvision, setTaxProvision] = useState(0); 
   const [ventureTax, setVentureTax] = useState(0);
@@ -58,7 +58,7 @@ export const Triage = () => {
   const [allocations, setAllocations] = useState<Record<string, number>>({});
 
   // --- SILENCE PROTOCOL STATE ---
-  const BIG_DROP_THRESHOLD = 10000;
+  const BIG_DROP_THRESHOLD = 10000; // $10k Trigger
   const [showSilenceProtocol, setShowSilenceProtocol] = useState(false);
   const [silenceChecks, setSilenceChecks] = useState({
     silence: false, // Told no one
@@ -73,7 +73,8 @@ export const Triage = () => {
 
     if (paramAmount) setAmountUSD(paramAmount);
     if (paramSource) {
-      const found = signals.find(s => s.title === paramSource);
+      // Support matching by Title (Legacy) or ID (New)
+      const found = signals.find(s => s.id === paramSource || s.title === paramSource);
       if (found) setSelectedSignalId(found.id);
     }
   }, [searchParams, signals]);
@@ -88,7 +89,7 @@ export const Triage = () => {
 
   // Tax Calculations
   const profitNGN = Math.max(0, (dropUSD - costUSD) * rateVal);
-
+  
   const calculateTaxEstimate = (profit: number) => {
     const annualRent = user?.annualRent || 0;
     const rentRelief = Math.min(500000, annualRent * 0.20);
@@ -111,7 +112,7 @@ export const Triage = () => {
     }
     return profit > 0 ? (tax / profit) * 100 : 0;
   };
-
+  
   const estTaxPercent = calculateTaxEstimate(profitNGN);
 
   const taxAmount = sourceFunds * (taxProvision / 100);
@@ -144,17 +145,8 @@ export const Triage = () => {
   };
 
   const openProtocol = () => {
-    setManualChapter('protocol_z'); // Specific deep link to Chapter VII
+    setManualChapter('protocol_z'); // Deep link to Chapter VII
     setShowManual(true);
-  };
-
-  const handleNextStep = () => {
-      // INTERCEPTION LOGIC
-      if (isBigDrop && (!silenceChecks.silence || !silenceChecks.time || !silenceChecks.clarity)) {
-          setShowSilenceProtocol(true);
-          return;
-      }
-      setStep(2);
   };
 
   const autoDistribute = () => {
@@ -166,26 +158,55 @@ export const Triage = () => {
     setAllocations(newAlloc);
   };
 
+  const handleNextStep = () => {
+      // INTERCEPTION LOGIC: Silence Protocol
+      if (isBigDrop && (!silenceChecks.silence || !silenceChecks.time || !silenceChecks.clarity)) {
+          setShowSilenceProtocol(true);
+          return;
+      }
+      setStep(2);
+  };
+
   const handleCommit = () => {
     const timestamp = new Date().toISOString();
     const signal = signals.find(s => s.id === selectedSignalId);
-
-    // 1. MASTER LOG
+    
+    // 1. MASTER LOG (With Snapshot Logic)
     if (dropUSD > 0) {
+      
+      // SNAPSHOT: Capture the state of the asset at this exact moment
+      const snapshot = signal ? {
+          phase: signal.phase,
+          hoursLogged: signal.hoursLogged || 0,
+          efficiency: (signal.hoursLogged || 0) > 0 ? dropUSD / (signal.hoursLogged || 1) : 0,
+          sector: signal.sector
+      } : null;
+
       commitAction({
         date: timestamp,
         type: 'TRIAGE_SESSION',
         title: isBigDrop ? `BIG DROP: $${formatNumber(dropUSD)}` : `Income Drop: $${formatNumber(dropUSD)}`,
         description: `Source: ${signal?.title || 'External'} @ ₦${rateVal}/$`,
         amount: grossNGN,
-        linkedSignalId: selectedSignalId,
-        tags: isBigDrop ? ['big_drop', 'protocol_verified'] : []
+        linkedSignalId: selectedSignalId || null,
+        tags: isBigDrop ? ['big_drop', 'protocol_verified'] : [],
+        metadata: snapshot // Store the snapshot for The Treasury
       });
-      if (signal) updateSignal({ ...signal, totalGenerated: signal.totalGenerated + dropUSD, updatedAt: timestamp });
+
+      // Update Signal Revenue
+      if (signal) {
+          updateSignal({ 
+              ...signal, 
+              totalGenerated: (signal.totalGenerated || 0) + dropUSD, 
+              updatedAt: timestamp 
+          });
+      }
     }
 
     // 2. FUND MOVEMENTS
+    // Credit Holding with Drop
     if (dropUSD > 0) updateAccount('holding', grossNGN); 
+    // Debit Holding for Allocation
     updateAccount('holding', -sourceFunds); 
 
     // Tax Shield
@@ -193,10 +214,10 @@ export const Triage = () => {
       updateAccount('vault', taxAmount); 
       commitAction({ date: timestamp, type: 'TRANSFER', title: 'Tax Shield Stashed', amount: taxAmount, tags: ['tax_nta2026'] });
     }
-
+    
     // Venture Tax (Burn)
     if (ventureAmount > 0) commitAction({ date: timestamp, type: 'SPEND', title: 'Venture Tax Burned', amount: ventureAmount, tags: ['risk'] });
-
+    
     // Vault (Wealth Defense)
     if (vaultAmount > 0) {
       updateAccount('vault', vaultAmount);
@@ -240,7 +261,7 @@ export const Triage = () => {
 
       {/* --- MANUAL MODAL --- */}
       <OperatorsManual isOpen={showManual} onClose={() => setShowManual(false)} initialChapterId={manualChapter} />
-
+      
       {/* --- MODAL: SILENCE PROTOCOL (BIG DROP INTERCEPTOR) --- */}
       {showSilenceProtocol && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-fade-in">
@@ -293,13 +314,13 @@ export const Triage = () => {
           </div>
       )}
 
-      {/* --- MODAL: HISTORY --- */}
+      {/* --- MODAL: TRIAGE HISTORY --- */}
       {showHistory && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-fade-in">
           <GlassCard className="w-full max-w-md max-h-[70vh] flex flex-col relative">
             <button onClick={() => setShowHistory(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X size={20}/></button>
             <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><History size={20}/> Triage History</h3>
-
+            
             <div className="flex-1 overflow-y-auto space-y-3 pr-2">
               {triageHistory.length === 0 ? (
                 <div className="text-gray-500 text-sm text-center py-8">No triage sessions recorded yet.</div>
@@ -334,7 +355,7 @@ export const Triage = () => {
       </div>
 
       <GlassCard className="p-6">
-
+        
         {/* --- STEP 1: INGESTION --- */}
         {step === 1 && (
           <div className="space-y-6 animate-fade-in">
@@ -348,7 +369,7 @@ export const Triage = () => {
                   onChange={(e) => setRate(e.target.value)} 
                   className={rateError ? 'border-red-500/50' : ''}
                 />
-
+                
                 {/* THE HYBRID BUTTON */}
                 <button 
                   onClick={handleFetchRate}
@@ -371,15 +392,19 @@ export const Triage = () => {
 
             <div>
               <label className="text-xs font-bold text-gray-500 uppercase">Signal Source</label>
-              <select className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-white/30 transition-colors" value={selectedSignalId} onChange={(e) => setSelectedSignalId(e.target.value)}>
-                <option value="">Select Source...</option>
+              <select 
+                  className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-white/30 transition-colors" 
+                  value={selectedSignalId} 
+                  onChange={(e) => setSelectedSignalId(e.target.value)}
+              >
+                <option value="">External / Non-Signal</option>
                 {signals.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
               </select>
             </div>
 
             {/* Tax Sliders */}
             <div className="space-y-4 pt-2">
-                {/* 1. Tax Shield WITH CONTEXTUAL LINK */}
+                {/* 1. Tax Shield (Enhanced with Manual) */}
                 <div className="p-4 bg-slate-500/10 rounded-xl border border-slate-500/20">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-slate-400"><ShieldCheck size={16}/> Tax Shield (NTA 2026)</span>
@@ -391,7 +416,7 @@ export const Triage = () => {
                         </button>
                     </div>
                     <div className="flex justify-between mb-2">
-                       <span className="font-mono text-slate-300 text-xs">Rate: {taxProvision}%</span>
+                         <span className="font-mono text-slate-300 text-xs">Rate: {taxProvision}%</span>
                     </div>
                     <input type="range" min="0" max="25" value={taxProvision} onChange={(e) => setTaxProvision(Number(e.target.value))} className="w-full accent-slate-500 cursor-pointer"/>
                     <div className="flex justify-between mt-2">
@@ -466,7 +491,7 @@ export const Triage = () => {
               <p className="text-[10px] text-gray-500 mt-2 text-right">Extends operational life (Payroll).</p>
             </div>
 
-            {/* Generosity (Wallet Architecture) */}
+            {/* Generosity (New Wallet Architecture) */}
             <div className={`p-4 rounded-xl border transition-colors ${isGenerosityLocked ? 'bg-red-500/5 border-red-500/30' : isOverCap ? 'bg-red-500/10 border-red-500' : 'bg-white/5 border-white/10'}`}>
               <div className="flex justify-between mb-2">
                 <span className="flex items-center gap-2 font-bold text-white"><Heart size={16} className={isGenerosityLocked ? 'text-gray-500' : 'text-accent-info'}/> Generosity Wallet</span>

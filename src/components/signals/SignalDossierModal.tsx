@@ -4,8 +4,12 @@ import { GlassCard } from '../ui/GlassCard';
 import { GlassButton } from '../ui/GlassButton';
 import { GlassInput } from '../ui/GlassInput';
 import { formatNumber } from '../../utils/format';
-import { type Signal, type SignalPhase, type HistoryLog } from '../../types';
-import { X, AlertTriangle, ExternalLink, Wallet, ArrowDownRight, Clock, Calendar, Play } from 'lucide-react';
+import { type Signal, type SignalPhase, type HistoryLog, type LifecycleChapter } from '../../types';
+import { getDurationDays } from '../../utils/lifecycle'; 
+import { 
+  X, AlertTriangle, ExternalLink, Wallet, ArrowDownRight, 
+  Clock, Calendar, Play, Activity 
+} from 'lucide-react';
 
 interface Props {
   signal: Signal;
@@ -14,10 +18,11 @@ interface Props {
 }
 
 export const SignalDossierModal = ({ signal, onClose, onUpdate }: Props) => {
-  const [activeTab, setActiveTab] = useState<'INTEL' | 'TIMELINE' | 'TIMESHEET' | 'FINANCE'>('INTEL');
+  // Added 'LIFECYCLE' to the active tab state
+  const [activeTab, setActiveTab] = useState<'INTEL' | 'LIFECYCLE' | 'TIMESHEET' | 'TIMELINE' | 'FINANCE'>('INTEL');
   const [logs, setLogs] = useState<any[]>([]);
   const [incomeHistory, setIncomeHistory] = useState<HistoryLog[]>([]);
-  
+
   // Form State
   const [note, setNote] = useState('');
   const [newUrl, setNewUrl] = useState(signal.research.links.website || '');
@@ -52,6 +57,13 @@ export const SignalDossierModal = ({ signal, onClose, onUpdate }: Props) => {
     };
     fetchData();
   }, [signal.id]);
+
+  // Helper to calculate effort for a specific chapter
+  const getPhaseEffort = (chapter: LifecycleChapter) => {
+    const start = chapter.hoursAtEntry || 0;
+    const end = chapter.hoursAtExit || (signal.hoursLogged || 0);
+    return parseFloat((end - start).toFixed(1));
+  };
 
   const handleSubmitIntel = () => {
     const changes: string[] = [];
@@ -98,6 +110,8 @@ export const SignalDossierModal = ({ signal, onClose, onUpdate }: Props) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fade-in">
       <GlassCard className="w-full max-w-2xl h-[85vh] flex flex-col relative border-white/20 shadow-2xl">
+        
+        {/* HEADER */}
         <div className="p-6 border-b border-white/10 flex justify-between items-start">
           <div>
             <div className="flex items-center gap-3 mb-1">
@@ -116,13 +130,16 @@ export const SignalDossierModal = ({ signal, onClose, onUpdate }: Props) => {
           <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={24}/></button>
         </div>
 
+        {/* TABS */}
         <div className="flex border-b border-white/10 overflow-x-auto bg-white/5">
-          {['INTEL', 'TIMESHEET', 'TIMELINE', 'FINANCE'].map(tab => (
+          {['INTEL', 'LIFECYCLE', 'TIMESHEET', 'TIMELINE', 'FINANCE'].map(tab => (
              <button key={tab} onClick={() => setActiveTab(tab as any)} className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest min-w-[100px] ${activeTab === tab ? 'text-white border-b-2 border-green-500' : 'text-gray-500'}`}>{tab}</button>
           ))}
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
+          
+          {/* --- INTEL TAB --- */}
           {activeTab === 'INTEL' && (
             <div className="space-y-6">
               <div className="p-4 bg-white/5 rounded-xl border border-white/10">
@@ -145,6 +162,101 @@ export const SignalDossierModal = ({ signal, onClose, onUpdate }: Props) => {
             </div>
           )}
 
+          {/* --- LIFECYCLE TAB (NEW) --- */}
+          {activeTab === 'LIFECYCLE' && (
+            <div className="space-y-6 animate-fade-in">
+              
+              {/* 1. Velocity Header */}
+              <div className="grid grid-cols-2 gap-4">
+                 <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+                    <div className="text-xs text-gray-500 uppercase font-bold mb-1">Total Age</div>
+                    <div className="text-2xl font-mono font-bold text-white">
+                        {getDurationDays(signal.createdAt)} <span className="text-sm text-gray-500">Days</span>
+                    </div>
+                 </div>
+                 <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+                    <div className="text-xs text-gray-500 uppercase font-bold mb-1">Total Effort</div>
+                    <div className="text-2xl font-mono font-bold text-white">
+                        {signal.hoursLogged} <span className="text-sm text-gray-500">Hours</span>
+                    </div>
+                 </div>
+              </div>
+
+              {/* 2. The Timeline Visualizer */}
+              <div>
+                <h3 className="text-xs font-bold text-gray-400 uppercase mb-4 flex items-center gap-2">
+                    <Activity size={14}/> Phase Velocity
+                </h3>
+                
+                {/* The Stacked Bar */}
+                <div className="flex w-full h-4 rounded-full overflow-hidden mb-6 bg-white/5">
+                    {(signal.lifecycle || [{ phase: signal.phase, enteredAt: signal.createdAt, hoursAtEntry: 0 }]).map((chapter, idx) => {
+                        const duration = getDurationDays(chapter.enteredAt, chapter.exitedAt);
+                        const totalDays = getDurationDays(signal.createdAt);
+                        const width = totalDays > 0 ? Math.max(5, (duration / totalDays) * 100) : 100;
+                        
+                        let color = 'bg-gray-500';
+                        if (chapter.phase === 'discovery') color = 'bg-blue-500';
+                        if (chapter.phase === 'validation') color = 'bg-yellow-500';
+                        if (chapter.phase === 'contribution') color = 'bg-purple-500';
+                        if (chapter.phase === 'delivered') color = 'bg-green-500';
+                        if (chapter.phase === 'graveyard') color = 'bg-red-500';
+
+                        return (
+                            <div key={idx} className={`h-full ${color} opacity-80 hover:opacity-100 transition-all border-r border-black/20`} style={{ width: `${width}%` }} title={`${chapter.phase}: ${duration} days`} />
+                        );
+                    })}
+                </div>
+
+                {/* The Detailed Log */}
+                <div className="space-y-0.5">
+                    {/* Header Row */}
+                    <div className="grid grid-cols-12 px-4 py-2 text-[10px] uppercase font-bold text-gray-500">
+                        <div className="col-span-4">Phase</div>
+                        <div className="col-span-3">Duration</div>
+                        <div className="col-span-3">Labor Burn</div>
+                        <div className="col-span-2 text-right">Status</div>
+                    </div>
+
+                    {/* Rows */}
+                    {(signal.lifecycle || [{ phase: signal.phase, enteredAt: signal.createdAt, hoursAtEntry: 0 }]).map((chapter, idx) => {
+                        const isCurrent = !chapter.exitedAt;
+                        const duration = getDurationDays(chapter.enteredAt, chapter.exitedAt);
+                        const effort = getPhaseEffort(chapter as LifecycleChapter);
+                        const intensity = duration > 0 ? (effort / duration).toFixed(1) : 0;
+
+                        return (
+                            <div key={idx} className={`grid grid-cols-12 items-center px-4 py-3 rounded-lg border ${isCurrent ? 'bg-white/10 border-white/20' : 'bg-transparent border-transparent hover:bg-white/5'}`}>
+                                <div className="col-span-4 flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${chapter.phase === 'graveyard' ? 'bg-red-500' : 'bg-green-500'}`}/>
+                                    <div>
+                                        <div className="text-xs font-bold text-white capitalize">{chapter.phase}</div>
+                                        <div className="text-[10px] text-gray-500">{new Date(chapter.enteredAt).toLocaleDateString()}</div>
+                                    </div>
+                                </div>
+                                <div className="col-span-3">
+                                    <div className="text-xs font-mono text-gray-300">{duration} Days</div>
+                                </div>
+                                <div className="col-span-3">
+                                    <div className="text-xs font-mono text-white">{effort}h</div>
+                                    <div className="text-[10px] text-gray-500">{intensity} h/day</div>
+                                </div>
+                                <div className="col-span-2 text-right">
+                                    {isCurrent ? (
+                                        <span className="text-[10px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded border border-green-500/30">ACTIVE</span>
+                                    ) : (
+                                        <span className="text-[10px] text-gray-600">DONE</span>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* --- TIMESHEET TAB --- */}
           {activeTab === 'TIMESHEET' && (
             <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-4">
@@ -178,6 +290,7 @@ export const SignalDossierModal = ({ signal, onClose, onUpdate }: Props) => {
             </div>
           )}
 
+          {/* --- TIMELINE TAB --- */}
           {activeTab === 'TIMELINE' && (
             <div className="space-y-4 relative pl-4 border-l border-white/10">
               {logs.map((log) => (
@@ -190,6 +303,7 @@ export const SignalDossierModal = ({ signal, onClose, onUpdate }: Props) => {
             </div>
           )}
 
+          {/* --- FINANCE TAB --- */}
           {activeTab === 'FINANCE' && (
              <div className="space-y-3">
                {incomeHistory.map((h) => (
@@ -204,7 +318,7 @@ export const SignalDossierModal = ({ signal, onClose, onUpdate }: Props) => {
              </div>
           )}
         </div>
-        
+
         <div className="p-6 border-t border-white/10 flex justify-end gap-3 bg-black/40">
            <GlassButton size="sm" variant="secondary" onClick={onClose}>Close</GlassButton>
            {activeTab === 'INTEL' && <GlassButton size="sm" onClick={handleSubmitIntel} disabled={!note && newPhase === signal.phase}>Update Dossier</GlassButton>}

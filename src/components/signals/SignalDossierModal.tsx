@@ -5,7 +5,7 @@ import { GlassButton } from '../ui/GlassButton';
 import { GlassInput } from '../ui/GlassInput';
 import { formatNumber } from '../../utils/format';
 import { type Signal, type SignalPhase, type HistoryLog } from '../../types';
-import { X, Save, AlertTriangle, ExternalLink, Wallet, TrendingUp, ArrowDownRight, Clock, Calendar, Play } from 'lucide-react';
+import { X, AlertTriangle, ExternalLink, Wallet, ArrowDownRight, Clock, Calendar, Play } from 'lucide-react';
 
 interface Props {
   signal: Signal;

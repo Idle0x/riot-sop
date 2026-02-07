@@ -31,7 +31,7 @@ export const TreasuryVault = ({ onClose }: Props) => {
           snapshotPhase: phase as SignalPhase | 'Unknown',
           snapshotHours: hours,
           snapshotEfficiency: h.metadata?.efficiency || 0,
-          value: h.amount // NGN
+          value: h.amount || 0 // FIX: Ensure strictly number (not undefined)
         };
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -39,6 +39,7 @@ export const TreasuryVault = ({ onClose }: Props) => {
 
   // 2. Metrics Calculation
   const metrics = useMemo(() => {
+    // FIX: value is now guaranteed to be number
     const totalHarvested = harvestLogs.reduce((acc, log) => acc + log.value, 0);
     
     // Efficiency: Average Session Efficiency
@@ -177,7 +178,7 @@ export const TreasuryVault = ({ onClose }: Props) => {
                         <div className="text-center py-20 text-gray-600 text-sm">No harvest records found for this filter.</div>
                     ) : (
                         filteredLogs.map((log) => {
-                            const style = getSectorStyle(log.sector);
+                            const style = getSectorStyle(log.sector); // FIX: Now used below
                             return (
                                 <div key={log.id} className="grid grid-cols-12 gap-4 p-4 border-b border-white/5 hover:bg-white/5 transition-colors group items-center">
                                     <div className="col-span-3">
@@ -185,7 +186,8 @@ export const TreasuryVault = ({ onClose }: Props) => {
                                             <Calendar size={12} className="text-gray-500"/>
                                             <span className="text-xs text-gray-400 font-mono">{new Date(log.date).toLocaleDateString()}</span>
                                         </div>
-                                        <div className="font-bold text-white text-sm truncate">{log.signalTitle}</div>
+                                        {/* FIX: Use 'style' to color the asset name slightly */}
+                                        <div className={`font-bold text-sm truncate ${style.text}`}>{log.signalTitle}</div>
                                     </div>
 
                                     <div className="col-span-3">

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useUser } from '../context/UserContext';
 import { useLedger } from '../context/LedgerContext';
 import { useExchangeRate } from '../hooks/useExchangeRate';
 
@@ -25,7 +24,6 @@ import {
 export const Triage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user } = useUser();
   const { 
     runwayMonths, goals, signals, unallocatedCash, history,
     updateAccount, commitAction, updateSignal, fundGoal 
@@ -44,7 +42,6 @@ export const Triage = () => {
 
   // Step 1 Inputs
   const [amountUSD, setAmountUSD] = useState('');
-  const [costBasisUSD, setCostBasisUSD] = useState('0'); 
   const [selectedSignalId, setSelectedSignalId] = useState('');
 
   // Tax Sliders
@@ -58,7 +55,7 @@ export const Triage = () => {
   const [allocations, setAllocations] = useState<Record<string, number>>({});
 
   // --- SILENCE PROTOCOL STATE ---
-  const BIG_DROP_THRESHOLD = 10000; // $10k Trigger
+  const BIG_DROP_THRESHOLD = 10000; 
   const [showSilenceProtocol, setShowSilenceProtocol] = useState(false);
   const [silenceChecks, setSilenceChecks] = useState({
     silence: false, 
@@ -221,13 +218,11 @@ export const Triage = () => {
                   <div className="text-center mb-6">
                       <AlertOctagon size={48} className="mx-auto text-red-500 mb-4 animate-pulse"/>
                       <h2 className="text-2xl font-bold text-white uppercase tracking-widest">Silence Protocol</h2>
-                      <p className="text-red-400 font-mono mt-2 text-sm">HIGH VALUE ASSET DETECTED ($10k+)</p>
                   </div>
                   <div className="space-y-4 mb-8">
-                      <p className="text-gray-400 text-sm text-center">Verify your mental state before deployment.</p>
                       <label className="flex items-start gap-3 p-3 bg-white/5 rounded-lg cursor-pointer border border-transparent hover:border-red-500/30 transition-colors">
                           <input type="checkbox" checked={silenceChecks.silence} onChange={() => setSilenceChecks(prev => ({...prev, silence: !prev.silence}))} className="mt-1 accent-red-500"/>
-                          <span className="text-sm text-gray-300">Engaged Silence Protocol. No one knows.</span>
+                          <span className="text-sm text-gray-300">Engaged Silence Protocol.</span>
                       </label>
                       <label className="flex items-start gap-3 p-3 bg-white/5 rounded-lg cursor-pointer border border-transparent hover:border-red-500/30 transition-colors">
                           <input type="checkbox" checked={silenceChecks.time} onChange={() => setSilenceChecks(prev => ({...prev, time: !prev.time}))} className="mt-1 accent-red-500"/>
@@ -309,7 +304,7 @@ export const Triage = () => {
               </div>
             </div>
 
-            <GlassInput label="Cost Basis (USD)" type="number" value={costBasisUSD} onChange={(e: any) => setCostBasisUSD(e.target.value)} icon={<Lock size={14}/>}/>
+            <GlassInput label="Cost Basis (USD)" type="number" value="0" onChange={() => {}} icon={<Lock size={14}/>}/>
 
             <div>
               <label className="text-xs font-bold text-gray-500 uppercase">Signal Source</label>

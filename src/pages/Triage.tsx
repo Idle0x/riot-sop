@@ -9,6 +9,7 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
 import { Naira } from '../components/ui/Naira';
+import { OperatorsManual } from '../components/signals/OperatorsManual';
 
 // UTILS
 import { getFinancialState, calculateGenerosityCap } from '../utils/finance';
@@ -18,7 +19,7 @@ import { formatNumber } from '../utils/format';
 import { 
   ArrowRight, ArrowLeft, Flame, Heart, AlertTriangle, 
   CheckCircle2, Lock, Wand2, Landmark, ShieldCheck, 
-  Wallet, RefreshCw, History, X, AlertOctagon 
+  Wallet, RefreshCw, History, X, AlertOctagon, HelpCircle, BookOpen 
 } from 'lucide-react';
 
 export const Triage = () => {
@@ -33,7 +34,11 @@ export const Triage = () => {
   // --- STATE 1: EXCHANGE RATE ---
   const { rate, setRate, loading: isFetchingRate, error: rateError, fetchLiveRate } = useExchangeRate(); 
 
-  // --- STATE 2: FORM DATA ---
+  // --- STATE 2: MANUAL TRIGGER & OVERLAY ---
+  const [showManual, setShowManual] = useState(false);
+  const [manualChapter, setManualChapter] = useState<string | undefined>(undefined);
+
+  // --- STATE 3: FORM DATA ---
   const [step, setStep] = useState(1);
   const [showHistory, setShowHistory] = useState(false); 
 
@@ -56,9 +61,9 @@ export const Triage = () => {
   const BIG_DROP_THRESHOLD = 10000; // $10k Trigger
   const [showSilenceProtocol, setShowSilenceProtocol] = useState(false);
   const [silenceChecks, setSilenceChecks] = useState({
-    silence: false, // Told no one
-    time: false,    // Waited 24h
-    clarity: false  // Read Constitution
+    silence: false, 
+    time: false,    
+    clarity: false  
   });
 
   // --- AUTO-FILL LOGIC ---
@@ -68,7 +73,6 @@ export const Triage = () => {
 
     if (paramAmount) setAmountUSD(paramAmount);
     if (paramSource) {
-      // Support matching by Title (Legacy) or ID (New)
       const found = signals.find(s => s.id === paramSource || s.title === paramSource);
       if (found) setSelectedSignalId(found.id);
     }
@@ -82,7 +86,6 @@ export const Triage = () => {
   const grossNGN = dropUSD * rateVal;
   const sourceFunds = dropUSD > 0 ? grossNGN : unallocatedCash;
 
-  // Tax Calculations
   const profitNGN = Math.max(0, (dropUSD - costUSD) * rateVal);
   
   const calculateTaxEstimate = (profit: number) => {
@@ -93,7 +96,6 @@ export const Triage = () => {
     let tax = 0;
     let remaining = chargeableProfit;
 
-    // NTA 2026 Bands
     remaining -= 800000;
     if (remaining > 0) {
       const band2 = Math.min(remaining, 2200000);
@@ -116,7 +118,6 @@ export const Triage = () => {
 
   const netFunds = sourceFunds - taxAmount - ventureAmount - vaultAmount;
 
-  // Allocation Math
   const genAmount = parseFloat(generosity) || 0;
   const runwayAmount = parseFloat(runwayAlloc) || 0;
   const goalSum = Object.values(allocations).reduce((a, b) => a + b, 0);
@@ -124,7 +125,6 @@ export const Triage = () => {
   const availableForGoals = netFunds - genAmount - runwayAmount;
   const remaining = availableForGoals - goalSum;
 
-  // Guardrails
   const state = getFinancialState(runwayMonths);
   const isCritical = runwayMonths < 3; 
   const dynamicGenCap = calculateGenerosityCap(runwayMonths);
@@ -134,6 +134,11 @@ export const Triage = () => {
   const isBigDrop = dropUSD >= BIG_DROP_THRESHOLD;
 
   // --- ACTIONS ---
+
+  const openManualTo = (chapterId: string) => {
+    setManualChapter(chapterId);
+    setShowManual(true);
+  };
 
   const handleFetchRate = async () => {
     await fetchLiveRate();
@@ -160,7 +165,6 @@ export const Triage = () => {
     const timestamp = new Date().toISOString();
     const signal = signals.find(s => s.id === selectedSignalId);
     
-    // 1. MASTER LOG
     if (dropUSD > 0) {
       const snapshot = signal ? {
           phase: signal.phase,
@@ -189,7 +193,6 @@ export const Triage = () => {
       }
     }
 
-    // 2. FUND MOVEMENTS
     if (dropUSD > 0) updateAccount('holding', grossNGN); 
     updateAccount('holding', -sourceFunds); 
 
@@ -233,9 +236,16 @@ export const Triage = () => {
   return (
     <div className="max-w-3xl mx-auto p-4 md:p-8 pb-20 space-y-8 animate-fade-in relative">
       
+      {/* --- OPERATOR'S MANUAL OVERLAY --- */}
+      <OperatorsManual 
+        isOpen={showManual} 
+        onClose={() => setShowManual(false)} 
+        initialChapterId={manualChapter} 
+      />
+
       {/* --- SILENCE PROTOCOL --- */}
       {showSilenceProtocol && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-fade-in">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-fade-in">
               <div className="w-full max-w-md bg-zinc-900 border border-red-500/50 rounded-2xl p-6 shadow-[0_0_50px_rgba(239,68,68,0.2)]">
                   <div className="text-center mb-6">
                       <AlertOctagon size={48} className="mx-auto text-red-500 mb-4 animate-pulse"/>
@@ -243,7 +253,7 @@ export const Triage = () => {
                       <p className="text-red-400 font-mono mt-2 text-sm">HIGH VALUE ASSET DETECTED ($10k+)</p>
                   </div>
                   <div className="space-y-4 mb-8">
-                      <p className="text-gray-400 text-sm text-center">You are about to deploy significant capital. The algorithm requires you to verify your state of mind.</p>
+                      <p className="text-gray-400 text-sm text-center">You are about to deploy significant capital. Verify your state of mind.</p>
                       <label className="flex items-start gap-3 p-3 bg-white/5 rounded-lg cursor-pointer border border-transparent hover:border-red-500/30 transition-colors">
                           <input type="checkbox" checked={silenceChecks.silence} onChange={() => setSilenceChecks(prev => ({...prev, silence: !prev.silence}))} className="mt-1 accent-red-500"/>
                           <span className="text-sm text-gray-300">I have engaged the Silence Protocol. I have told absolutely no one about this drop.</span>
@@ -259,6 +269,12 @@ export const Triage = () => {
                   </div>
                   <div className="flex gap-3">
                       <button 
+                          onClick={() => openManualTo('manifesto')}
+                          className="flex-1 py-3 bg-white/10 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-white/20 transition-colors"
+                      >
+                          <BookOpen size={16}/> The Manifesto
+                      </button>
+                      <button 
                           onClick={() => {
                               if (silenceChecks.silence && silenceChecks.time && silenceChecks.clarity) {
                                   setShowSilenceProtocol(false);
@@ -266,9 +282,9 @@ export const Triage = () => {
                               }
                           }}
                           disabled={!silenceChecks.silence || !silenceChecks.time || !silenceChecks.clarity}
-                          className="w-full py-3 bg-red-600 text-white rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-red-700 transition-colors shadow-lg shadow-red-900/20"
+                          className="flex-1 py-3 bg-red-600 text-white rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-red-700 transition-colors shadow-lg"
                       >
-                          Proceed to Allocation
+                          Proceed
                       </button>
                   </div>
               </div>
@@ -277,7 +293,7 @@ export const Triage = () => {
 
       {/* --- HISTORY MODAL --- */}
       {showHistory && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-fade-in">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-fade-in">
           <GlassCard className="w-full max-w-md max-h-[70vh] flex flex-col relative">
             <button onClick={() => setShowHistory(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X size={20}/></button>
             <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><History size={20}/> Triage History</h3>
@@ -365,9 +381,7 @@ export const Triage = () => {
                 <div className="p-4 bg-slate-500/10 rounded-xl border border-slate-500/20">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-slate-400"><ShieldCheck size={16}/> Tax Shield (NTA 2026)</span>
-                    </div>
-                    <div className="flex justify-between mb-2">
-                         <span className="font-mono text-slate-300 text-xs">Rate: {taxProvision}%</span>
+                        <button onClick={() => openManualTo('protocol_z')} className="text-[10px] text-slate-500 flex items-center gap-1 hover:text-white"><HelpCircle size={10}/> Policy</button>
                     </div>
                     <input type="range" min="0" max="25" value={taxProvision} onChange={(e) => setTaxProvision(Number(e.target.value))} className="w-full accent-slate-500 cursor-pointer"/>
                     <div className="flex justify-between mt-2">
@@ -377,12 +391,10 @@ export const Triage = () => {
                 </div>
 
                 {/* 2. Venture Tax */}
-                <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+                <div className="p-4 bg-red-500/5 rounded-xl border border-red-500/20">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-red-500"><Flame size={16}/> Venture Tax</span>
-                    </div>
-                    <div className="flex justify-between mb-2">
-                         <span className="font-mono text-red-500">{ventureTax}%</span>
+                        <button onClick={() => openManualTo('filters')} className="text-[10px] text-red-900 flex items-center gap-1 hover:text-red-500"><HelpCircle size={10}/> Help</button>
                     </div>
                     <input type="range" min="0" max="20" value={ventureTax} onChange={(e) => setVentureTax(Number(e.target.value))} className="w-full accent-red-500 cursor-pointer"/>
                 </div>
@@ -391,9 +403,7 @@ export const Triage = () => {
                 <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-blue-400"><Landmark size={16}/> The Vault</span>
-                    </div>
-                    <div className="flex justify-between mb-2">
-                        <span className="font-mono text-blue-400">{vaultTax}%</span>
+                        <button onClick={() => openManualTo('engine')} className="text-[10px] text-blue-900 flex items-center gap-1 hover:text-blue-400"><BookOpen size={10}/> Engine</button>
                     </div>
                     <input type="range" min="0" max="50" value={vaultTax} onChange={(e) => setVaultTax(Number(e.target.value))} className="w-full accent-blue-500 cursor-pointer"/>
                 </div>
@@ -427,7 +437,7 @@ export const Triage = () => {
               </div>
               <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
                 <div className="text-xs text-blue-500 uppercase">Vault Stashed</div>
-                <div className="font-mono font-bold text-white flex items-center justify-center gap-1"><Naira/>{formatNumber(vaultAmount)}</div>
+                <div className="font-mono font-bold text-white flex items-center justify-center gap-1"><Naira/>{formatNumber(vaultAmount + taxAmount)}</div>
               </div>
             </div>
 
@@ -461,7 +471,7 @@ export const Triage = () => {
               ) : (
                   <>
                       <GlassInput value={generosity} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGenerosity(e.target.value)} className="text-right mb-3" placeholder="0" />
-                      <div className="text-[10px] text-gray-500 text-right">Funds will be moved to the Generosity Wallet for later distribution.</div>
+                      <div className="text-[10px] text-gray-500 text-right">Funds will be moved to the Generosity Wallet.</div>
                       {isOverCap && <div className="mt-2 text-[10px] text-red-400 flex items-center gap-1 justify-end"><AlertTriangle size={10}/> Exceeds Cap</div>}
                   </>
               )}
@@ -509,7 +519,7 @@ export const Triage = () => {
               <span className={`font-mono font-bold flex items-center gap-1 ${remaining < 0 ? 'text-red-500' : 'text-green-500'}`}><Naira/>{formatNumber(remaining)}</span>
             </div>
 
-            <GlassButton className="w-full" disabled={remaining < 0 || genAmount > 300000} onClick={handleCommit}>
+            <GlassButton className="w-full" disabled={remaining < 0} onClick={handleCommit}>
               <CheckCircle2 size={16} className="mr-2"/> Commit Triage
             </GlassButton>
           </div>

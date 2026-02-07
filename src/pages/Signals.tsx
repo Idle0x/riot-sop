@@ -12,7 +12,7 @@ import { HarvestModal } from '../components/signals/HarvestModal';
 import { ClosureModal } from '../components/signals/ClosureModal'; 
 import { TransitionWizard } from '../components/signals/TransitionWizard'; 
 import { GraveyardVault } from '../components/signals/GraveyardVault'; 
-import { OperatorsManual } from '../components/signals/OperatorsManual'; // THE CODEX
+import { OperatorsManual } from '../components/signals/OperatorsManual'; 
 
 // UTILS
 import { formatNumber } from '../utils/format';
@@ -21,7 +21,7 @@ import { type Signal, type SignalPhase } from '../types';
 
 // ICONS
 import { 
-  Zap, Maximize2, Skull, Trophy, Archive, Clock, 
+  Zap, Maximize2, Skull, Archive, 
   DollarSign, ArrowRight, Flame, Snowflake 
 } from 'lucide-react';
 
@@ -33,7 +33,7 @@ export const Signals = () => {
   const [isDrillOpen, setIsDrillOpen] = useState(false);
   const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null); 
   const [showGraveyard, setShowGraveyard] = useState(false);
-  const [showManual, setShowManual] = useState(false); // Manual State
+  const [showManual, setShowManual] = useState(false); 
 
   // Active Modals
   const [dossierSignal, setDossierSignal] = useState<Signal | null>(null);       
@@ -59,7 +59,7 @@ export const Signals = () => {
     return { winRate, bestSector };
   }, [signals]);
 
-  // --- NERVOUS SYSTEM (Manual Actions) ---
+  // --- NERVOUS SYSTEM ---
   const handleManualAction = (actionId: string) => {
     if (actionId === 'open_drill') setIsDrillOpen(true);
     if (actionId === 'open_triage') navigate('/triage');
@@ -111,7 +111,6 @@ export const Signals = () => {
     setIsDrillOpen(false);
   };
 
-  // Phase Transition Handoff
   const initiateMove = (signal: Signal, currentPhase: SignalPhase) => {
     const nextIndex = activeColumns.findIndex(c => c.id === currentPhase) + 1;
     if (nextIndex < activeColumns.length) {
@@ -242,7 +241,6 @@ export const Signals = () => {
                 const sectorStyle = getSectorStyle(s.sector);
                 const assetID = generateAssetID(s.title, s.createdAt);
 
-                // STATUS LOGIC
                 const now = new Date().getTime();
                 const lastActive = new Date(s.lastSessionAt || s.updatedAt).getTime();
                 const daysInactive = (now - lastActive) / (1000 * 60 * 60 * 24);
@@ -265,9 +263,9 @@ export const Signals = () => {
                       </div>
 
                       <div className="flex gap-1 absolute top-2 right-12">
-                          {isHot && <Flame size={12} className="text-orange-500 animate-pulse" title="Hot Streak"/>}
-                          {isStale && <Snowflake size={12} className="text-blue-300" title="Stale / Frozen"/>}
-                          {isMissingIntel && <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse mt-1" title="Incomplete Data"/>}
+                          {isHot && <div title="Hot Streak"><Flame size={12} className="text-orange-500 animate-pulse"/></div>}
+                          {isStale && <div title="Stale / Frozen"><Snowflake size={12} className="text-blue-300"/></div>}
+                          {isMissingIntel && <div title="Incomplete Data" className="w-2 h-2 bg-orange-500 rounded-full animate-pulse mt-1"/>}
                       </div>
 
                       {s.totalGenerated > 0 && (
@@ -320,7 +318,6 @@ export const Signals = () => {
         ))}
       </div>
 
-      {/* --- THE BOTTOM DOCK --- */}
       <div 
         onClick={() => setShowManual(true)}
         className="fixed bottom-0 left-0 right-0 h-12 bg-black/80 backdrop-blur-md border-t border-white/10 flex items-center justify-between px-6 cursor-pointer hover:bg-black/90 transition-colors z-40 group"

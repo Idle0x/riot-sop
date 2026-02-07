@@ -8,7 +8,8 @@ interface UserContextType {
   session: any;
   isLoading: boolean;
   isGhostMode: boolean;
-  updateProfile: (updates: Partial<UserProfile>) => void;
+  toggleGhostMode: () => void; // ADDED
+  updateProfile: (updates: Partial<UserProfile>) => Promise<void>; // CHANGED: Returns Promise
   logout: () => void;
 }
 
@@ -16,8 +17,7 @@ const UserContext = createContext<UserContextType | null>(null);
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<any>(null);
-  // Fixed: Removed unused 'setIsGhostMode' setter
-  const [isGhostMode] = useState(false); 
+  const [isGhostMode, setIsGhostMode] = useState(false); // FIXED: Added setter
   const queryClient = useQueryClient();
 
   // 1. Auth Listener
@@ -36,18 +36,18 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     queryKey: ['profile', session?.user?.id],
     queryFn: async () => {
       if (!session?.user) return null;
-      
+
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', session.user.id)
         .single();
-      
+
       if (error) {
         console.error('Error fetching profile:', error);
         return null;
       }
-      
+
       // Transform snake_case DB to camelCase JS
       return {
         id: data.id,
@@ -63,21 +63,26 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         currencyCode: data.currency_code
       } as UserProfile;
     },
-    enabled: !!session?.user?.id, // Only run if logged in
+    enabled: !!session?.user?.id, 
   });
 
   // 3. Update Mutation
   const mutation = useMutation({
     mutationFn: async (updates: Partial<UserProfile>) => {
       if (!session?.user) return;
-      
+
       // Convert back to snake_case for DB
       const dbUpdates: any = {};
-      if (updates.lastReconciliationDate) dbUpdates.last_reconciliation_date = updates.lastReconciliationDate;
-      if (updates.settings) dbUpdates.settings = updates.settings;
+      
+      // Core Financials
       if (updates.annualRent !== undefined) dbUpdates.annual_rent = updates.annualRent;
       if (updates.burnCap !== undefined) dbUpdates.burn_cap = updates.burnCap;
-      // Add other fields as necessary
+      if (updates.inflationRate !== undefined) dbUpdates.inflation_rate = updates.inflationRate;
+      
+      // System State
+      if (updates.lastReconciliationDate) dbUpdates.last_reconciliation_date = updates.lastReconciliationDate;
+      if (updates.pendingChanges) dbUpdates.pending_changes = updates.pendingChanges;
+      if (updates.settings) dbUpdates.settings = updates.settings;
 
       const { error } = await supabase
         .from('profiles')
@@ -97,7 +102,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       session,
       isLoading,
       isGhostMode,
-      updateProfile: (u) => mutation.mutate(u),
+      toggleGhostMode: () => setIsGhostMode(prev => !prev),
+      updateProfile: (u) => mutation.mutateAsync(u), // FIXED: awaitable
       logout: () => supabase.auth.signOut(),
     }}>
       {children}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { GlassCard } from '../ui/GlassCard';
 import { MANUAL_CHAPTERS } from '../../data/manual_content';
-import { X, ChevronRight, BookOpen, Anchor, Activity, Dumbbell, ShieldAlert, Wrench, Archive, ExternalLink, Zap, ArrowRight, Copy } from 'lucide-react';
+import { X, ChevronRight, BookOpen, Anchor, Activity, Dumbbell, ShieldAlert, Wrench, Archive, Zap, ArrowRight, Copy } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;

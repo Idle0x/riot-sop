@@ -9,7 +9,7 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
 import { Naira } from '../components/ui/Naira';
-import { OperatorsManual } from '../components/signals/OperatorsManual'; // Imported, but controlled
+import { OperatorsManual } from '../components/signals/OperatorsManual';
 
 // UTILS
 import { getFinancialState, calculateGenerosityCap } from '../utils/finance';
@@ -36,8 +36,7 @@ export const Triage = () => {
   const [step, setStep] = useState(1);
   const [showHistory, setShowHistory] = useState(false); 
 
-  // --- MANUAL STATE (CONTROLS VISIBILITY) ---
-  // This ensures the Codex block is HIDDEN by default
+  // --- MANUAL MODAL STATE ---
   const [showManual, setShowManual] = useState(false);
   const [manualChapter, setManualChapter] = useState<string | undefined>(undefined);
 
@@ -115,8 +114,7 @@ export const Triage = () => {
 
   const handleFetchRate = async () => { await fetchLiveRate(); };
 
-  // --- MANUAL TRIGGER ---
-  // This function now opens the popup instead of scrolling to the bottom
+  // Trigger Manual with correct chapter
   const openManualTo = (chapterId: string) => {
     setManualChapter(chapterId);
     setShowManual(true);
@@ -202,27 +200,14 @@ export const Triage = () => {
   return (
     <div className="max-w-3xl mx-auto p-4 md:p-8 pb-20 space-y-8 animate-fade-in relative">
 
-      {/* --- MANUAL MODAL --- */}
-      {/* This wraps the Codex component. It ONLY renders when showManual is true. */}
-      {/* This effectively deletes the block from the bottom and puts it here instead. */}
-      {showManual && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-xl p-4 animate-fade-in">
-           <div className="w-full max-w-5xl h-[85vh] overflow-y-auto relative bg-black border border-white/10 rounded-2xl shadow-2xl">
-               <button 
-                 onClick={() => setShowManual(false)} 
-                 className="absolute top-6 right-6 z-50 p-2 bg-white/10 rounded-full hover:bg-white/20 text-white transition-colors"
-               >
-                 <X size={24}/>
-               </button>
-               <div className="p-4 md:p-8">
-                  {/* We pass the chapter ID so it opens to the right section */}
-                  <OperatorsManual initialChapterId={manualChapter} />
-               </div>
-           </div>
-        </div>
-      )}
+      {/* --- MANUAL MODAL (Fixed TS Props) --- */}
+      <OperatorsManual 
+        isOpen={showManual} 
+        onClose={() => setShowManual(false)} 
+        initialChapterId={manualChapter} 
+      />
       
-      {/* --- SILENCE PROTOCOL MODAL --- */}
+      {/* --- SILENCE PROTOCOL --- */}
       {showSilenceProtocol && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-fade-in">
               <div className="w-full max-w-md bg-zinc-900 border border-red-500/50 rounded-2xl p-6 shadow-[0_0_50px_rgba(239,68,68,0.2)]">
@@ -232,18 +217,18 @@ export const Triage = () => {
                       <p className="text-red-400 font-mono mt-2 text-sm">HIGH VALUE ASSET DETECTED ($10k+)</p>
                   </div>
                   <div className="space-y-4 mb-8">
-                      <p className="text-gray-400 text-sm text-center">You are about to deploy significant capital. The algorithm requires you to verify your state of mind.</p>
+                      <p className="text-gray-400 text-sm text-center">You are about to deploy significant capital. Verify your state of mind.</p>
                       <label className="flex items-start gap-3 p-3 bg-white/5 rounded-lg cursor-pointer border border-transparent hover:border-red-500/30 transition-colors">
                           <input type="checkbox" checked={silenceChecks.silence} onChange={() => setSilenceChecks(prev => ({...prev, silence: !prev.silence}))} className="mt-1 accent-red-500"/>
-                          <span className="text-sm text-gray-300">I have engaged the Silence Protocol. I have told absolutely no one about this drop.</span>
+                          <span className="text-sm text-gray-300">I have engaged the Silence Protocol. No one knows.</span>
                       </label>
                       <label className="flex items-start gap-3 p-3 bg-white/5 rounded-lg cursor-pointer border border-transparent hover:border-red-500/30 transition-colors">
                           <input type="checkbox" checked={silenceChecks.time} onChange={() => setSilenceChecks(prev => ({...prev, time: !prev.time}))} className="mt-1 accent-red-500"/>
-                          <span className="text-sm text-gray-300">I have waited the mandatory cooling period. I am not acting on dopamine.</span>
+                          <span className="text-sm text-gray-300">I have waited the cooling period. Not acting on dopamine.</span>
                       </label>
                       <label className="flex items-start gap-3 p-3 bg-white/5 rounded-lg cursor-pointer border border-transparent hover:border-red-500/30 transition-colors">
                           <input type="checkbox" checked={silenceChecks.clarity} onChange={() => setSilenceChecks(prev => ({...prev, clarity: !prev.clarity}))} className="mt-1 accent-red-500"/>
-                          <span className="text-sm text-gray-300">I have reviewed Page 1 (The Constitution) and remember who I am building this for.</span>
+                          <span className="text-sm text-gray-300">I have reviewed The Constitution.</span>
                       </label>
                   </div>
                   <div className="flex gap-3">
@@ -258,9 +243,9 @@ export const Triage = () => {
                               }
                           }}
                           disabled={!silenceChecks.silence || !silenceChecks.time || !silenceChecks.clarity}
-                          className="flex-1 py-3 bg-red-600 text-white rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-red-700 transition-colors shadow-lg shadow-red-900/20"
+                          className="flex-1 py-3 bg-red-600 text-white rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-red-700 transition-colors"
                       >
-                          Proceed to Allocation
+                          Proceed
                       </button>
                   </div>
               </div>
@@ -307,12 +292,10 @@ export const Triage = () => {
       </div>
 
       <GlassCard className="p-6">
-        
-        {/* --- STEP 1: INGESTION --- */}
         {step === 1 && (
           <div className="space-y-6 animate-fade-in">
             <div className="grid grid-cols-2 gap-4">
-              <GlassInput label="Drop (USD)" type="number" value={amountUSD} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmountUSD(e.target.value)} autoFocus />
+              <GlassInput label="Drop (USD)" type="number" value={amountUSD} onChange={(e) => setAmountUSD(e.target.value)} autoFocus />
               <div className="relative">
                 <GlassInput label="Rate (NGN/USD)" type="number" value={rate} onChange={(e) => setRate(e.target.value)} className={rateError ? 'border-red-500/50' : ''}/>
                 <button onClick={handleFetchRate} disabled={isFetchingRate} className="absolute right-2 top-8 text-[10px] bg-white/10 px-2 py-1 rounded text-accent-info hover:bg-white/20 transition-colors disabled:opacity-50 flex items-center gap-1">
@@ -320,14 +303,7 @@ export const Triage = () => {
                 </button>
               </div>
             </div>
-
-            {rateError && (
-               <div className="text-[10px] text-red-400 flex items-center gap-1 justify-end -mt-3">
-                  <AlertTriangle size={10}/> {rateError}
-               </div>
-            )}
-
-            <GlassInput label="Cost Basis (USD)" type="number" value={costBasisUSD} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCostBasisUSD(e.target.value)} icon={<Lock size={14}/>}/>
+            <GlassInput label="Cost Basis (USD)" type="number" value={costBasisUSD} onChange={(e) => setCostBasisUSD(e.target.value)} icon={<Lock size={14}/>}/>
 
             <div>
               <label className="text-xs font-bold text-gray-500 uppercase">Signal Source</label>
@@ -337,42 +313,35 @@ export const Triage = () => {
               </select>
             </div>
 
-            {/* Tax Sliders */}
             <div className="space-y-4 pt-2">
                 <div className="p-4 bg-slate-500/10 rounded-xl border border-slate-500/20">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-slate-400"><ShieldCheck size={16}/> Tax Shield (NTA 2026)</span>
-                        <button onClick={() => openManualTo('protocol_z')} className="text-[10px] flex items-center gap-1 text-slate-500 hover:text-white transition-colors bg-white/5 px-2 py-1 rounded hover:bg-white/10">
+                        <button onClick={() => openManualTo('protocol_z')} className="text-[10px] text-slate-500 hover:text-white bg-white/5 px-2 py-1 rounded hover:bg-white/10 flex items-center gap-1">
                            <BookOpen size={10}/> Why?
                         </button>
                     </div>
                     <div className="flex justify-between mb-2"><span className="font-mono text-slate-300 text-xs">Rate: {taxProvision}%</span></div>
                     <input type="range" min="0" max="25" value={taxProvision} onChange={(e) => setTaxProvision(Number(e.target.value))} className="w-full accent-slate-500 cursor-pointer"/>
-                    <div className="flex justify-between mt-2">
-                       <span className="text-[10px] text-gray-500">Legal Est: {estTaxPercent.toFixed(1)}%</span>
-                       <button onClick={() => setTaxProvision(Math.round(estTaxPercent))} className="text-[10px] text-accent-info hover:underline">Apply Est.</button>
-                    </div>
                 </div>
 
                 <div className="p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-red-500"><Flame size={16}/> Venture Tax</span>
-                        <button onClick={() => openManualTo('filters')} className="text-[10px] flex items-center gap-1 text-gray-500 hover:text-white transition-colors bg-white/5 px-2 py-1 rounded hover:bg-white/10">
+                        <button onClick={() => openManualTo('filters')} className="text-[10px] text-gray-500 hover:text-white bg-white/5 px-2 py-1 rounded hover:bg-white/10 flex items-center gap-1">
                            <HelpCircle size={10}/> Strategy
                         </button>
                     </div>
-                    <div className="flex justify-between mb-2"><span className="font-mono text-red-500">{ventureTax}%</span></div>
                     <input type="range" min="0" max="20" value={ventureTax} onChange={(e) => setVentureTax(Number(e.target.value))} className="w-full accent-red-500 cursor-pointer"/>
                 </div>
 
                 <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-blue-400"><Landmark size={16}/> The Vault</span>
-                        <button onClick={() => openManualTo('engine')} className="text-[10px] flex items-center gap-1 text-blue-400/50 hover:text-blue-200 transition-colors bg-blue-500/5 px-2 py-1 rounded hover:bg-blue-500/20">
+                        <button onClick={() => openManualTo('engine')} className="text-[10px] text-blue-400/50 hover:text-blue-200 bg-blue-500/5 px-2 py-1 rounded hover:bg-blue-500/20 flex items-center gap-1">
                            <BookOpen size={10}/> Rules
                         </button>
                     </div>
-                    <div className="flex justify-between mb-2"><span className="font-mono text-blue-400">{vaultTax}%</span></div>
                     <input type="range" min="0" max="50" value={vaultTax} onChange={(e) => setVaultTax(Number(e.target.value))} className="w-full accent-blue-500 cursor-pointer"/>
                 </div>
             </div>
@@ -381,84 +350,56 @@ export const Triage = () => {
           </div>
         )}
 
-        {/* --- STEP 2: ALLOCATION --- */}
         {step === 2 && (
           <div className="space-y-6 animate-fade-in">
             <div className="flex items-center gap-4 border-b border-white/10 pb-4">
                <button onClick={() => setStep(1)} className="p-2 bg-white/5 rounded-lg hover:bg-white/10 text-white transition-colors"><ArrowLeft size={16}/></button>
-               <div>
-                  <h2 className="text-lg font-bold text-white">Allocation Strategy</h2>
-                  {isBigDrop && <span className="text-[10px] bg-yellow-500/20 text-yellow-500 px-2 py-0.5 rounded border border-yellow-500/50 font-mono">⚠ BIG DROP MODE: STRICT ADHERENCE</span>}
-               </div>
+               <h2 className="text-lg font-bold text-white">Allocation Strategy</h2>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-center">
               <div className="p-3 bg-white/5 rounded-xl border border-white/10">
                 <div className="text-xs text-gray-500 uppercase">Net Deployable</div>
-                <div className="font-mono font-bold text-white flex items-center justify-center gap-1"><Naira/>{formatNumber(netFunds)}</div>
+                <div className="font-mono font-bold text-white"><Naira/>{formatNumber(netFunds)}</div>
               </div>
               <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
                 <div className="text-xs text-blue-500 uppercase">Vault Stashed</div>
-                <div className="font-mono font-bold text-white flex items-center justify-center gap-1"><Naira/>{formatNumber(vaultAmount)}</div>
+                <div className="font-mono font-bold text-white"><Naira/>{formatNumber(vaultAmount)}</div>
               </div>
             </div>
 
             <div className="p-4 bg-green-500/10 rounded-xl border border-green-500/20">
-              <div className="flex justify-between items-center mb-2">
-                <span className="flex items-center gap-2 font-bold text-green-400"><Wallet size={16}/> Runway Top-up</span>
-              </div>
-              <GlassInput value={runwayAlloc} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRunwayAlloc(e.target.value)} className="text-right font-mono" placeholder="0" />
-              <p className="text-[10px] text-gray-500 mt-2 text-right">Extends operational life (Payroll).</p>
+              <div className="font-bold text-green-400 flex items-center gap-2 mb-2"><Wallet size={16}/> Runway Top-up</div>
+              <GlassInput value={runwayAlloc} onChange={(e) => setRunwayAlloc(e.target.value)} className="text-right font-mono" placeholder="0" />
             </div>
 
-            <div className={`p-4 rounded-xl border transition-colors ${isGenerosityLocked ? 'bg-red-500/5 border-red-500/30' : isOverCap ? 'bg-red-500/10 border-red-500' : 'bg-white/5 border-white/10'}`}>
-              <div className="flex justify-between mb-2">
-                <span className="flex items-center gap-2 font-bold text-white"><Heart size={16} className={isGenerosityLocked ? 'text-gray-500' : 'text-accent-info'}/> Generosity Wallet</span>
-                {isGenerosityLocked ? (
-                    <span className="text-xs font-bold text-red-500 flex items-center gap-1"><Lock size={12}/> LOCKED</span>
-                ) : (
-                    <span className={`text-xs font-bold ${isOverCap ? 'text-red-500' : 'text-gray-500'} flex items-center gap-1`}>Cap: <Naira/>{formatNumber(dynamicGenCap)}</span>
-                )}
+            <div className={`p-4 rounded-xl border ${isGenerosityLocked ? 'bg-red-500/5 border-red-500/30' : 'bg-white/5 border-white/10'}`}>
+              <div className="flex justify-between mb-2 font-bold text-white">
+                <span className="flex items-center gap-2"><Heart size={16} className="text-accent-info"/> Generosity</span>
+                <span className="text-xs font-mono text-gray-500">Cap: <Naira/>{formatNumber(dynamicGenCap)}</span>
               </div>
-              {isGenerosityLocked ? (
-                  <div className="text-xs text-red-400 italic text-center py-2">"My security comes first." (Runway &lt; 3mo)</div>
-              ) : (
-                  <>
-                      <GlassInput value={generosity} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGenerosity(e.target.value)} className="text-right mb-3" placeholder="0" />
-                      {isOverCap && <div className="mt-2 text-[10px] text-red-400 flex items-center gap-1 justify-end"><AlertTriangle size={10}/> Exceeds Cap</div>}
-                  </>
-              )}
+              <GlassInput value={generosity} onChange={(e) => setGenerosity(e.target.value)} className="text-right" placeholder="0" disabled={isGenerosityLocked}/>
             </div>
 
-            <div className="bg-black/20 p-4 rounded-xl border border-white/10 h-64 overflow-y-auto relative">
-              {isCritical && (
-                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center text-center p-4">
-                  <Lock className="text-red-500 mb-2" size={32}/>
-                  <h3 className="font-bold text-white">Allocation Locked</h3>
-                  <p className="text-sm text-red-400">Runway is Critical (&lt;3 Months).</p>
-                </div>
-              )}
+            <div className="bg-black/20 p-4 rounded-xl border border-white/10 h-64 overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
                  <h3 className="text-xs font-bold text-gray-400 uppercase">Goals</h3>
-                 <button onClick={autoDistribute} className="text-xs text-accent-success flex items-center gap-1 hover:underline"><Wand2 size={12}/> Auto-Fill</button>
+                 <button onClick={autoDistribute} className="text-xs text-accent-success hover:underline flex items-center gap-1"><Wand2 size={12}/> Auto-Fill</button>
               </div>
               {goals.filter(g => !g.isCompleted).map(g => (
                 <div key={g.id} className="mb-3">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-white">{g.title}</span>
-                    <span className="text-gray-500 flex items-center gap-1">Need: <Naira/>{formatNumber(g.targetAmount - g.currentAmount)}</span>
+                  <div className="flex justify-between text-xs mb-1 text-white">
+                    <span>{g.title}</span>
+                    <span className="text-gray-500 font-mono">Need: <Naira/>{formatNumber(g.targetAmount - g.currentAmount)}</span>
                   </div>
-                  <input type="number" disabled={isCritical} className="w-full bg-black/40 border border-white/10 rounded p-2 text-white text-sm disabled:opacity-50" placeholder="Allocation" value={allocations[g.id] || ''} onChange={(e) => setAllocations({...allocations, [g.id]: parseFloat(e.target.value) || 0})} />
+                  <input type="number" disabled={isCritical} className="w-full bg-black/40 border border-white/10 rounded p-2 text-white text-sm" placeholder="0" value={allocations[g.id] || ''} onChange={(e) => setAllocations({...allocations, [g.id]: parseFloat(e.target.value) || 0})} />
                 </div>
               ))}
             </div>
 
             <div className="flex justify-between items-center pt-4 border-t border-white/10">
-              <div className="flex flex-col">
-                <span className="text-gray-400 text-sm">Remaining</span>
-                <span className="text-[10px] text-gray-500">(Unallocated Holding)</span>
-              </div>
-              <span className={`font-mono font-bold flex items-center gap-1 ${remaining < 0 ? 'text-red-500' : 'text-green-500'}`}><Naira/>{formatNumber(remaining)}</span>
+              <span className="text-gray-400 text-sm">Remaining</span>
+              <span className={`font-mono font-bold ${remaining < 0 ? 'text-red-500' : 'text-green-500'}`}><Naira/>{formatNumber(remaining)}</span>
             </div>
             <GlassButton className="w-full" disabled={remaining < 0 || genAmount > 300000} onClick={handleCommit}>
               <CheckCircle2 size={16} className="mr-2"/> Commit Triage
@@ -466,8 +407,7 @@ export const Triage = () => {
           </div>
         )}
       </GlassCard>
-      
-      {/* NO STATIC CODEX BLOCK HERE */}
+      {/* FINAL GUARD: NOTHING BELOW THIS POINT */}
     </div>
   );
 };

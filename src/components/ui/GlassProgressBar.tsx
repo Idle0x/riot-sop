@@ -4,9 +4,10 @@ interface GlassProgressBarProps {
   value: number;      // Current amount
   max: number;        // Target amount
   label?: string;     // e.g., "8.2 months runway"
-  color?: 'success' | 'warning' | 'danger' | 'info';
+  color?: 'success' | 'warning' | 'danger' | 'info' | 'primary';
   size?: 'sm' | 'md' | 'lg';
   showPercentage?: boolean;
+  className?: string; // FIX: Added this prop to satisfy TypeScript
 }
 
 export const GlassProgressBar = ({ 
@@ -15,16 +16,18 @@ export const GlassProgressBar = ({
   label, 
   color = 'success',
   size = 'md',
-  showPercentage = true
+  showPercentage = true,
+  className // FIX: Destructured here
 }: GlassProgressBarProps) => {
   const percentage = Math.min(100, Math.max(0, (value / max) * 100));
-  
+
   // Color Maps
   const colors = {
     success: 'from-accent-success to-emerald-600 shadow-accent-success/20',
     warning: 'from-accent-warning to-amber-600 shadow-accent-warning/20',
     danger: 'from-accent-danger to-red-600 shadow-accent-danger/20',
     info: 'from-accent-info to-blue-600 shadow-accent-info/20',
+    primary: 'from-blue-500 to-blue-700 shadow-blue-500/20'
   };
 
   const sizes = {
@@ -34,7 +37,8 @@ export const GlassProgressBar = ({
   };
 
   return (
-    <div className="w-full">
+    // FIX: Applied className here
+    <div className={cn("w-full", className)}>
       <div className="flex justify-between mb-2">
         {label && (
           <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
@@ -42,12 +46,12 @@ export const GlassProgressBar = ({
           </span>
         )}
         {showPercentage && (
-          <span className={cn("font-mono text-sm font-bold", `text-accent-${color}`)}>
+          <span className={cn("font-mono text-sm font-bold", `text-${color === 'primary' ? 'blue-500' : `accent-${color}`}`)}>
             {percentage.toFixed(0)}%
           </span>
         )}
       </div>
-      
+
       {/* Bar Container */}
       <div className={cn("relative w-full overflow-hidden rounded-full bg-glass-border", sizes[size])}>
         {/* Fill */}

@@ -5,8 +5,7 @@ import { Naira } from '../components/ui/Naira';
 import { formatNumber } from '../utils/format';
 import { 
   Clock, Undo2, Search, Filter, ArrowDown, 
-  Target, Flame, Skull, Zap, Heart, ShieldCheck, Wallet, 
-  Settings as Gear, ShieldAlert
+  Target, Flame, Skull, Zap, Heart, ShieldCheck, Wallet, ShieldAlert
 } from 'lucide-react';
 
 export const Ledger = () => {

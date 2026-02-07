@@ -19,7 +19,7 @@ import { formatNumber } from '../utils/format';
 import { 
   ArrowRight, ArrowLeft, Flame, Heart, AlertTriangle, 
   CheckCircle2, Lock, Wand2, Landmark, ShieldCheck, 
-  Wallet, RefreshCw, History, X, AlertOctagon, FileText, BookOpen 
+  Wallet, RefreshCw, History, X, AlertOctagon, FileText, BookOpen, HelpCircle 
 } from 'lucide-react';
 
 export const Triage = () => {
@@ -144,8 +144,8 @@ export const Triage = () => {
     await fetchLiveRate();
   };
 
-  const openProtocol = () => {
-    setManualChapter('protocol_z'); // Deep link to Chapter VII
+  const openManualTo = (chapterId: string) => {
+    setManualChapter(chapterId);
     setShowManual(true);
   };
 
@@ -159,7 +159,6 @@ export const Triage = () => {
   };
 
   const handleNextStep = () => {
-      // INTERCEPTION LOGIC: Silence Protocol
       if (isBigDrop && (!silenceChecks.silence || !silenceChecks.time || !silenceChecks.clarity)) {
           setShowSilenceProtocol(true);
           return;
@@ -171,11 +170,8 @@ export const Triage = () => {
     const timestamp = new Date().toISOString();
     const signal = signals.find(s => s.id === selectedSignalId);
     
-    // 1. MASTER LOG (With Snapshot Logic)
+    // 1. MASTER LOG
     if (dropUSD > 0) {
-      
-      // SNAPSHOT: Capture the state of the asset at this exact moment
-      // FIX: Use undefined instead of null for strict types
       const snapshot = signal ? {
           phase: signal.phase,
           hoursLogged: signal.hoursLogged || 0,
@@ -189,12 +185,11 @@ export const Triage = () => {
         title: isBigDrop ? `BIG DROP: $${formatNumber(dropUSD)}` : `Income Drop: $${formatNumber(dropUSD)}`,
         description: `Source: ${signal?.title || 'External'} @ ₦${rateVal}/$`,
         amount: grossNGN,
-        linkedSignalId: selectedSignalId || undefined, // FIX: Use undefined
+        linkedSignalId: selectedSignalId || undefined,
         tags: isBigDrop ? ['big_drop', 'protocol_verified'] : [],
-        metadata: snapshot // Store the snapshot for The Treasury
+        metadata: snapshot
       });
 
-      // Update Signal Revenue
       if (signal) {
           updateSignal({ 
               ...signal, 
@@ -205,42 +200,31 @@ export const Triage = () => {
     }
 
     // 2. FUND MOVEMENTS
-    // Credit Holding with Drop
     if (dropUSD > 0) updateAccount('holding', grossNGN); 
-    // Debit Holding for Allocation
     updateAccount('holding', -sourceFunds); 
 
-    // Tax Shield
     if (taxAmount > 0) {
       updateAccount('vault', taxAmount); 
       commitAction({ date: timestamp, type: 'TRANSFER', title: 'Tax Shield Stashed', amount: taxAmount, tags: ['tax_nta2026'] });
     }
     
-    // Venture Tax (Burn)
     if (ventureAmount > 0) commitAction({ date: timestamp, type: 'SPEND', title: 'Venture Tax Burned', amount: ventureAmount, tags: ['risk'] });
     
-    // Vault (Wealth Defense)
     if (vaultAmount > 0) {
       updateAccount('vault', vaultAmount);
       commitAction({ date: timestamp, type: 'TRANSFER', title: 'Vault Deposit', amount: vaultAmount, tags: ['wealth_defense'] });
     }
 
-    // Generosity (Architecture Shift: To Wallet)
     if (genAmount > 0) {
         updateAccount('generosity', genAmount);
-        commitAction({ 
-            date: timestamp, type: 'TRANSFER', title: 'Funded Generosity Wallet', 
-            amount: genAmount, description: 'Allocated for future giving', tags: ['generosity_fund'] 
-        });
+        commitAction({ date: timestamp, type: 'TRANSFER', title: 'Funded Generosity Wallet', amount: genAmount, description: 'Allocated for future giving', tags: ['generosity_fund'] });
     }
 
-    // Runway
     if (runwayAmount > 0) {
         updateAccount('payroll', runwayAmount); 
         commitAction({ date: timestamp, type: 'TRANSFER', title: 'Runway Extension', amount: runwayAmount, tags: ['operations'] });
     }
 
-    // Goals
     Object.entries(allocations).forEach(([goalId, amount]) => {
        if (amount > 0) {
          updateAccount('buffer', amount);
@@ -249,7 +233,6 @@ export const Triage = () => {
        }
     });
 
-    // Return Remaining to Holding
     if (remaining > 0) updateAccount('holding', remaining);
 
     navigate('/');
@@ -260,10 +243,10 @@ export const Triage = () => {
   return (
     <div className="max-w-3xl mx-auto p-4 md:p-8 pb-20 space-y-8 animate-fade-in relative">
 
-      {/* --- MANUAL MODAL --- */}
+      {/* --- MANUAL MODAL (Hidden by default) --- */}
       <OperatorsManual isOpen={showManual} onClose={() => setShowManual(false)} initialChapterId={manualChapter} />
       
-      {/* --- MODAL: SILENCE PROTOCOL (BIG DROP INTERCEPTOR) --- */}
+      {/* --- SILENCE PROTOCOL --- */}
       {showSilenceProtocol && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-fade-in">
               <div className="w-full max-w-md bg-zinc-900 border border-red-500/50 rounded-2xl p-6 shadow-[0_0_50px_rgba(239,68,68,0.2)]">
@@ -272,30 +255,23 @@ export const Triage = () => {
                       <h2 className="text-2xl font-bold text-white uppercase tracking-widest">Silence Protocol</h2>
                       <p className="text-red-400 font-mono mt-2 text-sm">HIGH VALUE ASSET DETECTED ($10k+)</p>
                   </div>
-
                   <div className="space-y-4 mb-8">
-                      <p className="text-gray-400 text-sm text-center">
-                          You are about to deploy significant capital. The algorithm requires you to verify your state of mind.
-                      </p>
-
+                      <p className="text-gray-400 text-sm text-center">You are about to deploy significant capital. The algorithm requires you to verify your state of mind.</p>
                       <label className="flex items-start gap-3 p-3 bg-white/5 rounded-lg cursor-pointer border border-transparent hover:border-red-500/30 transition-colors">
                           <input type="checkbox" checked={silenceChecks.silence} onChange={() => setSilenceChecks(prev => ({...prev, silence: !prev.silence}))} className="mt-1 accent-red-500"/>
                           <span className="text-sm text-gray-300">I have engaged the Silence Protocol. I have told absolutely no one about this drop.</span>
                       </label>
-
                       <label className="flex items-start gap-3 p-3 bg-white/5 rounded-lg cursor-pointer border border-transparent hover:border-red-500/30 transition-colors">
                           <input type="checkbox" checked={silenceChecks.time} onChange={() => setSilenceChecks(prev => ({...prev, time: !prev.time}))} className="mt-1 accent-red-500"/>
                           <span className="text-sm text-gray-300">I have waited the mandatory cooling period. I am not acting on dopamine.</span>
                       </label>
-
                       <label className="flex items-start gap-3 p-3 bg-white/5 rounded-lg cursor-pointer border border-transparent hover:border-red-500/30 transition-colors">
                           <input type="checkbox" checked={silenceChecks.clarity} onChange={() => setSilenceChecks(prev => ({...prev, clarity: !prev.clarity}))} className="mt-1 accent-red-500"/>
                           <span className="text-sm text-gray-300">I have reviewed Page 1 (The Constitution) and remember who I am building this for.</span>
                       </label>
                   </div>
-
                   <div className="flex gap-3">
-                      <button onClick={openProtocol} className="flex-1 py-3 bg-white/10 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-white/20 transition-colors">
+                      <button onClick={() => openManualTo('manifesto')} className="flex-1 py-3 bg-white/10 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-white/20 transition-colors">
                           <FileText size={16}/> View Protocol
                       </button>
                       <button 
@@ -315,13 +291,12 @@ export const Triage = () => {
           </div>
       )}
 
-      {/* --- MODAL: TRIAGE HISTORY --- */}
+      {/* --- HISTORY MODAL --- */}
       {showHistory && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-fade-in">
           <GlassCard className="w-full max-w-md max-h-[70vh] flex flex-col relative">
             <button onClick={() => setShowHistory(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X size={20}/></button>
             <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><History size={20}/> Triage History</h3>
-            
             <div className="flex-1 overflow-y-auto space-y-3 pr-2">
               {triageHistory.length === 0 ? (
                 <div className="text-gray-500 text-sm text-center py-8">No triage sessions recorded yet.</div>
@@ -370,8 +345,6 @@ export const Triage = () => {
                   onChange={(e) => setRate(e.target.value)} 
                   className={rateError ? 'border-red-500/50' : ''}
                 />
-                
-                {/* THE HYBRID BUTTON */}
                 <button 
                   onClick={handleFetchRate}
                   disabled={isFetchingRate}
@@ -382,7 +355,6 @@ export const Triage = () => {
               </div>
             </div>
 
-            {/* Error Message if API fails */}
             {rateError && (
                <div className="text-[10px] text-red-400 flex items-center gap-1 justify-end -mt-3">
                   <AlertTriangle size={10}/> {rateError}
@@ -405,15 +377,15 @@ export const Triage = () => {
 
             {/* Tax Sliders */}
             <div className="space-y-4 pt-2">
-                {/* 1. Tax Shield (Enhanced with Manual) */}
+                {/* 1. Tax Shield (With Help) */}
                 <div className="p-4 bg-slate-500/10 rounded-xl border border-slate-500/20">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-slate-400"><ShieldCheck size={16}/> Tax Shield (NTA 2026)</span>
                         <button 
-                           onClick={openProtocol}
+                           onClick={() => openManualTo('protocol_z')}
                            className="text-[10px] flex items-center gap-1 text-slate-500 hover:text-white transition-colors bg-white/5 px-2 py-1 rounded hover:bg-white/10"
                         >
-                           <BookOpen size={10}/> View Protocol
+                           <BookOpen size={10}/> Why?
                         </button>
                     </div>
                     <div className="flex justify-between mb-2">
@@ -426,19 +398,35 @@ export const Triage = () => {
                     </div>
                 </div>
 
-                {/* 2. Venture Tax */}
+                {/* 2. Venture Tax (With Help) */}
                 <div className="p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-red-500"><Flame size={16}/> Venture Tax</span>
-                        <span className="font-mono text-red-500">{ventureTax}%</span>
+                        <button 
+                           onClick={() => openManualTo('filters')} 
+                           className="text-[10px] flex items-center gap-1 text-gray-500 hover:text-white transition-colors bg-white/5 px-2 py-1 rounded hover:bg-white/10"
+                        >
+                           <HelpCircle size={10}/> Strategy
+                        </button>
+                    </div>
+                    <div className="flex justify-between mb-2">
+                         <span className="font-mono text-red-500">{ventureTax}%</span>
                     </div>
                     <input type="range" min="0" max="20" value={ventureTax} onChange={(e) => setVentureTax(Number(e.target.value))} className="w-full accent-red-500 cursor-pointer"/>
                 </div>
 
-                {/* 3. The Vault */}
+                {/* 3. The Vault (With Help) */}
                 <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center gap-2 font-bold text-blue-400"><Landmark size={16}/> The Vault</span>
+                        <button 
+                           onClick={() => openManualTo('engine')} 
+                           className="text-[10px] flex items-center gap-1 text-blue-400/50 hover:text-blue-200 transition-colors bg-blue-500/5 px-2 py-1 rounded hover:bg-blue-500/20"
+                        >
+                           <BookOpen size={10}/> Rules
+                        </button>
+                    </div>
+                    <div className="flex justify-between mb-2">
                         <span className="font-mono text-blue-400">{vaultTax}%</span>
                     </div>
                     <input type="range" min="0" max="50" value={vaultTax} onChange={(e) => setVaultTax(Number(e.target.value))} className="w-full accent-blue-500 cursor-pointer"/>
@@ -458,7 +446,6 @@ export const Triage = () => {
                </button>
                <div>
                   <h2 className="text-lg font-bold text-white">Allocation Strategy</h2>
-                  {/* BIG DROP VISUAL REMINDER */}
                   {isBigDrop && (
                     <span className="text-[10px] bg-yellow-500/20 text-yellow-500 px-2 py-0.5 rounded border border-yellow-500/50 font-mono">
                         ⚠ BIG DROP MODE: STRICT ADHERENCE
@@ -492,7 +479,7 @@ export const Triage = () => {
               <p className="text-[10px] text-gray-500 mt-2 text-right">Extends operational life (Payroll).</p>
             </div>
 
-            {/* Generosity (New Wallet Architecture) */}
+            {/* Generosity */}
             <div className={`p-4 rounded-xl border transition-colors ${isGenerosityLocked ? 'bg-red-500/5 border-red-500/30' : isOverCap ? 'bg-red-500/10 border-red-500' : 'bg-white/5 border-white/10'}`}>
               <div className="flex justify-between mb-2">
                 <span className="flex items-center gap-2 font-bold text-white"><Heart size={16} className={isGenerosityLocked ? 'text-gray-500' : 'text-accent-info'}/> Generosity Wallet</span>

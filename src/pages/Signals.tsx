@@ -8,21 +8,22 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
 import { DrillModeModal } from '../components/signals/DrillModeModal'; 
 import { SignalDossierModal } from '../components/signals/SignalDossierModal'; 
-import { HarvestModal } from '../components/signals/HarvestModal'; 
 import { ClosureModal } from '../components/signals/ClosureModal'; 
 import { TransitionWizard } from '../components/signals/TransitionWizard'; 
 import { GraveyardVault } from '../components/signals/GraveyardVault'; 
 import { OperatorsManual } from '../components/signals/OperatorsManual'; 
+import { TreasuryVault } from '../components/signals/TreasuryVault'; 
 
 // UTILS
 import { formatNumber } from '../utils/format';
 import { getSectorStyle, generateAssetID } from '../utils/colors'; 
+import { transitionLifecycle } from '../utils/lifecycle'; // NEW: Lifecycle Engine
 import { type Signal, type SignalPhase } from '../types';
 
 // ICONS
 import { 
   Zap, Maximize2, Skull, Archive, 
-  DollarSign, ArrowRight, Flame, Snowflake 
+  DollarSign, ArrowRight, ArrowLeft, Flame, Snowflake, Landmark 
 } from 'lucide-react';
 
 export const Signals = () => {
@@ -33,18 +34,19 @@ export const Signals = () => {
   const [isDrillOpen, setIsDrillOpen] = useState(false);
   const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null); 
   const [showGraveyard, setShowGraveyard] = useState(false);
+  const [showTreasury, setShowTreasury] = useState(false); 
   const [showManual, setShowManual] = useState(false); 
 
   // Active Modals
   const [dossierSignal, setDossierSignal] = useState<Signal | null>(null);       
-  const [harvestSignal, setHarvestSignal] = useState<Signal | null>(null); 
   const [killSignal, setKillSignal] = useState<Signal | null>(null); 
   const [promoteSignal, setPromoteSignal] = useState<{signal: Signal, phase: SignalPhase} | null>(null);
 
   // --- ANALYTICS ---
   const analytics = useMemo(() => {
     const totalSignals = signals.length;
-    const wins = signals.filter(s => s.phase === 'delivered' || s.phase === 'harvested');
+    // Wins are signals that have generated revenue > 0
+    const wins = signals.filter(s => s.totalGenerated > 0);
     const winRate = totalSignals > 0 ? (wins.length / totalSignals) * 100 : 0;
 
     const sectors: Record<string, { count: number, value: number }> = {};
@@ -69,7 +71,7 @@ export const Signals = () => {
 
   const handleDossierUpdate = async (updatedSignal: Signal, logContent: string) => {
     updateSignal(updatedSignal);
-    
+
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
         await supabase.from('signal_logs').insert({
@@ -91,6 +93,17 @@ export const Signals = () => {
 
   const handleCreateFromDrill = (data: Partial<Signal>) => {
     if (!data.title) { alert("Title required"); return; }
+    
+    const now = new Date().toISOString();
+    
+    // Initialize Lifecycle
+    const initialLifecycle = [{
+        phase: 'discovery' as SignalPhase,
+        enteredAt: now,
+        hoursAtEntry: 0,
+        notes: 'Signal Created'
+    }];
+
     addSignal({
         title: data.title,
         sector: data.sector || 'General',
@@ -104,16 +117,24 @@ export const Signals = () => {
         thesis: { alpha: '', catalyst: '', invalidation: '', expectedValue: 0 },
         research: { links: {}, token: { status: 'none' }, findings: '', pickReason: '', drillNotes: {} },
         timeline: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: now,
+        updatedAt: now,
+        lifecycle: initialLifecycle, // Initialize History
         ...data as any
     });
     setIsDrillOpen(false);
   };
 
-  const initiateMove = (signal: Signal, currentPhase: SignalPhase) => {
-    const nextIndex = activeColumns.findIndex(c => c.id === currentPhase) + 1;
-    if (nextIndex < activeColumns.length) {
+  // UPDATED: Handle both Forward (Next) and Backward (Prev) movements
+  const initiateMove = (signal: Signal, currentPhase: SignalPhase, direction: 'next' | 'prev') => {
+    const currentIndex = activeColumns.findIndex(c => c.id === currentPhase);
+    
+    let nextIndex = -1;
+    if (direction === 'next') nextIndex = currentIndex + 1;
+    if (direction === 'prev') nextIndex = currentIndex - 1;
+
+    // Boundary Check
+    if (nextIndex >= 0 && nextIndex < activeColumns.length) {
        const nextPhase = activeColumns[nextIndex].id;
        setPromoteSignal({ signal, phase: nextPhase });
     }
@@ -122,18 +143,26 @@ export const Signals = () => {
   const confirmMove = (notes: string, addedHours: number) => {
     if (!promoteSignal) return;
     const { signal, phase } = promoteSignal;
-    
+    const newTotalHours = (signal.hoursLogged || 0) + addedHours;
+
+    // 1. Calculate new Lifecycle Array using Utility
+    const updatedLifecycle = transitionLifecycle(signal, phase, newTotalHours, notes);
+
+    // 2. Update Signal
     updateSignal({ 
         ...signal, 
         phase, 
-        hoursLogged: (signal.hoursLogged || 0) + addedHours,
+        hoursLogged: newTotalHours,
+        lifecycle: updatedLifecycle, 
         updatedAt: new Date().toISOString() 
     });
+
+    const isRegress = activeColumns.findIndex(c => c.id === phase) < activeColumns.findIndex(c => c.id === signal.phase);
 
     commitAction({
       date: new Date().toISOString(),
       type: 'SIGNAL_ADVANCE',
-      title: `Advanced: ${signal.title}`,
+      title: isRegress ? `Regressed: ${signal.title}` : `Advanced: ${signal.title}`,
       description: `To ${phase} | ${notes}`,
       linkedSignalId: signal.id
     });
@@ -142,12 +171,23 @@ export const Signals = () => {
 
   const confirmKill = (outcome: any) => {
     if (!killSignal) return;
+
+    // 1. Transition to 'graveyard' phase
+    const updatedLifecycle = transitionLifecycle(
+        killSignal, 
+        'graveyard', 
+        killSignal.hoursLogged || 0, 
+        `Killed: ${outcome.reason}`
+    );
+
     updateSignal({ 
         ...killSignal, 
         phase: 'graveyard', 
         outcome,
+        lifecycle: updatedLifecycle,
         updatedAt: new Date().toISOString() 
     });
+
     commitAction({ 
         date: new Date().toISOString(), 
         type: 'SIGNAL_KILL', 
@@ -159,24 +199,9 @@ export const Signals = () => {
     setSelectedSignalId(null);
   };
 
-  const handleHarvestConfirm = (amount: number) => {
-    if (!harvestSignal) return;
-    updateSignal({ 
-      ...harvestSignal, 
-      phase: 'harvested', 
-      totalGenerated: (harvestSignal.totalGenerated || 0) + amount,
-      updatedAt: new Date().toISOString() 
-    });
-    commitAction({
-      date: new Date().toISOString(),
-      type: 'SIGNAL_UPDATE',
-      title: `Harvested: ${harvestSignal.title}`,
-      description: `Profit: $${formatNumber(amount)}`,
-      linkedSignalId: harvestSignal.id,
-      amount: amount
-    });
-    setHarvestSignal(null);
-    navigate(`/triage?source=${encodeURIComponent(harvestSignal.title)}&amount=${amount}`);
+  // UPDATED: Redirect to Triage
+  const handleHarvestClick = (signal: Signal) => {
+    navigate(`/triage?source=${encodeURIComponent(signal.id)}`);
   };
 
   const activeColumns: { id: SignalPhase; label: string; color: string }[] = [
@@ -192,10 +217,10 @@ export const Signals = () => {
       {/* --- MODAL MANAGER --- */}
       {isDrillOpen && <DrillModeModal onClose={() => setIsDrillOpen(false)} onSave={handleCreateFromDrill} />}
       {dossierSignal && <SignalDossierModal signal={dossierSignal} onClose={() => setDossierSignal(null)} onUpdate={handleDossierUpdate}/>}
-      {harvestSignal && <HarvestModal signal={harvestSignal} onClose={() => setHarvestSignal(null)} onConfirm={handleHarvestConfirm} />}
       {killSignal && <ClosureModal signal={killSignal} onClose={() => setKillSignal(null)} onConfirm={confirmKill} />}
       {promoteSignal && <TransitionWizard signal={promoteSignal.signal} targetPhase={promoteSignal.phase} onClose={() => setPromoteSignal(null)} onConfirm={confirmMove} />}
       {showGraveyard && <GraveyardVault onClose={() => setShowGraveyard(false)} onRevive={(s) => { updateSignal({...s, phase: 'discovery'}); setShowGraveyard(false); }} />}
+      {showTreasury && <TreasuryVault onClose={() => setShowTreasury(false)} />}
       <OperatorsManual isOpen={showManual} onClose={() => setShowManual(false)} onAction={handleManualAction} />
 
       {/* --- HEADER --- */}
@@ -217,6 +242,9 @@ export const Signals = () => {
         </div>
 
         <div className="flex gap-2">
+          <GlassButton size="sm" variant="secondary" onClick={() => setShowTreasury(true)} className="text-yellow-400 border-yellow-500/20 hover:bg-yellow-500/10">
+             <Landmark size={16} className="mr-2"/> Treasury
+          </GlassButton>
           <GlassButton size="sm" variant="secondary" onClick={() => setShowGraveyard(true)}>
              <Archive size={16} className="mr-2"/> The Crypt
           </GlassButton>
@@ -290,15 +318,39 @@ export const Signals = () => {
                       {isSelected && (
                         <div className="mt-4 pt-3 border-t border-white/10 flex flex-col gap-2 animate-fade-in">
                            <div className="flex justify-between items-center gap-2">
+                             
+                             {/* BACKWARD BUTTON: Only if not in Discovery */}
+                             {col.id !== 'discovery' && (
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); initiateMove(s, col.id, 'prev'); }} 
+                                    className="text-xs font-bold text-orange-400 hover:text-white bg-orange-500/10 hover:bg-orange-500/30 px-3 py-1.5 rounded-lg border border-orange-500/20"
+                                    title="Regress Phase"
+                                >
+                                    <ArrowLeft size={14} />
+                                </button>
+                             )}
+
+                             {/* DOSSIER (Takes remaining space) */}
                              <button onClick={(e) => { e.stopPropagation(); setDossierSignal(s); }} className="flex-1 text-xs font-bold text-white bg-green-600/20 hover:bg-green-600/40 px-3 py-1.5 rounded-lg flex items-center justify-center gap-2 border border-green-500/30">
                                <Maximize2 size={12}/> Dossier
                              </button>
-                             {col.id === 'delivered' ? (
-                                <button onClick={(e) => { e.stopPropagation(); setHarvestSignal(s); }} className="text-xs font-bold text-green-400 hover:text-white bg-green-500/10 hover:bg-green-500/30 px-3 py-1.5 rounded-lg border border-green-500/20">
-                                    <DollarSign size={14} />
-                                </button>
-                             ) : (
-                                <button onClick={(e) => { e.stopPropagation(); initiateMove(s, col.id); }} className="text-xs font-bold text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500/30 px-3 py-1.5 rounded-lg border border-blue-500/20">
+                             
+                             {/* HARVEST/TRIAGE */}
+                             <button 
+                                onClick={(e) => { e.stopPropagation(); handleHarvestClick(s); }} 
+                                className="text-xs font-bold text-green-400 hover:text-white bg-green-500/10 hover:bg-green-500/30 px-3 py-1.5 rounded-lg border border-green-500/20"
+                                title="Harvest (Go to Triage)"
+                             >
+                                <DollarSign size={14} />
+                             </button>
+                             
+                             {/* FORWARD BUTTON: Only if not in Delivered */}
+                             {col.id !== 'delivered' && (
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); initiateMove(s, col.id, 'next'); }} 
+                                    className="text-xs font-bold text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500/30 px-3 py-1.5 rounded-lg border border-blue-500/20"
+                                    title="Advance Phase"
+                                >
                                     <ArrowRight size={14} />
                                 </button>
                              )}

@@ -42,10 +42,11 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
     s.toLowerCase() !== formData.sector.toLowerCase()
   );
 
-  // 2. Red Flags Source (Single Source of Truth)
+  // 2. Red Flags Source (Fixed TypeScript Error)
   const RED_FLAGS_SOURCE = useMemo(() => {
     const filterChapter = MANUAL_CHAPTERS.find(c => c.id === 'filters');
-    const flagBlock = filterChapter?.content.find(b => b.type === 'card_grid' && b.variant === 'danger');
+    // FIX: Added (b: any) to allow checking 'variant' on the union type
+    const flagBlock = filterChapter?.content.find((b: any) => b.type === 'card_grid' && b.variant === 'danger');
     return (flagBlock as any)?.items || [];
   }, []);
 
@@ -115,7 +116,6 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
         </div>
 
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
-          {/* STEPS 1-4 (Standard inputs) */}
           {step === 1 && (
             <div className="space-y-4 animate-fade-in">
               <h3 className="text-lg font-bold text-white flex items-center gap-2"><LinkIcon size={18} className="text-blue-400"/> The Artifacts</h3>
@@ -157,7 +157,6 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
             </div>
           )}
 
-          {/* STEP 5: FINAL REVIEW */}
           {step === 5 && (
             <div className="space-y-6 animate-fade-in text-center py-4">
               <div className="inline-flex p-4 rounded-full bg-green-500/10 text-green-500 mb-2"><CheckCircle2 size={32}/></div>
@@ -166,7 +165,6 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
               <div className="text-left space-y-4">
                 <GlassInput label="Project Name" value={formData.title} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(p => ({...p, title: e.target.value}))} autoFocus />
                 
-                {/* SECTOR AUTOCOMPLETE */}
                 <div className="relative">
                     <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Sector</label>
                     <input 
@@ -190,7 +188,6 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
                     )}
                 </div>
 
-                {/* RED FLAG WARNINGS (WIRED TO MANUAL) */}
                 <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4 mb-2">
                    <div className="flex items-center gap-2 mb-2 text-red-400">
                       <AlertTriangle size={14} />
@@ -206,7 +203,6 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
                    </div>
                 </div>
 
-                {/* CONFIDENCE UI */}
                 <div className={`p-4 rounded-xl border transition-all duration-300 ${missingFields.length > 0 ? 'bg-red-500/5 border-red-500/30' : 'bg-green-500/10 border-green-500/50 shadow-md'}`}>
                   <div className="flex justify-between mb-2">
                     <label className="text-xs font-bold text-gray-500 uppercase">Initial Confidence</label>

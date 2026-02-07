@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
 import { useLedger } from '../context/LedgerContext';
-import { useExchangeRate } from '../hooks/useExchangeRate'; 
+import { useExchangeRate } from '../hooks/useExchangeRate'; // IMPORT THE HOOK
 
 // UI COMPONENTS
 import { GlassCard } from '../components/ui/GlassCard';
@@ -30,9 +30,8 @@ export const Triage = () => {
     updateAccount, commitAction, updateSignal, fundGoal 
   } = useLedger();
 
-  // --- STATE 1: EXCHANGE RATE ---
-  const { rate, setRate, fetchLiveRate } = useExchangeRate(); 
-  const [isFetchingRate, setIsFetchingRate] = useState(false);
+  // --- STATE 1: EXCHANGE RATE (The Hybrid Logic) ---
+  const { rate, setRate, loading: isFetchingRate, error: rateError, fetchLiveRate } = useExchangeRate(); 
 
   // --- STATE 2: FORM DATA ---
   const [step, setStep] = useState(1);
@@ -125,9 +124,7 @@ export const Triage = () => {
   // --- ACTIONS ---
 
   const handleFetchRate = async () => {
-    setIsFetchingRate(true);
     await fetchLiveRate();
-    setIsFetchingRate(false);
   };
 
   const autoDistribute = () => {
@@ -266,16 +263,26 @@ export const Triage = () => {
                   type="number" 
                   value={rate} 
                   onChange={(e) => setRate(e.target.value)} 
+                  className={rateError ? 'border-red-500/50' : ''}
                 />
+                
+                {/* THE HYBRID BUTTON */}
                 <button 
                   onClick={handleFetchRate}
                   disabled={isFetchingRate}
                   className="absolute right-2 top-8 text-[10px] bg-white/10 px-2 py-1 rounded text-accent-info hover:bg-white/20 transition-colors disabled:opacity-50 flex items-center gap-1"
                 >
-                  {isFetchingRate ? <RefreshCw size={10} className="animate-spin"/> : 'FETCH'}
+                  {isFetchingRate ? <RefreshCw size={10} className="animate-spin"/> : 'FETCH LIVE'}
                 </button>
               </div>
             </div>
+
+            {/* Error Message if API fails */}
+            {rateError && (
+               <div className="text-[10px] text-red-400 flex items-center gap-1 justify-end -mt-3">
+                  <AlertTriangle size={10}/> {rateError}
+               </div>
+            )}
 
             <GlassInput label="Cost Basis (USD)" type="number" value={costBasisUSD} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCostBasisUSD(e.target.value)} icon={<Lock size={14}/>}/>
 

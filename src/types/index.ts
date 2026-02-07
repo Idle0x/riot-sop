@@ -1,5 +1,3 @@
-// src/types.ts
-
 export type Currency = 'USD' | 'NGN';
 
 // --- USER & SYSTEM STATE ---
@@ -94,6 +92,14 @@ export interface SignalTimelineEntry {
   meta?: Record<string, any>; 
 }
 
+export interface SignalSession {
+  id: string;
+  date: string;
+  duration: number; // in hours
+  notes: string;
+  type: 'active' | 'adjustment';
+}
+
 export interface Signal {
   id: string;
   title: string;
@@ -101,6 +107,15 @@ export interface Signal {
   phase: SignalPhase;
   confidence: number;        
   effort: 'low' | 'med' | 'high';
+
+  // Time Architecture
+  timeEstimates?: {
+    weekly: number;        
+    total: number;         
+    completionDate: string; 
+  };
+  sessionLogs?: SignalSession[]; 
+  lastSessionAt?: string;      
 
   thesis: {
     alpha: string;        
@@ -146,9 +161,9 @@ export interface Signal {
 // --- HISTORY (BLACK BOX) ---
 export type LogType = 
   // Financial
-  'DROP' | 'SPEND' | 'TRANSFER' | 'TRIAGE' | 'TRIAGE_SESSION' | 'TAX_ALLOCATION' | 'GENEROSITY' |
+  'DROP' | 'SPEND' | 'TRANSFER' | 'TRIAGE' | 'TRIAGE_SESSION' | 'TAX_ALLOCATION' | 'GENEROSITY' | 'GENEROSITY_GIFT' |
   // Signals
-  'SIGNAL_CREATE' | 'SIGNAL_PROMOTE' | 'SIGNAL_KILL' | 'SIGNAL_REVIVE' | 'SIGNAL_UPDATE' | 'SIGNAL_HARVEST' | 'SIGNAL_ADVANCE' | 'FIELD_REPORT' |
+  'SIGNAL_CREATE' | 'SIGNAL_PROMOTE' | 'SIGNAL_KILL' | 'SIGNAL_REVIVE' | 'SIGNAL_UPDATE' | 'SIGNAL_HARVEST' | 'SIGNAL_ADVANCE' | 'FIELD_REPORT' | 'WORK_SESSION' |
   // Goals & Budgets
   'GOAL_CREATE' | 'GOAL_FUND' | 'GOAL_DELETE' | 
   'BUDGET_CREATE' | 'BUDGET_DELETE' |
@@ -160,10 +175,17 @@ export interface HistoryLog {
   date: string;
   type: LogType;
   title: string;
-  amount?: number;
+  amount?: number; // Used for Currency OR Hours (context dependent)
   currency?: Currency;
   description?: string;
+  
+  // Linkage
   linkedSignalId?: string;
   linkedGoalId?: string;
   tags?: string[];
+
+  // Forensic Metadata (New)
+  efficiencyRating?: number; // $/hr
+  recipientName?: string;    // Generosity
+  recipientTier?: 'T1' | 'T2' | 'T3' | 'T4'; // Generosity
 }

@@ -5,8 +5,9 @@ import { Naira } from '../components/ui/Naira';
 import { formatNumber } from '../utils/format';
 import { 
   Clock, Undo2, Search, Filter, ArrowDown, 
-  Target, Flame, Skull, Zap, Heart, ShieldCheck, Wallet 
-} from 'lucide-react'; // FIX: Removed 'RefreshCw'
+  Target, Flame, Skull, Zap, Heart, ShieldCheck, Wallet, 
+  Settings as Gear, ShieldAlert
+} from 'lucide-react';
 
 export const Ledger = () => {
   const { history, deleteTransaction } = useLedger();
@@ -32,8 +33,9 @@ export const Ledger = () => {
 
   const visibleHistory = filteredHistory.slice(0, limit);
 
-  // Icon Mapper
+  // Icon Mapper (Updated for System Events)
   const getIcon = (type: string) => {
+    if (type === 'SYSTEM_EVENT') return <ShieldAlert size={20}/>; // NEW
     if (type.includes('SIGNAL_KILL')) return <Skull size={20}/>;
     if (type.includes('SIGNAL')) return <Zap size={20}/>;
     if (type.includes('GOAL')) return <Target size={20}/>;
@@ -44,8 +46,9 @@ export const Ledger = () => {
     return <Clock size={20}/>;
   };
 
-  // Color Mapper
+  // Color Mapper (Updated for System Events)
   const getColor = (type: string) => {
+    if (type === 'SYSTEM_EVENT') return 'bg-orange-500/10 text-orange-500'; // NEW: Audit/Warning Color
     if (type.includes('KILL') || type.includes('DELETE') || type === 'SPEND') return 'bg-red-500/10 text-red-500';
     if (type === 'DROP' || type.includes('HARVEST') || type.includes('CREATE')) return 'bg-green-500/10 text-green-500';
     if (type.includes('PROMOTE') || type === 'TRIAGE') return 'bg-blue-500/10 text-blue-400';
@@ -80,6 +83,7 @@ export const Ledger = () => {
             onChange={e => setFilterType(e.target.value)}
           >
             <option value="ALL">All Events</option>
+            <option value="SYSTEM_EVENT">System Audits</option> {/* NEW */}
             <option value="SPEND">Spending</option>
             <option value="DROP">Income Drops</option>
             <option value="TRIAGE">Triage Operations</option>
@@ -100,7 +104,7 @@ export const Ledger = () => {
                <div>
                  <div className="font-bold text-white flex items-center gap-2">
                    {log.title}
-                   <span className="text-[10px] uppercase bg-white/10 px-2 py-0.5 rounded text-gray-400 font-mono">{log.type}</span>
+                   <span className="text-[10px] uppercase bg-white/10 px-2 py-0.5 rounded text-gray-400 font-mono">{log.type.replace('_', ' ')}</span>
                  </div>
                  <div className="text-xs text-gray-500">{new Date(log.date).toLocaleString()} • {log.description}</div>
                </div>

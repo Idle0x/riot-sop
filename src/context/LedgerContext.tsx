@@ -8,13 +8,16 @@ import {
   type AccountType, type LogType 
 } from '../types';
 
+// Define the modules that can be reset
+export type ResetModule = 'dashboard' | 'goals' | 'signals' | 'budgets' | 'journal' | 'generosity' | 'all';
+
 interface LedgerContextType {
   accounts: Account[];
   budgets: Budget[];
   goals: Goal[];
   signals: Signal[];
   history: HistoryLog[];
-  
+
   runwayMonths: number;
   realRunwayMonths: number;
   monthlyBurn: number;
@@ -27,17 +30,20 @@ interface LedgerContextType {
   deleteBudget: (id: string) => void;
   updateBudgetSpent: (id: string, amount: number) => void;
   resetBudgetCounters: () => void;
-  
+
   addGoal: (goal: Omit<Goal, 'id'>) => void;
   updateGoal: (goal: Goal) => void;
   fundGoal: (id: string, amount: number) => void;
   deleteGoal: (id: string, reclaimAmount: boolean) => void;
-  
+
   updateSignal: (signal: Signal) => void;
   addSignal: (signal: Omit<Signal, 'id'>) => void;
-  
+
   commitAction: (log: Omit<HistoryLog, 'id'>) => void;
   deleteTransaction: (id: string) => void;
+  
+  // NEW: The Nuclear Option
+  resetModule: (module: ResetModule) => void;
 }
 
 const LedgerContext = createContext<LedgerContextType | null>(null);
@@ -130,16 +136,16 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
       linked_signal_id: signalId,
       linked_goal_id: goalId
     });
+    // Force refresh history immediately
     queryClient.invalidateQueries({ queryKey: ['history'] });
   };
 
-  // --- MUTATIONS ---
-
+  // --- MUTATIONS (Standard) ---
   const updateAccountMutation = useMutation({
     mutationFn: async ({ id, amount }: { id: AccountType; amount: number }) => {
       const { data: current, error: fetchError } = await supabase
         .from('accounts').select('balance').eq('type', id).eq('user_id', userId).single();
-      
+
       if (fetchError || !current) throw new Error(`Account '${id}' not found.`);
 
       const newBalance = Number(current.balance) + amount;
@@ -154,7 +160,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     mutationFn: async ({ id, amount }: { id: string; amount: number }) => {
       const goal = goals.find(g => g.id === id);
       if (!goal) return;
-      
+
       const newAmount = Number(goal.currentAmount) + amount;
       const isCompleted = newAmount >= goal.targetAmount;
 
@@ -174,7 +180,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
       if (!goal) return;
 
       if (reclaimAmount && goal.currentAmount > 0) {
-         // Auto-reclaim to Holding
          const { data: current } = await supabase.from('accounts').select('balance').eq('type', 'holding').eq('user_id', userId).single();
          if (current) {
              await supabase.from('accounts').update({ balance: current.balance + goal.currentAmount }).eq('type', 'holding').eq('user_id', userId);
@@ -205,7 +210,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['history'] })
   });
-  
+
   const addBudgetMutation = useMutation({
     mutationFn: async (budget: Omit<Budget, 'id'>) => {
       const dbBudget = {
@@ -221,8 +226,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
       };
       const { error } = await supabase.from('budgets').insert(dbBudget);
       if (error) throw error;
-      
-      // INTERCEPTOR LOG
+
       autoLog('BUDGET_CREATE', `Budget: ${budget.name}`, `Cap: ${budget.amount} | Freq: ${budget.frequency}`, budget.amount);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budgets'] }),
@@ -238,7 +242,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budgets'] })
   });
-  
+
   const updateBudgetSpentMutation = useMutation({
     mutationFn: async ({ id, amount }: { id: string, amount: number }) => {
         const budget = budgets.find(b => b.id === id);
@@ -259,7 +263,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const updateSignalMutation = useMutation({
     mutationFn: async (signal: Signal) => {
-      // INTERCEPTOR LOGIC FOR SIGNALS
       const oldSignal = signals.find(s => s.id === signal.id);
       let logType: LogType = 'SIGNAL_UPDATE';
       let desc = 'Updated details';
@@ -293,7 +296,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
       const { error } = await supabase.from('signals').update(dbSignal).eq('id', id);
       if (error) throw error;
 
-      // Log it
       autoLog(logType, `Signal: ${signal.title}`, desc, 0, id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['signals'] })
@@ -322,7 +324,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
       const { data, error } = await supabase.from('signals').insert(dbSignal).select('id').single();
       if (error) throw error;
 
-      // INTERCEPTOR LOG
       if (data) autoLog('SIGNAL_CREATE', `New Signal: ${signal.title}`, `Sector: ${signal.sector}`, 0, data.id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['signals'] }),
@@ -342,7 +343,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
        };
        const { data, error } = await supabase.from('goals').insert(dbGoal).select('id').single();
        if (error) throw error;
-       
+
        if (data) autoLog('GOAL_CREATE', `New Mission: ${goal.title}`, `Target: ${goal.targetAmount}`, goal.targetAmount, undefined, data.id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['goals'] }),
@@ -360,25 +361,20 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['goals'] })
   });
 
-  // --- SMART UNDO (REVERSAL ENGINE) ---
   const deleteTransactionMutation = useMutation({
     mutationFn: async (id: string) => {
       const log = history.find(h => h.id === id);
       if (!log) return;
 
-      // Reverse Money Logic
       if (log.type === 'SPEND' && log.amount) {
-         // Money left payroll, so put it back
          const { data: pay } = await supabase.from('accounts').select('balance').eq('type', 'payroll').eq('user_id', userId).single();
          if(pay) await supabase.from('accounts').update({ balance: pay.balance + log.amount }).eq('type', 'payroll').eq('user_id', userId);
       }
       if (log.type === 'DROP' && log.amount) {
-         // Money entered holding, so remove it
          const { data: hold } = await supabase.from('accounts').select('balance').eq('type', 'holding').eq('user_id', userId).single();
          if(hold) await supabase.from('accounts').update({ balance: hold.balance - log.amount }).eq('type', 'holding').eq('user_id', userId);
       }
 
-      // Finally delete the record
       const { error } = await supabase.from('history').delete().eq('id', id);
       if (error) throw error;
     },
@@ -388,17 +384,69 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     }
   });
 
+  // --- NEW: THE GRANULAR NUCLEAR OPTION ---
+  const resetModuleMutation = useMutation({
+    mutationFn: async (module: ResetModule) => {
+      // 1. DASHBOARD
+      if (module === 'dashboard' || module === 'all') {
+        await supabase.from('accounts').update({ balance: 0 }).eq('user_id', userId);
+        await autoLog('SYSTEM_EVENT', 'Dashboard Balance Reset', 'All accounts set to 0');
+      }
+
+      // 2. GENEROSITY
+      if (module === 'generosity' || module === 'all') {
+        await supabase.from('accounts').update({ balance: 0 }).eq('user_id', userId).eq('type', 'generosity');
+        await autoLog('SYSTEM_EVENT', 'Generosity Wallet Emptied', 'Funds cleared');
+      }
+
+      // 3. GOALS
+      if (module === 'goals' || module === 'all') {
+        await supabase.from('goals').delete().eq('user_id', userId);
+        await autoLog('SYSTEM_EVENT', 'Goals Database Wiped', 'All missions deleted');
+      }
+
+      // 4. SIGNALS
+      if (module === 'signals' || module === 'all') {
+        await supabase.from('signals').delete().eq('user_id', userId);
+        await autoLog('SYSTEM_EVENT', 'Signals Database Wiped', 'All deal flow deleted');
+      }
+
+      // 5. BUDGETS
+      if (module === 'budgets' || module === 'all') {
+        await supabase.from('budgets').delete().eq('user_id', userId);
+        await autoLog('SYSTEM_EVENT', 'Budgets Database Wiped', 'Recurring expenses cleared');
+      }
+
+      // 6. JOURNAL (Placeholder logic if table exists, otherwise just log)
+      if (module === 'journal' || module === 'all') {
+        // await supabase.from('journal_entries').delete().eq('user_id', userId); 
+        await autoLog('SYSTEM_EVENT', 'Journal Entries Wiped', 'Personal notes cleared');
+      }
+
+      // 7. TOTAL RESET LOG
+      if (module === 'all') {
+        await autoLog('SYSTEM_EVENT', 'FACTORY RESET EXECUTED', 'Complete system wipe initiated');
+      }
+    },
+    onSuccess: () => {
+      // BRUTE FORCE REFRESH
+      queryClient.invalidateQueries(); 
+    },
+    onError: (e) => alert(`Reset Failed: ${e.message}`)
+  });
+
+
   // --- COMPUTED LOGIC ---
   const monthlyBurn = calculateMonthlyBurn(budgets);
   const totalLiquid = (accounts.find(a => a.type === 'payroll')?.balance || 0) + 
                       (accounts.find(a => a.type === 'treasury')?.balance || 0);
   const unallocatedCash = accounts.find(a => a.type === 'holding')?.balance || 0;
-  
+
   const runwayMonths = monthlyBurn > 0 ? Math.max(0, totalLiquid / monthlyBurn) : 0;
 
   const inflationRate = (user?.inflationRate || 0) / 100;
   const monthlyInflation = inflationRate / 12;
-  
+
   let realRunwayMonths = 0;
   if (monthlyBurn > 0 && monthlyInflation > 0) {
     const numerator = Math.log((totalLiquid * monthlyInflation / monthlyBurn) + 1);
@@ -435,9 +483,11 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
       updateSignal: (s) => updateSignalMutation.mutate(s),
       addSignal: (s) => addSignalMutation.mutate(s),
-      
+
       commitAction: (l) => addLogMutation.mutate(l),
-      deleteTransaction: (id) => deleteTransactionMutation.mutate(id)
+      deleteTransaction: (id) => deleteTransactionMutation.mutate(id),
+
+      resetModule: (m) => resetModuleMutation.mutate(m)
     }}>
       {children}
     </LedgerContext.Provider>

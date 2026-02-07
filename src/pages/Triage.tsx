@@ -175,12 +175,13 @@ export const Triage = () => {
     if (dropUSD > 0) {
       
       // SNAPSHOT: Capture the state of the asset at this exact moment
+      // FIX: Use undefined instead of null for strict types
       const snapshot = signal ? {
           phase: signal.phase,
           hoursLogged: signal.hoursLogged || 0,
           efficiency: (signal.hoursLogged || 0) > 0 ? dropUSD / (signal.hoursLogged || 1) : 0,
           sector: signal.sector
-      } : null;
+      } : undefined;
 
       commitAction({
         date: timestamp,
@@ -188,7 +189,7 @@ export const Triage = () => {
         title: isBigDrop ? `BIG DROP: $${formatNumber(dropUSD)}` : `Income Drop: $${formatNumber(dropUSD)}`,
         description: `Source: ${signal?.title || 'External'} @ ₦${rateVal}/$`,
         amount: grossNGN,
-        linkedSignalId: selectedSignalId || null,
+        linkedSignalId: selectedSignalId || undefined, // FIX: Use undefined
         tags: isBigDrop ? ['big_drop', 'protocol_verified'] : [],
         metadata: snapshot // Store the snapshot for The Treasury
       });

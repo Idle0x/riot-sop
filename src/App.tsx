@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
-import { AuthScreen } from './components/auth/AuthScreen'; // NEW
-import { supabase } from './lib/supabase'; // NEW
+import { AuthScreen } from './components/auth/AuthScreen';
+import { supabase } from './lib/supabase'; 
 
 // Pages
 import { Dashboard } from './pages/Dashboard';
@@ -13,9 +13,10 @@ import { Constitution } from './pages/Constitution';
 import { Budget } from './pages/Budget';
 import { Settings } from './pages/Settings';
 import { Ledger } from './pages/Ledger';
-import { Journal } from './pages/Journal';
 import { Analytics } from './pages/Analytics';
 import { Generosity } from './pages/Generosity';
+import { Journal } from './pages/Journal';
+import { Ingestion } from './pages/Ingestion'; // NEW IMPORT
 
 function App() {
   const [session, setSession] = useState<any>(null);
@@ -39,7 +40,7 @@ function App() {
   if (isLoading) return <div className="min-h-screen bg-black flex items-center justify-center text-gray-500">Initializing Uplink...</div>;
 
   if (!session) {
-    return <AuthScreen onAuthenticated={() => {}} />; // The listener handles the state update
+    return <AuthScreen onAuthenticated={() => {}} />; 
   }
 
   return (
@@ -50,6 +51,7 @@ function App() {
           <Route path="/triage" element={<Triage />} />
           <Route path="/roadmap" element={<Roadmap />} />
           <Route path="/budget" element={<Budget />} />
+          <Route path="/ingestion" element={<Ingestion />} /> {/* NEW ROUTE */}
           <Route path="/ledger" element={<Ledger />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/generosity" element={<Generosity />} />

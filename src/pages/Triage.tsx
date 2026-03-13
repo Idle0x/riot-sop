@@ -18,7 +18,7 @@ import { formatNumber } from '../utils/format';
 import { 
   ArrowRight, ArrowLeft, Flame, Heart, AlertTriangle, 
   CheckCircle2, Lock, Wand2, Landmark, ShieldCheck, 
-  Wallet, RefreshCw, History, X, AlertOctagon,
+  RefreshCw, History, X, AlertOctagon,
   Server, Cpu, Activity
 } from 'lucide-react';
 

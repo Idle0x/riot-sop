@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext'; 
 import { useLedger } from '../context/LedgerContext';
 import { useFinancialStats } from '../hooks/useFinancialStats'; 
-import { useAnalytics } from '../hooks/useAnalytics'; // Added for Top Burners
+import { useAnalytics } from '../hooks/useAnalytics'; 
 
 // UI COMPONENTS
 import { GlassCard } from '../components/ui/GlassCard';
@@ -36,10 +36,9 @@ export const Dashboard = () => {
 
   const { runwayMonths, history, goals } = useLedger();
   const { 
-    netFlow, inflow, outflow, burnDelta, chartData, allocation 
+    netFlow, inflow, outflow, leakOutflow, burnDelta, chartData, allocation 
   } = useFinancialStats();
-  
-  // Fetch Top Burners
+
   const { categorySplit } = useAnalytics();
 
   // 3. LEDGER STATE
@@ -56,23 +55,30 @@ export const Dashboard = () => {
   const burnCap = user?.burnCap || 0;
   const burnRatio = burnCap > 0 ? (outflow / burnCap) * 100 : 0;
 
-  // Active Goals (Top 3 by Priority)
+  // Active Goals (Top 3)
   const activeGoals = goals
     .filter(g => !g.isCompleted)
-    .sort((a, b) => b.priority - a.priority) // Assuming higher number = higher priority
+    .sort((a, b) => b.priority - a.priority) 
     .slice(0, 3);
 
   // Top Burners (Top 3)
   const topBurners = categorySplit.slice(0, 3);
 
-  // Visual Data for the "Pie Chart" background effect
+  // Recent Bleeds Context (Get unique categories that are bleeding right now)
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const activeBleedCategories = Array.from(new Set(
+      history
+        .filter(h => h.highVelocityFlag && h.date.startsWith(currentMonthKey))
+        .map(h => h.categoryGroup || 'Uncategorized')
+  ));
+
+  // Visual Data
   const allocationData = [
     { name: 'Ops', value: allocation.liquid, color: '#10b981' }, 
     { name: 'Defense', value: allocation.reserved, color: '#3b82f6' }, 
     { name: 'Idle', value: allocation.idle, color: '#eab308' }, 
   ].filter(d => d.value > 0);
 
-  // Filter Logic for Mini-Ledger
   const filteredActivity = history.filter(log => {
     if (activityFilter === 'ALL') return true;
     if (activityFilter === 'IN') return log.type === 'DROP' || log.type === 'TRIAGE_SESSION';
@@ -103,38 +109,64 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        {/* --- ALERT: UNALLOCATED CAPITAL (Strictly Holding Account) --- */}
-        {allocation.idle > 0 && (
-          <div className="bg-yellow-500/10 border border-yellow-500/50 p-6 rounded-2xl flex flex-col md:flex-row items-center justify-between animate-pulse shadow-[0_0_20px_rgba(234,179,8,0.2)] gap-4">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-yellow-500/20 rounded-xl text-yellow-500"><AlertTriangle size={24}/></div>
-              <div>
-                <h3 className="font-bold text-white text-lg">Unallocated Capital Detected</h3>
-                <p className="text-sm text-yellow-500/80">Funds are sitting idle in the Holding Pen.</p>
-              </div>
+        {/* --- ALERT QUEUE --- */}
+        <div className="space-y-4">
+            {/* UNALLOCATED CAPITAL */}
+            {allocation.idle > 0 && (
+            <div className="bg-yellow-500/10 border border-yellow-500/50 p-6 rounded-2xl flex flex-col md:flex-row items-center justify-between shadow-[0_0_20px_rgba(234,179,8,0.1)] gap-4">
+                <div className="flex items-center gap-4">
+                <div className="p-3 bg-yellow-500/20 rounded-xl text-yellow-500"><AlertTriangle size={24}/></div>
+                <div>
+                    <h3 className="font-bold text-white text-lg">Unallocated Capital Detected</h3>
+                    <p className="text-sm text-yellow-500/80">Funds are sitting idle in the Holding Pen.</p>
+                </div>
+                </div>
+                <div className="flex items-center gap-4">
+                <div className="font-mono font-bold text-yellow-500 text-xl flex items-center justify-end gap-1">
+                    <Naira/>{formatNumber(allocation.idle)}
+                </div>
+                <GlassButton size="sm" onClick={() => navigate('/triage')} className="border-yellow-500/50 text-yellow-500 hover:bg-yellow-500 hover:text-black">
+                    Triage Now <ArrowRight size={14} className="ml-1"/>
+                </GlassButton>
+                </div>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="font-mono font-bold text-yellow-500 text-xl flex items-center justify-end gap-1">
-                <Naira/>{formatNumber(allocation.idle)}
-              </div>
-              <GlassButton size="sm" onClick={() => navigate('/triage')} className="border-yellow-500/50 text-yellow-500 hover:bg-yellow-500 hover:text-black">
-                Triage Now <ArrowRight size={14} className="ml-1"/>
-              </GlassButton>
+            )}
+
+            {/* HIGH-VELOCITY BLEED WARNING */}
+            {leakOutflow > 0 && (
+            <div className="bg-red-500/10 border border-red-500/50 p-6 rounded-2xl flex flex-col md:flex-row items-center justify-between shadow-[0_0_20px_rgba(239,68,68,0.15)] gap-4 animate-fade-in">
+                <div className="flex items-center gap-4">
+                <div className="p-3 bg-red-500/20 rounded-xl text-red-500 animate-pulse"><Zap size={24}/></div>
+                <div>
+                    <h3 className="font-bold text-white text-lg">System Leak Detected</h3>
+                    <p className="text-sm text-red-400">High-frequency micro-transactions are draining liquidity.</p>
+                    <div className="flex gap-2 mt-2">
+                        {activeBleedCategories.map(cat => (
+                            <span key={cat} className="text-[10px] bg-red-500/20 border border-red-500/30 text-red-300 px-2 py-0.5 rounded uppercase font-bold">
+                                {cat}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+                </div>
+                <div className="flex flex-col md:items-end gap-2">
+                    <div className="text-xs text-gray-400 uppercase tracking-widest font-bold">Leaked (Mo)</div>
+                    <div className="font-mono font-bold text-red-500 text-2xl flex items-center justify-end gap-1">
+                        -<Naira/>{formatNumber(leakOutflow)}
+                    </div>
+                </div>
             </div>
-          </div>
-        )}
+            )}
+        </div>
 
         {/* --- DECK A: HUD METRICS --- */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Card 1: Runway */}
           <MetricCard 
             title="Liquid Runway" 
             value={<div className="flex items-center gap-1"><Naira/>{formatNumber(allocation.liquid)}</div>} 
             subValue={`${runwayMonths === Infinity ? '∞' : runwayMonths.toFixed(1)} Months`} 
             icon={<Activity size={20}/>} 
           />
-
-          {/* Card 2: Net Flow */}
           <MetricCard 
              title="Net Flow (Mo)"
              value={
@@ -151,8 +183,6 @@ export const Dashboard = () => {
              }
              icon={netFlow >= 0 ? <TrendingUp size={20}/> : <TrendingDown size={20}/>}
           />
-
-          {/* Card 3: Net Worth */}
           <div className="relative">
             <MetricCard 
               title="Net Worth" 
@@ -175,11 +205,10 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        {/* --- DECK B: RUNWAY COCKPIT (Upgraded) --- */}
+        {/* --- DECK B: RUNWAY COCKPIT --- */}
         <GlassCard className="p-0 overflow-hidden relative group h-48">
           <div className="absolute inset-0 p-8 z-10 flex flex-col md:flex-row justify-between items-start md:items-center">
-            
-            {/* LEFT: TIME (Survival) */}
+            {/* LEFT: TIME */}
             <div>
                 <h3 className="font-bold text-white text-lg flex items-center gap-2">
                   Runway Health
@@ -193,21 +222,17 @@ export const Dashboard = () => {
                 </div>
             </div>
 
-            {/* RIGHT: VELOCITY (Burn Numbers) */}
+            {/* RIGHT: VELOCITY */}
             <div className="text-left md:text-right mt-4 md:mt-0">
-                <div className="text-sm text-gray-400 uppercase font-bold tracking-widest mb-1">Burn Velocity</div>
+                <div className="text-sm text-gray-400 uppercase font-bold tracking-widest mb-1">Total Burn Velocity</div>
                 <div className="text-2xl font-mono font-bold text-white flex items-center justify-start md:justify-end gap-1">
                    <Naira/>{formatNumber(outflow)} <span className="text-sm text-gray-500">/ <Naira/>{formatNumber(burnCap)}</span>
                 </div>
-                
-                {/* Stats Row */}
                 <div className="flex items-center gap-3 mt-1 text-xs justify-start md:justify-end">
-                   {/* Cap Usage */}
                    <span className={`${burnRatio > 100 ? 'text-red-500' : 'text-gray-400'}`}>
                       {burnRatio.toFixed(0)}% of Cap Used
                    </span>
                    <span className="text-gray-600">|</span>
-                   {/* Delta */}
                    {burnDelta > 0 ? (
                       <span className="text-red-400 font-mono">▲ {burnDelta.toFixed(1)}% Velocity</span>
                     ) : (
@@ -216,8 +241,6 @@ export const Dashboard = () => {
                 </div>
             </div>
           </div>
-
-          {/* Background Area Chart */}
           <div className="absolute bottom-0 left-0 right-0 h-32 opacity-20 group-hover:opacity-30 transition-opacity pointer-events-none">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
@@ -227,7 +250,7 @@ export const Dashboard = () => {
                     <stop offset="95%" stopColor="#fff" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <Area type="monotone" dataKey="expenses" stroke="#fff" fill="url(#colorBurn)" strokeWidth={2} />
+                <Area type="monotone" dataKey="expense" stroke="#fff" fill="url(#colorBurn)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -235,7 +258,6 @@ export const Dashboard = () => {
 
         {/* --- DECK C: TACTICAL GRID --- */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-           {/* LEFT: Cash Flow Chart */}
            <div className="lg:col-span-2">
               <GlassCard className="p-6 h-full min-h-[300px]">
                 <div className="flex justify-between items-center mb-6">
@@ -252,32 +274,30 @@ export const Dashboard = () => {
                 </div>
               </GlassCard>
            </div>
-
-           {/* RIGHT: Asset Stack */}
            <div className="space-y-4">
               <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">Asset Allocation</h3>
-              <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center group hover:bg-white/10 transition-colors">
+              <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center hover:bg-white/10 transition-colors">
                   <div className="flex items-center gap-3">
                      <div className="p-2 bg-blue-500/20 text-blue-400 rounded-lg"><Wallet size={18}/></div>
                      <div><div className="text-sm font-bold text-white">Operations</div><div className="text-[10px] text-gray-500">Liquid Cash</div></div>
                   </div>
                   <div className="font-mono font-bold text-white"><Naira/>{formatNumber(allocation.liquid)}</div>
               </div>
-              <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center group hover:bg-white/10 transition-colors">
+              <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center hover:bg-white/10 transition-colors">
                   <div className="flex items-center gap-3">
                      <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-lg"><ShieldCheck size={18}/></div>
                      <div><div className="text-sm font-bold text-white">Defense</div><div className="text-[10px] text-gray-500">Vault + Buffer</div></div>
                   </div>
                   <div className="font-mono font-bold text-white"><Naira/>{formatNumber(allocation.reserved)}</div>
               </div>
-              <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center group hover:bg-white/10 transition-colors">
+              <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center hover:bg-white/10 transition-colors">
                   <div className="flex items-center gap-3">
                      <div className="p-2 bg-pink-500/20 text-pink-400 rounded-lg"><Heart size={18}/></div>
                      <div><div className="text-sm font-bold text-white">Generosity</div><div className="text-[10px] text-gray-500">Wallet Balance</div></div>
                   </div>
                   <div className="font-mono font-bold text-white"><Naira/>{formatNumber(allocation.generosity)}</div>
               </div>
-              <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center group hover:bg-white/10 transition-colors">
+              <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center hover:bg-white/10 transition-colors">
                   <div className="flex items-center gap-3">
                      <div className="p-2 bg-yellow-500/20 text-yellow-400 rounded-lg"><Zap size={18}/></div>
                      <div><div className="text-sm font-bold text-white">Signals</div><div className="text-[10px] text-gray-500">Total Generated</div></div>
@@ -287,66 +307,7 @@ export const Dashboard = () => {
            </div>
         </div>
 
-        {/* --- DECK D: FOCUS GRID (NEW) --- */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-           
-           {/* Active Missions (Goals) */}
-           <GlassCard className="p-6">
-              <div className="flex items-center gap-2 mb-4 text-orange-400">
-                 <Target size={18}/> <h3 className="font-bold text-white text-sm uppercase">Active Missions</h3>
-              </div>
-              <div className="space-y-3">
-                 {activeGoals.length === 0 ? (
-                    <div className="text-center text-xs text-gray-500 py-4">No active missions.</div>
-                 ) : (
-                    activeGoals.map(goal => (
-                       <div key={goal.id} className="flex justify-between items-center">
-                          <div>
-                             <div className="text-sm font-bold text-white">{goal.title}</div>
-                             <div className="text-[10px] text-gray-500">
-                               <Naira/>{formatNumber(goal.currentAmount)} / {formatNumber(goal.targetAmount)}
-                             </div>
-                          </div>
-                          <GlassProgressBar 
-                             value={goal.currentAmount} 
-                             max={goal.targetAmount} 
-                             color="warning" 
-                             size="sm" 
-                             showPercentage 
-                             className="w-24"
-                          />
-                       </div>
-                    ))
-                 )}
-              </div>
-           </GlassCard>
-
-           {/* Top Burners */}
-           <GlassCard className="p-6">
-              <div className="flex items-center gap-2 mb-4 text-red-400">
-                 <Flame size={18}/> <h3 className="font-bold text-white text-sm uppercase">Top Burners (Mo)</h3>
-              </div>
-              <div className="space-y-3">
-                 {topBurners.length === 0 ? (
-                    <div className="text-center text-xs text-gray-500 py-4">No spend data yet.</div>
-                 ) : (
-                    topBurners.map((cat, idx) => (
-                       <div key={cat.name} className="flex justify-between items-center border-b border-white/5 pb-2 last:border-0 last:pb-0">
-                          <div className="flex items-center gap-3">
-                             <div className="text-xs font-mono text-gray-500">0{idx + 1}</div>
-                             <div className="text-sm font-bold text-white">{cat.name}</div>
-                          </div>
-                          <div className="font-mono text-sm font-bold text-red-400">
-                             <Naira/>{formatNumber(cat.value)}
-                          </div>
-                       </div>
-                    ))
-                 )}
-              </div>
-           </GlassCard>
-        </div>
-
-        {/* --- DECK E: MINI-LEDGER --- */}
+        {/* --- DECK E: MINI-LEDGER (With Telemetry Flags) --- */}
         <GlassCard className="p-6">
           <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Recent System Events</h3>
@@ -364,16 +325,19 @@ export const Dashboard = () => {
               filteredActivity.map(log => {
                 const isIncome = log.type === 'DROP' || log.type === 'TRIAGE_SESSION';
                 const isSpend = log.type === 'SPEND' || log.type === 'GENEROSITY' || log.type === 'TRANSFER';
-                
+
                 return (
-                  <div key={log.id} className="flex justify-between items-center p-4 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-colors group">
+                  <div key={log.id} className={`flex justify-between items-center p-4 border rounded-xl hover:bg-white/10 transition-colors group ${log.highVelocityFlag ? 'bg-red-950/20 border-red-500/30' : 'bg-white/5 border-white/5'}`}>
                     <div className="flex items-center gap-3">
                       <div className={`p-2 rounded-lg ${isIncome ? 'bg-emerald-500/10 text-emerald-500' : isSpend ? 'bg-red-500/10 text-red-500' : 'bg-blue-500/10 text-blue-500'}`}>
                          {isIncome ? <ArrowDownLeft size={16}/> : isSpend ? <ArrowUpRight size={16}/> : <Activity size={16}/>}
                       </div>
                       <div>
-                        <div className="font-bold text-white text-sm group-hover:text-gray-200 transition-colors">{log.title}</div>
-                        <div className="text-xs text-gray-500">{new Date(log.date).toLocaleDateString()} • {log.type}</div>
+                        <div className="font-bold text-white text-sm flex items-center gap-2">
+                           {log.categoryGroup || log.title}
+                           {log.highVelocityFlag && <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded font-bold uppercase">BLEED</span>}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate max-w-[150px] md:max-w-xs">{new Date(log.date).toLocaleDateString()} • {log.description || log.type}</div>
                       </div>
                     </div>
                     <div className={`font-mono text-sm font-bold flex items-center gap-1 ${isIncome ? 'text-emerald-400' : isSpend ? 'text-red-400' : 'text-white'}`}>
@@ -385,7 +349,7 @@ export const Dashboard = () => {
               })
             )}
           </div>
-          
+
           <div className="mt-6 pt-4 border-t border-white/5 text-center">
              <button onClick={() => navigate('/ledger')} className="text-xs text-gray-500 hover:text-white transition-colors uppercase tracking-wider font-bold">
                 View Full Ledger

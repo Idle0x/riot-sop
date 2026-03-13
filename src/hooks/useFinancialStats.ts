@@ -12,10 +12,11 @@ export const useFinancialStats = () => {
     let thisMonthIn = 0;
     let thisMonthOut = 0;
     let lastMonthOut = 0;
+    let thisMonthLeakage = 0; // NEW: Track High-Velocity Bleed
 
     // 1. Chart Data Construction (Last 6 Months)
     const monthsMap = new Map<string, { name: string; income: number; expense: number }>();
-    
+
     // Initialize last 6 months to 0
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -35,7 +36,11 @@ export const useFinancialStats = () => {
       // Update Monthly Totals
       if (logMonth === currentMonthKey) {
         if (log.type === 'DROP' || log.type === 'TRIAGE_SESSION') thisMonthIn += amount;
-        if (log.type === 'SPEND' || log.type === 'GENEROSITY' || (log.type === 'TRANSFER' && log.tags?.includes('risk'))) thisMonthOut += amount;
+        if (log.type === 'SPEND' || log.type === 'GENEROSITY' || (log.type === 'TRANSFER' && log.tags?.includes('risk'))) {
+            thisMonthOut += amount;
+            // Catch the specific micro-bleeds
+            if (log.highVelocityFlag) thisMonthLeakage += amount;
+        }
       }
       if (logMonth === lastMonthKey) {
         if (log.type === 'SPEND' || log.type === 'GENEROSITY') lastMonthOut += amount;
@@ -68,6 +73,7 @@ export const useFinancialStats = () => {
       netFlow: thisMonthIn - thisMonthOut,
       inflow: thisMonthIn,
       outflow: thisMonthOut,
+      leakOutflow: thisMonthLeakage, // EXPOSED TO HUD
       burnDelta,
       chartData: Array.from(monthsMap.values()),
       allocation

@@ -15,7 +15,8 @@ import {
   PieChart,
   History,
   TrendingUp,
-  Heart 
+  Heart,
+  Database // NEW IMPORT
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { icon: Wallet, label: 'Triage', path: '/triage' },
   { icon: Target, label: 'Roadmap', path: '/roadmap' },
   { icon: PieChart, label: 'Budget', path: '/budget' },
+  { icon: Database, label: 'Ingestion', path: '/ingestion' }, // NEW MODULE
   { icon: History, label: 'Ledger', path: '/ledger' },
   { icon: TrendingUp, label: 'Analytics', path: '/analytics' },
   { icon: Heart, label: 'Generosity', path: '/generosity' },

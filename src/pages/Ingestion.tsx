@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../context/UserContext';
@@ -15,7 +15,8 @@ import { UploadCloud, CheckCircle2, Database, Zap, FileSpreadsheet } from 'lucid
 export const Ingestion = () => {
   const { session } = useUser();
   const queryClient = useQueryClient();
-  const [bankType, setBankType] = useState<'OPAY' | 'KUDA'>('OPAY');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const [isProcessing, setIsProcessing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [previewData, setPreviewData] = useState<Partial<HistoryLog>[]>([]);
@@ -28,13 +29,16 @@ export const Ingestion = () => {
     setIsProcessing(true);
     setUploadStatus(null);
     try {
-      const data = await processCSV(file, bankType);
+      // The bankType isn't strictly needed anymore since the parser is fuzzy
+      const data = await processCSV(file);
       setPreviewData(data);
-    } catch (err) {
-      alert("Failed to parse CSV. Ensure you selected the correct bank type.");
+    } catch (err: any) {
+      alert(`CSV Parsing Failed: ${err.message}\nMake sure it's a valid CSV converted from your bank statement.`);
       console.error(err);
     } finally {
       setIsProcessing(false);
+      // Reset input so the user can select the same file again if needed
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -58,7 +62,7 @@ export const Ingestion = () => {
         tags: log.tags
       }));
 
-      // Bulk Insert (Supabase 'upsert' with 'ignoreDuplicates' handles the idempotency constraint we added)
+      // Bulk Insert
       const { data, error } = await supabase
         .from('history')
         .upsert(payload, { onConflict: 'transaction_ref', ignoreDuplicates: true })
@@ -72,12 +76,6 @@ export const Ingestion = () => {
       setUploadStatus({ imported: importedCount, ignored: ignoredCount });
       queryClient.invalidateQueries({ queryKey: ['history'] });
       
-      if (importedCount > 0) {
-          // Invalidate accounts to force recalculation if necessary, though ingestion 
-          // assumes these are historical and don't double-count current live balance.
-          queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      }
-
     } catch (err: any) {
       alert(`Upload failed: ${err.message}`);
     } finally {
@@ -100,28 +98,19 @@ export const Ingestion = () => {
         
         {/* CONTROLS */}
         <GlassCard className="p-6 h-fit md:col-span-1">
-          <h3 className="font-bold text-white mb-4 uppercase tracking-widest text-xs">1. Select Source</h3>
-          <div className="flex gap-2 mb-6">
-            <button 
-              onClick={() => { setBankType('OPAY'); setPreviewData([]); setUploadStatus(null); }}
-              className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-colors ${bankType === 'OPAY' ? 'bg-green-500/20 text-green-400 border-green-500/50' : 'bg-black/20 text-gray-500 border-white/10 hover:border-white/30'}`}
-            >
-              OPay
-            </button>
-            <button 
-              onClick={() => { setBankType('KUDA'); setPreviewData([]); setUploadStatus(null); }}
-              className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-colors ${bankType === 'KUDA' ? 'bg-purple-500/20 text-purple-400 border-purple-500/50' : 'bg-black/20 text-gray-500 border-white/10 hover:border-white/30'}`}
-            >
-              Kuda
-            </button>
-          </div>
-
-          <h3 className="font-bold text-white mb-4 uppercase tracking-widest text-xs">2. Upload CSV</h3>
+          <h3 className="font-bold text-white mb-4 uppercase tracking-widest text-xs">Upload Statement</h3>
           <label className="border-2 border-dashed border-white/20 rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-accent-info/50 hover:bg-white/5 transition-all group">
              <UploadCloud size={32} className="text-gray-500 group-hover:text-accent-info mb-3"/>
-             <span className="text-sm font-bold text-white mb-1">Click to Upload Statement</span>
+             <span className="text-sm font-bold text-white mb-1 text-center">Click to Upload Statement</span>
              <span className="text-xs text-gray-500">.csv files only</span>
-             <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} disabled={isProcessing}/>
+             <input 
+                type="file" 
+                accept=".csv" 
+                className="hidden" 
+                onChange={handleFileUpload} 
+                disabled={isProcessing}
+                ref={fileInputRef}
+             />
           </label>
 
           {isProcessing && <div className="mt-4 text-center text-xs text-blue-400 animate-pulse">Running Telemetry Algorithms...</div>}

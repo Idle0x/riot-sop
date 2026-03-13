@@ -10,7 +10,7 @@ import { GlassButton } from '../components/ui/GlassButton';
 import { Naira } from '../components/ui/Naira';
 import { formatNumber } from '../utils/format';
 
-import { UploadCloud, AlertTriangle, CheckCircle2, Database, Zap, FileSpreadsheet } from 'lucide-react';
+import { UploadCloud, CheckCircle2, Database, Zap, FileSpreadsheet } from 'lucide-react';
 
 export const Ingestion = () => {
   const { session } = useUser();

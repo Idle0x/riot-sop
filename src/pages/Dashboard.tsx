@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext'; 
 import { useLedger } from '../context/LedgerContext';
 import { useFinancialStats } from '../hooks/useFinancialStats'; 
-import { useAnalytics } from '../hooks/useAnalytics'; 
 
 // UI COMPONENTS
 import { GlassCard } from '../components/ui/GlassCard';
@@ -24,7 +23,7 @@ import { ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recha
 import { 
   Clock, AlertTriangle, ArrowRight, Activity, ShieldCheck, 
   BarChart3, Wallet, Heart, Zap, TrendingUp, TrendingDown, 
-  ArrowDownLeft, ArrowUpRight, Target, Flame
+  ArrowDownLeft, ArrowUpRight
 } from 'lucide-react';
 
 export const Dashboard = () => {
@@ -34,12 +33,10 @@ export const Dashboard = () => {
   const { user, isGhostMode } = useUser();
   const [time, setTime] = useState(new Date());
 
-  const { runwayMonths, history, goals } = useLedger();
+  const { runwayMonths, history } = useLedger();
   const { 
     netFlow, inflow, outflow, leakOutflow, burnDelta, chartData, allocation 
   } = useFinancialStats();
-
-  const { categorySplit } = useAnalytics();
 
   // 3. LEDGER STATE
   const [activityFilter, setActivityFilter] = useState<'ALL' | 'IN' | 'OUT'>('ALL');
@@ -54,15 +51,6 @@ export const Dashboard = () => {
   const totalNetWorth = allocation.liquid + allocation.reserved + allocation.generosity + allocation.idle;
   const burnCap = user?.burnCap || 0;
   const burnRatio = burnCap > 0 ? (outflow / burnCap) * 100 : 0;
-
-  // Active Goals (Top 3)
-  const activeGoals = goals
-    .filter(g => !g.isCompleted)
-    .sort((a, b) => b.priority - a.priority) 
-    .slice(0, 3);
-
-  // Top Burners (Top 3)
-  const topBurners = categorySplit.slice(0, 3);
 
   // Recent Bleeds Context (Get unique categories that are bleeding right now)
   const currentMonthKey = new Date().toISOString().slice(0, 7);

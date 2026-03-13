@@ -12,7 +12,7 @@ export type RawTransaction = {
 
 // --- 1. CATEGORIZATION ENGINE ---
 export const categorizeTransaction = (description: string): string => {
-  const desc = description.toLowerCase();
+  const desc = (description || '').toLowerCase();
   
   if (desc.includes('sportybet') || desc.includes('bet9ja') || desc.includes('1xbet')) return 'Betting';
   if (desc.includes('airtime') || desc.includes('datamtn') || desc.includes('dataglo') || desc.includes('telecom')) return 'Telecom';
@@ -23,69 +23,64 @@ export const categorizeTransaction = (description: string): string => {
   return 'General';
 };
 
-// --- 2. BANK NORMALIZERS ---
+// --- 2. FUZZY DATA EXTRACTORS ---
+const getVal = (row: any, keywords: string[]): string => {
+  const key = Object.keys(row).find(k => keywords.some(kw => k.toLowerCase().includes(kw)));
+  return key ? String(row[key]) : '';
+};
+
 const parseAmount = (val: string) => {
   if (!val) return 0;
-  return parseFloat(val.replace(/,/g, '').replace(/N/g, '').replace(/#/g, '').trim());
+  const clean = val.replace(/,/g, '').replace(/N/g, '').replace(/#/g, '').trim();
+  const parsed = parseFloat(clean);
+  return isNaN(parsed) ? 0 : parsed;
 };
 
 const parseDate = (dateStr: string) => {
-  // Try to create a valid ISO date string from common NG formats
   try {
-    const parts = dateStr.split(' ');
-    if (parts.length >= 2) {
-        // e.g., "29 Oct 2022 22:06:16"
-        const d = new Date(dateStr);
-        if (!isNaN(d.getTime())) return d.toISOString();
-    }
-    // Fallback parsing logic can be expanded here based on strict formats
-    return new Date(dateStr).toISOString();
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) return d.toISOString();
+    return new Date().toISOString(); 
   } catch (e) {
-    return new Date().toISOString(); // Ultimate fallback
+    return new Date().toISOString();
   }
 };
 
-export const normalizeOPay = (data: any[]): RawTransaction[] => {
+// Unified Fuzzy Normalizer for both OPay and Kuda messy CSVs
+export const normalizeData = (data: any[]): RawTransaction[] => {
   return data
-    .filter(row => row['Trans. Time'] && row['Value Date']) // Skip empty rows
     .map(row => {
-      const debit = parseAmount(row['Debit']);
-      const credit = parseAmount(row['Credit']);
-      const isSpend = debit > 0;
-      
-      return {
-        date: parseDate(row['Trans. Time']),
-        description: row['Description'] || 'OPay Transaction',
-        amount: isSpend ? debit : credit,
-        type: isSpend ? 'SPEND' : 'DROP',
-        reference: row['Transaction Reference'] || crypto.randomUUID()
-      };
-    });
-};
+      // Fuzzy match column names because PDF-to-CSV converters mangle headers
+      const dateStr = getVal(row, ['time', 'date']);
+      const descStr = getVal(row, ['description', 'category', 'details']);
+      const moneyInStr = getVal(row, ['credit', 'money in', 'deposit']);
+      const moneyOutStr = getVal(row, ['debit', 'money out', 'withdrawal']);
+      const refStr = getVal(row, ['reference', 'ref']);
 
-export const normalizeKuda = (data: any[]): RawTransaction[] => {
-  return data
-    .filter(row => row['Date/Time']) 
-    .map(row => {
-      const moneyIn = parseAmount(row['Money In'] || row['Money in']);
-      const moneyOut = parseAmount(row['Money out']);
+      if (!dateStr || (!moneyInStr && !moneyOutStr)) return null;
+
+      const moneyIn = parseAmount(moneyInStr);
+      const moneyOut = parseAmount(moneyOutStr);
       const isSpend = moneyOut > 0;
+      const amount = isSpend ? moneyOut : moneyIn;
+
+      // Skip rows with 0 amount (often header artifacts)
+      if (amount === 0) return null;
 
       return {
-        date: parseDate(row['Date/Time']),
-        description: row['Description'] || row['Category'] || 'Kuda Transaction',
-        amount: isSpend ? moneyOut : moneyIn,
+        date: parseDate(dateStr),
+        description: descStr || 'Unknown Transaction',
+        amount: amount,
         type: isSpend ? 'SPEND' : 'DROP',
-        reference: `KUDA-${parseDate(row['Date/Time'])}-${isSpend ? moneyOut : moneyIn}` // Kuda often lacks strict refs in CSVs
+        reference: refStr || `AUTO-REF-${dateStr}-${amount}` // Fallback reference for idempotency
       };
-    });
+    })
+    .filter(Boolean) as RawTransaction[]; // Remove nulls
 };
 
-// --- 3. THE VELOCITY ALGORITHM (Circuit Breaker) ---
+// --- 3. THE VELOCITY ALGORITHM ---
 export const applyTelemetryFlags = (transactions: RawTransaction[]): Partial<HistoryLog>[] => {
-  // Sort chronologically (oldest first) to track time windows accurately
   const sorted = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  
   const flaggedData: Partial<HistoryLog>[] = [];
 
   for (let i = 0; i < sorted.length; i++) {
@@ -93,24 +88,18 @@ export const applyTelemetryFlags = (transactions: RawTransaction[]): Partial<His
     const category = categorizeTransaction(current.description);
     let isHighVelocity = false;
 
-    // Only check velocity for specific high-risk bleed categories
     if (current.type === 'SPEND' && ['Betting', 'Telecom', 'Food', 'POS/Cash'].includes(category)) {
-      let countInWindow = 1; // Start with current transaction
+      let countInWindow = 1; 
 
-      // Look backwards to see how many similar transactions occurred within 48 hours
       for (let j = i - 1; j >= 0; j--) {
         const prev = sorted[j];
         if (prev.type !== 'SPEND' || categorizeTransaction(prev.description) !== category) continue;
 
-        const hoursDiff = differenceInHours(new Date(current.date), new Date(prev.date));
-        
-        // If we've looked past 48 hours, stop checking backwards
+        const hoursDiff = Math.abs(differenceInHours(new Date(current.date), new Date(prev.date)));
         if (hoursDiff > 48) break;
-
         countInWindow++;
       }
 
-      // If 3 or more transactions of the same category happened within 48 hours, flag it
       if (countInWindow >= 3) {
         isHighVelocity = true;
       }
@@ -130,12 +119,11 @@ export const applyTelemetryFlags = (transactions: RawTransaction[]): Partial<His
     });
   }
 
-  // Reverse back to newest first for UI display
   return flaggedData.reverse();
 };
 
 // --- 4. MAIN EXECUTOR ---
-export const processCSV = async (file: File, bankType: 'OPAY' | 'KUDA'): Promise<Partial<HistoryLog>[]> => {
+export const processCSV = async (file: File): Promise<Partial<HistoryLog>[]> => {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       header: true,
@@ -143,7 +131,15 @@ export const processCSV = async (file: File, bankType: 'OPAY' | 'KUDA'): Promise
       complete: (results) => {
         try {
           const rawData = results.data;
-          const normalized = bankType === 'OPAY' ? normalizeOPay(rawData) : normalizeKuda(rawData);
+          if (!rawData || rawData.length === 0) {
+              reject(new Error("The CSV file is empty."));
+              return;
+          }
+          const normalized = normalizeData(rawData);
+          if (normalized.length === 0) {
+              reject(new Error("Could not find valid Date and Amount columns in the CSV."));
+              return;
+          }
           const telemetryApplied = applyTelemetryFlags(normalized);
           resolve(telemetryApplied);
         } catch (err) {

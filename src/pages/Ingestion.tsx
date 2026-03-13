@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../context/UserContext';
-import { processCSV } from '../utils/csvParsers';
+import { processStatement } from '../utils/csvParsers';
 import { type HistoryLog } from '../types';
 
 import { GlassCard } from '../components/ui/GlassCard';
@@ -10,7 +10,7 @@ import { GlassButton } from '../components/ui/GlassButton';
 import { Naira } from '../components/ui/Naira';
 import { formatNumber } from '../utils/format';
 
-import { UploadCloud, CheckCircle2, Database, Zap, FileSpreadsheet } from 'lucide-react';
+import { UploadCloud, CheckCircle2, Database, Zap, FileSpreadsheet, AlertTriangle } from 'lucide-react';
 
 export const Ingestion = () => {
   const { session } = useUser();
@@ -21,6 +21,7 @@ export const Ingestion = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [previewData, setPreviewData] = useState<Partial<HistoryLog>[]>([]);
   const [uploadStatus, setUploadStatus] = useState<{ imported: number; ignored: number } | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -28,16 +29,17 @@ export const Ingestion = () => {
 
     setIsProcessing(true);
     setUploadStatus(null);
+    setErrorMsg(null);
+
     try {
-      // The bankType isn't strictly needed anymore since the parser is fuzzy
-      const data = await processCSV(file);
+      // The Master Router automatically handles Excel (.xls/.xlsx) or CSV files
+      const data = await processStatement(file);
       setPreviewData(data);
     } catch (err: any) {
-      alert(`CSV Parsing Failed: ${err.message}\nMake sure it's a valid CSV converted from your bank statement.`);
+      setErrorMsg(err.message || "Failed to parse document.");
       console.error(err);
     } finally {
       setIsProcessing(false);
-      // Reset input so the user can select the same file again if needed
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -45,6 +47,7 @@ export const Ingestion = () => {
   const handleCommitToLedger = async () => {
     if (!session?.user?.id || previewData.length === 0) return;
     setIsUploading(true);
+    setErrorMsg(null);
 
     try {
       // Prepare the payload mapping to snake_case for DB
@@ -62,7 +65,7 @@ export const Ingestion = () => {
         tags: log.tags
       }));
 
-      // Bulk Insert
+      // Bulk Insert with Idempotency
       const { data, error } = await supabase
         .from('history')
         .upsert(payload, { onConflict: 'transaction_ref', ignoreDuplicates: true })
@@ -77,7 +80,7 @@ export const Ingestion = () => {
       queryClient.invalidateQueries({ queryKey: ['history'] });
       
     } catch (err: any) {
-      alert(`Upload failed: ${err.message}`);
+      setErrorMsg(`Upload failed: ${err.message}`);
     } finally {
       setIsUploading(false);
     }
@@ -91,7 +94,7 @@ export const Ingestion = () => {
         <h1 className="text-3xl font-bold text-white flex items-center gap-3">
           <Database className="text-accent-info" /> Data Ingestion
         </h1>
-        <p className="text-gray-400 text-sm mt-1">Upload structural transaction data. Duplicates are automatically ignored.</p>
+        <p className="text-gray-400 text-sm mt-1">Upload native bank statements. Duplicates are automatically ignored.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -99,13 +102,14 @@ export const Ingestion = () => {
         {/* CONTROLS */}
         <GlassCard className="p-6 h-fit md:col-span-1">
           <h3 className="font-bold text-white mb-4 uppercase tracking-widest text-xs">Upload Statement</h3>
+          
           <label className="border-2 border-dashed border-white/20 rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-accent-info/50 hover:bg-white/5 transition-all group">
              <UploadCloud size={32} className="text-gray-500 group-hover:text-accent-info mb-3"/>
              <span className="text-sm font-bold text-white mb-1 text-center">Click to Upload Statement</span>
-             <span className="text-xs text-gray-500">.csv files only</span>
+             <span className="text-xs text-gray-500">.xls, .xlsx, or .csv</span>
              <input 
                 type="file" 
-                accept=".csv" 
+                accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" 
                 className="hidden" 
                 onChange={handleFileUpload} 
                 disabled={isProcessing}
@@ -113,7 +117,14 @@ export const Ingestion = () => {
              />
           </label>
 
-          {isProcessing && <div className="mt-4 text-center text-xs text-blue-400 animate-pulse">Running Telemetry Algorithms...</div>}
+          {isProcessing && <div className="mt-4 text-center text-xs text-blue-400 animate-pulse">Extracting Financial Data...</div>}
+          
+          {errorMsg && (
+             <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs flex items-start gap-2">
+                 <AlertTriangle size={14} className="shrink-0 mt-0.5"/>
+                 <div>{errorMsg}</div>
+             </div>
+          )}
         </GlassCard>
 
         {/* PREVIEW & TELEMETRY */}
@@ -137,7 +148,7 @@ export const Ingestion = () => {
              {previewData.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-gray-600 space-y-2">
                    <Database size={48} className="opacity-20"/>
-                   <p className="text-sm">Awaiting data injection...</p>
+                   <p className="text-sm">Awaiting native Excel or CSV payload...</p>
                 </div>
              ) : (
                 <div className="space-y-2">

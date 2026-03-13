@@ -40,7 +40,7 @@ interface LedgerContextType {
 
   commitAction: (log: Omit<HistoryLog, 'id'>) => void;
   deleteTransaction: (id: string) => void;
-  
+
   // NEW FEATURES
   resetModule: (module: ResetModule) => void;
   recordGenerosity: (name: string, tier: 'T1' | 'T2' | 'T3', amount: number, notes?: string) => void;
@@ -132,7 +132,11 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
           linkedGoalId: h.linked_goal_id,
           recipientName: h.recipient_name,
           recipientTier: h.recipient_tier,
-          efficiencyRating: h.efficiency_rating
+          efficiencyRating: h.efficiency_rating,
+          // Mappings for Telemetry and Ingestion
+          transactionRef: h.transaction_ref,
+          highVelocityFlag: h.high_velocity_flag,
+          categoryGroup: h.category_group
       }));
     }
   });
@@ -204,7 +208,11 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
          linked_goal_id: log.linkedGoalId,
          recipient_name: log.recipientName,
          recipient_tier: log.recipientTier,
-         efficiency_rating: log.efficiencyRating
+         efficiency_rating: log.efficiencyRating,
+         // Fields for Telemetry and Ingestion
+         transaction_ref: log.transactionRef,
+         high_velocity_flag: log.highVelocityFlag,
+         category_group: log.categoryGroup
        });
        if (error) throw error;
     },
@@ -371,7 +379,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         // 1. Deduct from Generosity Wallet
         const { data: current } = await supabase.from('accounts').select('balance').eq('type', 'generosity').eq('user_id', userId).single();
         if (!current || current.balance < amount) throw new Error("Insufficient Generosity funds");
-        
+
         await supabase.from('accounts').update({ balance: current.balance - amount }).eq('type', 'generosity').eq('user_id', userId);
 
         // 2. Log History

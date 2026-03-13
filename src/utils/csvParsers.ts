@@ -24,20 +24,15 @@ export const categorizeTransaction = (description: string): string => {
   return 'General';
 };
 
-// --- 2. FUZZY DATA EXTRACTORS ---
-const getVal = (row: any, keywords: string[]): string => {
-  if (!row || typeof row !== 'object') return '';
-  const key = Object.keys(row).find(k => keywords.some(kw => k.toLowerCase().includes(kw)));
-  return key ? String(row[key]) : '';
-};
-
-const parseAmount = (val: string | number) => {
+// --- 2. UTILITIES ---
+const parseAmount = (val: any) => {
   if (val === undefined || val === null || val === '') return 0;
   if (typeof val === 'number') return val;
   
-  const clean = String(val).replace(/,/g, '').replace(/N/g, '').replace(/#/g, '').trim();
+  // Strip NGN symbols, commas, and whitespace
+  const clean = String(val).replace(/,/g, '').replace(/N/g, '').replace(/₦/g, '').replace(/#/g, '').trim();
   const parsed = parseFloat(clean);
-  return isNaN(parsed) ? 0 : Math.abs(parsed); // Ensure positive absolute value
+  return isNaN(parsed) ? 0 : Math.abs(parsed); // Ensure absolute positive value
 };
 
 const parseDate = (dateStr: string) => {
@@ -50,51 +45,154 @@ const parseDate = (dateStr: string) => {
   }
 };
 
-// Universal Normalizer for standard tabular data (Excel or clean CSV)
-export const normalizeStandardData = (data: any[]): RawTransaction[] => {
-  return data.map(row => {
-      const dateStr = getVal(row, ['time', 'date']);
-      const descStr = getVal(row, ['description', 'category', 'details', 'remarks']);
-      
-      // OPay separates columns, Kuda often puts it in one or uses 'Money In'/'Money Out'
-      const moneyInStr = getVal(row, ['credit', 'money in', 'deposit', 'inward']);
-      const moneyOutStr = getVal(row, ['debit', 'money out', 'withdrawal', 'outward']);
-      const amountStr = getVal(row, ['amount']); // Fallback if single column
-      const refStr = getVal(row, ['reference', 'ref', 'transaction id']);
+// --- 3. DYNAMIC HEADER HUNTER & EXTRACTOR ---
+// This scans past the bank metadata (Name, Period, etc) to find the actual table
+const extractFrom2DArray = (rows: any[][]): RawTransaction[] => {
+  const transactions: RawTransaction[] = [];
+  let headerRowIndex = -1;
+  let colMap = { date: -1, desc: -1, debit: -1, credit: -1, amount: -1, ref: -1 };
 
-      if (!dateStr) return null;
+  // 1. Hunt for the true table headers (Scan first 50 rows)
+  for (let i = 0; i < Math.min(rows.length, 50); i++) {
+    if (!rows[i] || !Array.isArray(rows[i])) continue;
+    
+    const rowStrings = rows[i].map(c => String(c || '').toLowerCase().trim());
+    
+    const hasDate = rowStrings.findIndex(c => c.includes('date') || c.includes('time'));
+    const hasDesc = rowStrings.findIndex(c => c.includes('description') || c.includes('category') || c.includes('details') || c.includes('remarks'));
+    const hasDebit = rowStrings.findIndex(c => c.includes('debit') || c === 'money out' || c.includes('withdrawal'));
+    const hasCredit = rowStrings.findIndex(c => c.includes('credit') || c === 'money in' || c.includes('deposit'));
+    const hasAmount = rowStrings.findIndex(c => c === 'amount');
+    
+    // If we find a Date column AND a Money column, we found the start of the table.
+    if (hasDate !== -1 && (hasDebit !== -1 || hasAmount !== -1 || hasCredit !== -1)) {
+      headerRowIndex = i;
+      colMap.date = hasDate;
+      colMap.desc = hasDesc;
+      colMap.debit = hasDebit;
+      colMap.credit = hasCredit;
+      colMap.amount = hasAmount;
+      colMap.ref = rowStrings.findIndex(c => c.includes('reference') || c.includes('transaction id') || c === 'ref');
+      break;
+    }
+  }
+
+  // 2. Extract the Data
+  if (headerRowIndex !== -1) {
+    for (let i = headerRowIndex + 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || !Array.isArray(row) || row.length === 0) continue;
+
+      const dateVal = row[colMap.date];
+      if (!dateVal) continue; // Skip empty rows
 
       let amount = 0;
       let isSpend = false;
 
-      // Determine amount and type based on columns available
-      if (moneyOutStr && parseAmount(moneyOutStr) > 0) {
-          amount = parseAmount(moneyOutStr);
-          isSpend = true;
-      } else if (moneyInStr && parseAmount(moneyInStr) > 0) {
-          amount = parseAmount(moneyInStr);
-          isSpend = false;
-      } else if (amountStr) {
-          // If the bank uses a single amount column (negative for spend)
-          const rawAmt = parseFloat(String(amountStr).replace(/,/g, ''));
-          if (isNaN(rawAmt) || rawAmt === 0) return null;
-          amount = Math.abs(rawAmt);
-          isSpend = rawAmt < 0;
-      } else {
-          return null;
+      const debitVal = colMap.debit !== -1 ? parseAmount(row[colMap.debit]) : 0;
+      const creditVal = colMap.credit !== -1 ? parseAmount(row[colMap.credit]) : 0;
+      
+      let amtVal = 0;
+      if (colMap.amount !== -1 && row[colMap.amount] !== undefined) {
+         amtVal = parseFloat(String(row[colMap.amount]).replace(/,/g, ''));
       }
 
-      return {
-        date: parseDate(dateStr),
-        description: descStr || 'Unknown Transaction',
-        amount: amount,
+      // Determine flow direction
+      if (debitVal > 0) {
+        amount = debitVal;
+        isSpend = true;
+      } else if (creditVal > 0) {
+        amount = creditVal;
+        isSpend = false;
+      } else if (!isNaN(amtVal) && amtVal !== 0) {
+        amount = Math.abs(amtVal);
+        isSpend = amtVal < 0;
+      } else {
+        continue; // No money moved on this row
+      }
+
+      const desc = colMap.desc !== -1 && row[colMap.desc] ? String(row[colMap.desc]) : 'Bank Transaction';
+      const ref = colMap.ref !== -1 && row[colMap.ref] ? String(row[colMap.ref]) : `AUTO-${dateVal}-${amount}`;
+
+      transactions.push({
+        date: parseDate(String(dateVal)),
+        description: desc,
+        amount,
         type: isSpend ? 'SPEND' : 'DROP',
-        reference: refStr || `AUTO-REF-${dateStr}-${amount}` 
-      };
-    }).filter(Boolean) as RawTransaction[]; 
+        reference: String(ref).replace(/[^a-zA-Z0-9-]/g, '')
+      });
+    }
+  }
+
+  return transactions;
 };
 
-// --- 3. THE VELOCITY ALGORITHM (Circuit Breaker) ---
+// --- 4. BRUTE FORCE SEQUENCE PARSER (For Mangled PDF Conversions) ---
+const parseMangledSequence = (data: any[][]): RawTransaction[] => {
+  const sequence: string[] = [];
+  data.forEach(row => {
+    if (Array.isArray(row)) {
+        row.forEach(cell => {
+        if (typeof cell === 'string' && cell.trim()) sequence.push(cell.trim());
+        });
+    }
+  });
+
+  const transactions: RawTransaction[] = [];
+  
+  for (let i = 0; i < sequence.length; i++) {
+    const token = sequence[i];
+    
+    // Look for OPay Timestamp: e.g., "29 Oct 2022 22:06:16"
+    const dateMatch = token.match(/^(\d{2}\s[a-zA-Z]{3}\s\d{4}\s\d{2}:\d{2}:\d{2})/);
+    if (dateMatch) {
+      const dateStr = dateMatch[1];
+      let desc = sequence[i + 1] || 'Unknown Transaction';
+      let amount = 0;
+      let isSpend = false;
+      let ref = `RECOVERY-${crypto.randomUUID().slice(0, 8)}`;
+
+      for (let j = 1; j <= 6; j++) {
+        const lookAhead = sequence[i + j];
+        if (!lookAhead) break;
+        
+        // Match mangled OPay financials: "--1,000.001,000.00Mobile"
+        const opayFinMatch = lookAhead.match(/^(--|[\d,]+\.\d{2})(--|[\d,]+\.\d{2})([\d,]+\.\d{2})/);
+        if (opayFinMatch) {
+          const debitStr = opayFinMatch[1];
+          const creditStr = opayFinMatch[2];
+          
+          if (debitStr !== '--') {
+            amount = parseFloat(debitStr.replace(/,/g, ''));
+            isSpend = true;
+          } else if (creditStr !== '--') {
+            amount = parseFloat(creditStr.replace(/,/g, ''));
+            isSpend = false;
+          }
+          
+          ref = sequence[i + j + 1] || ref;
+          break;
+        }
+      }
+
+      if (amount > 0) {
+        if (desc.includes('OWealth') && sequence[i+2]?.includes('Transaction')) {
+            desc = desc + " " + sequence[i+2];
+        }
+        transactions.push({
+          date: new Date(dateStr).toISOString(),
+          description: desc,
+          amount,
+          type: isSpend ? 'SPEND' : 'DROP',
+          reference: ref.replace(/[^a-zA-Z0-9-]/g, '')
+        });
+      }
+    }
+  }
+  return transactions;
+};
+
+// --- 5. THE VELOCITY ALGORITHM (Circuit Breaker) ---
 export const applyTelemetryFlags = (transactions: RawTransaction[]): Partial<HistoryLog>[] => {
   const sorted = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const flaggedData: Partial<HistoryLog>[] = [];
@@ -138,38 +236,46 @@ export const applyTelemetryFlags = (transactions: RawTransaction[]): Partial<His
   return flaggedData.reverse();
 };
 
-// --- 4. EXCEL PROCESSING ENGINE ---
+// --- 6. EXCEL PROCESSING ENGINE ---
 const processExcel = async (file: File): Promise<Partial<HistoryLog>[]> => {
   const data = await file.arrayBuffer();
-  // Read workbook
   const workbook = XLSX.read(data, { type: 'array' });
   const firstSheetName = workbook.SheetNames[0];
   const worksheet = workbook.Sheets[firstSheetName];
   
-  // Convert sheet to array of JSON objects. defval ensures empty cells aren't skipped.
-  const rawData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+  // { header: 1 } forces SheetJS to output a 2D Array (rows and columns) instead of objects.
+  // This completely bypasses the metadata junk at the top of the file.
+  const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" }) as any[][];
   
-  if (!rawData || rawData.length === 0) throw new Error("The Excel file is empty or formatted incorrectly.");
+  if (!rawData || rawData.length === 0) throw new Error("The Excel file is empty.");
   
-  const transactions = normalizeStandardData(rawData);
-  if (transactions.length === 0) throw new Error("Could not extract valid financial rows from the Excel file.");
+  const transactions = extractFrom2DArray(rawData);
+  if (transactions.length === 0) throw new Error("Could not extract financial data. The file may be heavily corrupted.");
   
   return applyTelemetryFlags(transactions);
 };
 
-// --- 5. CSV PROCESSING ENGINE ---
+// --- 7. CSV PROCESSING ENGINE ---
 const processCSVFile = async (file: File): Promise<Partial<HistoryLog>[]> => {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
-      header: true, 
+      header: false, // Force 2D Array mode to match Excel logic
       skipEmptyLines: true,
       complete: (results) => {
         try {
-          const rawData = results.data;
+          const rawData = results.data as any[][];
           if (!rawData || rawData.length === 0) throw new Error("The CSV file is empty.");
 
-          const transactions = normalizeStandardData(rawData);
-          if (transactions.length === 0) throw new Error("Could not extract financial data. Ensure this is a clean CSV, not a mangled PDF conversion.");
+          let transactions = extractFrom2DArray(rawData);
+
+          // Fallback to Regex parser if the file is a corrupted PDF conversion
+          if (transactions.length === 0) {
+             transactions = parseMangledSequence(rawData);
+          }
+
+          if (transactions.length === 0) {
+             throw new Error("Parser failed. Please ensure you are downloading the native Excel or CSV file directly from the OPay/Kuda app, not a PDF converter.");
+          }
 
           resolve(applyTelemetryFlags(transactions));
         } catch (err) {
@@ -181,7 +287,7 @@ const processCSVFile = async (file: File): Promise<Partial<HistoryLog>[]> => {
   });
 };
 
-// --- 6. MASTER ROUTER ---
+// --- 8. MASTER ROUTER ---
 export const processStatement = async (file: File): Promise<Partial<HistoryLog>[]> => {
   const fileName = file.name.toLowerCase();
   

@@ -18,7 +18,8 @@ import { formatNumber } from '../utils/format';
 import { 
   ArrowRight, ArrowLeft, Flame, Heart, AlertTriangle, 
   CheckCircle2, Lock, Wand2, Landmark, ShieldCheck, 
-  Wallet, RefreshCw, History, X, AlertOctagon 
+  Wallet, RefreshCw, History, X, AlertOctagon,
+  Server, Cpu, Activity
 } from 'lucide-react';
 
 export const Triage = () => {
@@ -26,7 +27,7 @@ export const Triage = () => {
   const [searchParams] = useSearchParams();
   const { user } = useUser();
   const { 
-    runwayMonths, goals, signals, unallocatedCash, history,
+    runwayMonths, goals, signals, unallocatedCash, history, accounts, monthlyBurn,
     updateAccount, commitAction, updateSignal, fundGoal 
   } = useLedger();
 
@@ -41,7 +42,7 @@ export const Triage = () => {
   const [amountUSD, setAmountUSD] = useState('');
   const [costBasisUSD, setCostBasisUSD] = useState('0'); 
   const [selectedSignalId, setSelectedSignalId] = useState('');
-  
+
   // Tax Sliders
   const [taxProvision, setTaxProvision] = useState(0); 
   const [ventureTax, setVentureTax] = useState(0);
@@ -49,16 +50,21 @@ export const Triage = () => {
 
   // Step 2 Inputs
   const [generosity, setGenerosity] = useState('0');
-  const [runwayAlloc, setRunwayAlloc] = useState('0'); 
+  
+  // Tiered Architecture Inputs
+  const [runwayAlloc, setRunwayAlloc] = useState('0');       // Tier 2: OpEx
+  const [chaosBufferAlloc, setChaosBufferAlloc] = useState('0'); // Tier 1: Local Cache
+  const [coldStorageAlloc, setColdStorageAlloc] = useState('0'); // Tier 3: Wealth Engine
+  
   const [allocations, setAllocations] = useState<Record<string, number>>({});
 
   // --- SILENCE PROTOCOL STATE ---
-  const BIG_DROP_THRESHOLD = 10000; // $10k Trigger
+  const BIG_DROP_THRESHOLD = 10000; 
   const [showSilenceProtocol, setShowSilenceProtocol] = useState(false);
   const [silenceChecks, setSilenceChecks] = useState({
-    silence: false, // Told no one
-    time: false,    // Waited 24h
-    clarity: false  // Read Constitution
+    silence: false, 
+    time: false,    
+    clarity: false  
   });
 
   // --- AUTO-FILL LOGIC ---
@@ -68,7 +74,6 @@ export const Triage = () => {
 
     if (paramAmount) setAmountUSD(paramAmount);
     if (paramSource) {
-      // Support matching by Title (Legacy) or ID (New)
       const found = signals.find(s => s.id === paramSource || s.title === paramSource);
       if (found) setSelectedSignalId(found.id);
     }
@@ -84,7 +89,7 @@ export const Triage = () => {
 
   // Tax Calculations
   const profitNGN = Math.max(0, (dropUSD - costUSD) * rateVal);
-  
+
   const calculateTaxEstimate = (profit: number) => {
     const annualRent = user?.annualRent || 0;
     const rentRelief = Math.min(500000, annualRent * 0.20);
@@ -93,7 +98,6 @@ export const Triage = () => {
     let tax = 0;
     let remaining = chargeableProfit;
 
-    // NTA 2026 Bands
     remaining -= 800000;
     if (remaining > 0) {
       const band2 = Math.min(remaining, 2200000);
@@ -107,7 +111,7 @@ export const Triage = () => {
     }
     return profit > 0 ? (tax / profit) * 100 : 0;
   };
-  
+
   const estTaxPercent = calculateTaxEstimate(profitNGN);
 
   const taxAmount = sourceFunds * (taxProvision / 100);
@@ -118,11 +122,13 @@ export const Triage = () => {
 
   // Allocation Math
   const genAmount = parseFloat(generosity) || 0;
-  const runwayAmount = parseFloat(runwayAlloc) || 0;
+  const opExAmount = parseFloat(runwayAlloc) || 0;
+  const bufferAmount = parseFloat(chaosBufferAlloc) || 0;
+  const coldAmount = parseFloat(coldStorageAlloc) || 0;
   const goalSum = Object.values(allocations).reduce((a, b) => a + b, 0);
 
-  const availableForGoals = netFunds - genAmount - runwayAmount;
-  const remaining = availableForGoals - goalSum;
+  const allocatedTotal = genAmount + opExAmount + bufferAmount + coldAmount + goalSum;
+  const remaining = netFunds - allocatedTotal;
 
   // Guardrails
   const state = getFinancialState(runwayMonths);
@@ -130,7 +136,7 @@ export const Triage = () => {
   const dynamicGenCap = calculateGenerosityCap(runwayMonths);
   const isGenerosityLocked = dynamicGenCap === 0;
   const isOverCap = genAmount > dynamicGenCap;
-  
+
   const isBigDrop = dropUSD >= BIG_DROP_THRESHOLD;
 
   // --- ACTIONS ---
@@ -139,13 +145,36 @@ export const Triage = () => {
     await fetchLiveRate();
   };
 
-  const autoDistribute = () => {
+  const autoDistributeGoals = () => {
     const activeGoals = goals.filter(g => !g.isCompleted);
     if (activeGoals.length === 0) return;
-    const split = Math.floor(Math.max(0, availableForGoals) / activeGoals.length);
+    const available = Math.max(0, remaining);
+    const split = Math.floor(available / activeGoals.length);
     const newAlloc: Record<string, number> = {};
     activeGoals.forEach(g => newAlloc[g.id] = split);
     setAllocations(newAlloc);
+  };
+
+  const executeHardForkRouter = () => {
+    // Reset manual allocations
+    setAllocations({});
+    
+    let pool = netFunds - genAmount;
+
+    // 1. Tier 2: OpEx (Fund exactly 1 month of burn)
+    const targetOpEx = Math.min(pool, monthlyBurn);
+    setRunwayAlloc(targetOpEx.toString());
+    pool -= targetOpEx;
+
+    // 2. Tier 1: Chaos Buffer (Target 100k liquid in holding)
+    const holdingBal = accounts.find(a => a.type === 'holding')?.balance || 0;
+    const targetBuffer = Math.max(0, 100000 - holdingBal);
+    const toBuffer = Math.min(pool, targetBuffer);
+    setChaosBufferAlloc(toBuffer.toString());
+    pool -= toBuffer;
+
+    // 3. Tier 3: Cold Storage
+    setColdStorageAlloc(Math.max(0, pool).toString());
   };
 
   const handleNextStep = () => {
@@ -157,9 +186,15 @@ export const Triage = () => {
   };
 
   const handleCommit = () => {
+    // Zero-Based Routing Verification
+    if (Math.abs(remaining) > 1) {
+        alert("Zero-Based Routing Error: You must allocate exactly 100% of the funds before committing. Remaining balance must be zero.");
+        return;
+    }
+
     const timestamp = new Date().toISOString();
     const signal = signals.find(s => s.id === selectedSignalId);
-    
+
     // 1. MASTER LOG
     if (dropUSD > 0) {
       const snapshot = signal ? {
@@ -193,28 +228,42 @@ export const Triage = () => {
     if (dropUSD > 0) updateAccount('holding', grossNGN); 
     updateAccount('holding', -sourceFunds); 
 
+    // Taxes
     if (taxAmount > 0) {
       updateAccount('vault', taxAmount); 
       commitAction({ date: timestamp, type: 'TRANSFER', title: 'Tax Shield Stashed', amount: taxAmount, tags: ['tax_nta2026'] });
     }
-    
     if (ventureAmount > 0) commitAction({ date: timestamp, type: 'SPEND', title: 'Venture Tax Burned', amount: ventureAmount, tags: ['risk'] });
-    
+
+    // Step 1 Vault Auto-Save
     if (vaultAmount > 0) {
       updateAccount('vault', vaultAmount);
-      commitAction({ date: timestamp, type: 'TRANSFER', title: 'Vault Deposit', amount: vaultAmount, tags: ['wealth_defense'] });
+      commitAction({ date: timestamp, type: 'TRANSFER', title: 'Vault Pre-Tax Deposit', amount: vaultAmount, tags: ['wealth_defense'] });
     }
 
+    // Generosity
     if (genAmount > 0) {
         updateAccount('generosity', genAmount);
         commitAction({ date: timestamp, type: 'TRANSFER', title: 'Funded Generosity Wallet', amount: genAmount, description: 'Allocated for future giving', tags: ['generosity_fund'] });
     }
 
-    if (runwayAmount > 0) {
-        updateAccount('payroll', runwayAmount); 
-        commitAction({ date: timestamp, type: 'TRANSFER', title: 'Runway Extension', amount: runwayAmount, tags: ['operations'] });
+    // ARCHITECTURE ROUTING
+    if (opExAmount > 0) {
+        updateAccount('payroll', opExAmount); 
+        commitAction({ date: timestamp, type: 'TRANSFER', title: 'Tier 2: Runway Extension', amount: opExAmount, tags: ['operations'] });
     }
 
+    if (bufferAmount > 0) {
+        updateAccount('holding', bufferAmount); 
+        commitAction({ date: timestamp, type: 'TRANSFER', title: 'Tier 1: Chaos Buffer Funded', amount: bufferAmount, tags: ['liquidity'] });
+    }
+
+    if (coldAmount > 0) {
+        updateAccount('vault', coldAmount); 
+        commitAction({ date: timestamp, type: 'TRANSFER', title: 'Tier 3: Cold Storage Secured', amount: coldAmount, tags: ['wealth_building'] });
+    }
+
+    // Goals
     Object.entries(allocations).forEach(([goalId, amount]) => {
        if (amount > 0) {
          updateAccount('buffer', amount);
@@ -223,16 +272,14 @@ export const Triage = () => {
        }
     });
 
-    if (remaining > 0) updateAccount('holding', remaining);
-
     navigate('/');
   };
 
   const triageHistory = history.filter(h => h.type === 'TRIAGE_SESSION');
 
   return (
-    <div className="max-w-3xl mx-auto p-4 md:p-8 pb-20 space-y-8 animate-fade-in relative">
-      
+    <div className="max-w-4xl mx-auto p-4 md:p-8 pb-20 space-y-8 animate-fade-in relative">
+
       {/* --- SILENCE PROTOCOL --- */}
       {showSilenceProtocol && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-fade-in">
@@ -315,10 +362,10 @@ export const Triage = () => {
       </div>
 
       <GlassCard className="p-6">
-        
+
         {/* --- STEP 1: INGESTION --- */}
         {step === 1 && (
-          <div className="space-y-6 animate-fade-in">
+          <div className="space-y-6 animate-fade-in max-w-2xl mx-auto">
             <div className="grid grid-cols-2 gap-4">
               <GlassInput label="Drop (USD)" type="number" value={amountUSD} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmountUSD(e.target.value)} autoFocus />
               <div className="relative">
@@ -387,10 +434,10 @@ export const Triage = () => {
                     <input type="range" min="0" max="20" value={ventureTax} onChange={(e) => setVentureTax(Number(e.target.value))} className="w-full accent-red-500 cursor-pointer"/>
                 </div>
 
-                {/* 3. The Vault */}
+                {/* 3. The Pre-Tax Vault */}
                 <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
                     <div className="flex justify-between mb-2">
-                        <span className="flex items-center gap-2 font-bold text-blue-400"><Landmark size={16}/> The Vault</span>
+                        <span className="flex items-center gap-2 font-bold text-blue-400"><Landmark size={16}/> Pre-Tax Cold Storage (Vault)</span>
                     </div>
                     <div className="flex justify-between mb-2">
                         <span className="font-mono text-blue-400">{vaultTax}%</span>
@@ -399,25 +446,34 @@ export const Triage = () => {
                 </div>
             </div>
 
-            <GlassButton className="w-full" onClick={handleNextStep}>Next: Allocation <ArrowRight size={16} className="ml-2"/></GlassButton>
+            <GlassButton className="w-full" onClick={handleNextStep}>Next: Structural Routing <ArrowRight size={16} className="ml-2"/></GlassButton>
           </div>
         )}
 
-        {/* --- STEP 2: ALLOCATION --- */}
+        {/* --- STEP 2: ARCHITECTURE ROUTING --- */}
         {step === 2 && (
           <div className="space-y-6 animate-fade-in">
-            <div className="flex items-center gap-4 border-b border-white/10 pb-4">
-               <button onClick={() => setStep(1)} className="p-2 bg-white/5 rounded-lg hover:bg-white/10 text-white transition-colors">
-                  <ArrowLeft size={16}/>
-               </button>
-               <div>
-                  <h2 className="text-lg font-bold text-white">Allocation Strategy</h2>
-                  {isBigDrop && (
-                    <span className="text-[10px] bg-yellow-500/20 text-yellow-500 px-2 py-0.5 rounded border border-yellow-500/50 font-mono">
-                        ⚠ BIG DROP MODE: STRICT ADHERENCE
-                    </span>
-                  )}
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+               <div className="flex items-center gap-4">
+                 <button onClick={() => setStep(1)} className="p-2 bg-white/5 rounded-lg hover:bg-white/10 text-white transition-colors">
+                    <ArrowLeft size={16}/>
+                 </button>
+                 <div>
+                    <h2 className="text-lg font-bold text-white">System Architecture Routing</h2>
+                    {isBigDrop && (
+                      <span className="text-[10px] bg-yellow-500/20 text-yellow-500 px-2 py-0.5 rounded border border-yellow-500/50 font-mono">
+                          ⚠ BIG DROP MODE: STRICT ADHERENCE
+                      </span>
+                    )}
+                 </div>
                </div>
+               
+               <button 
+                  onClick={executeHardForkRouter} 
+                  className="bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-400 text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition-all"
+               >
+                  <Server size={14}/> Execute Hard Fork Auto-Router
+               </button>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-center">
@@ -426,23 +482,54 @@ export const Triage = () => {
                 <div className="font-mono font-bold text-white flex items-center justify-center gap-1"><Naira/>{formatNumber(netFunds)}</div>
               </div>
               <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
-                <div className="text-xs text-blue-500 uppercase">Vault Stashed</div>
+                <div className="text-xs text-blue-500 uppercase">Vault Pre-Stashed</div>
                 <div className="font-mono font-bold text-white flex items-center justify-center gap-1"><Naira/>{formatNumber(vaultAmount)}</div>
               </div>
             </div>
 
-            {/* Runway */}
-            <div className="p-4 bg-green-500/10 rounded-xl border border-green-500/20">
-              <div className="flex justify-between items-center mb-2">
-                <span className="flex items-center gap-2 font-bold text-green-400"><Wallet size={16}/> Runway Top-up</span>
-              </div>
-              <GlassInput 
-                value={runwayAlloc} 
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRunwayAlloc(e.target.value)} 
-                className="text-right font-mono" 
-                placeholder="0" 
-              />
-              <p className="text-[10px] text-gray-500 mt-2 text-right">Extends operational life (Payroll).</p>
+            {/* THE TRI-TIER ARCHITECTURE */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Tier 1: Buffer */}
+                <div className="p-4 bg-orange-500/5 border border-orange-500/20 rounded-xl">
+                    <div className="flex items-center gap-2 mb-3 text-orange-400 font-bold text-sm">
+                        <Cpu size={16}/> Tier 1: Chaos Buffer
+                    </div>
+                    <GlassInput 
+                        value={chaosBufferAlloc} 
+                        onChange={(e) => setChaosBufferAlloc(e.target.value)} 
+                        className="text-right font-mono" 
+                        placeholder="0" 
+                    />
+                    <p className="text-[10px] text-gray-500 mt-2">Liquid emergency cache to absorb unplannable shocks.</p>
+                </div>
+
+                {/* Tier 2: OpEx */}
+                <div className="p-4 bg-green-500/5 border border-green-500/20 rounded-xl">
+                    <div className="flex items-center gap-2 mb-3 text-green-400 font-bold text-sm">
+                        <Activity size={16}/> Tier 2: Batched OpEx
+                    </div>
+                    <GlassInput 
+                        value={runwayAlloc} 
+                        onChange={(e) => setRunwayAlloc(e.target.value)} 
+                        className="text-right font-mono" 
+                        placeholder="0" 
+                    />
+                    <p className="text-[10px] text-gray-500 mt-2">Operating expenses for the Payroll (Runway) account.</p>
+                </div>
+
+                {/* Tier 3: Cold Storage */}
+                <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl">
+                    <div className="flex items-center gap-2 mb-3 text-blue-400 font-bold text-sm">
+                        <Server size={16}/> Tier 3: Cold Storage
+                    </div>
+                    <GlassInput 
+                        value={coldStorageAlloc} 
+                        onChange={(e) => setColdStorageAlloc(e.target.value)} 
+                        className="text-right font-mono" 
+                        placeholder="0" 
+                    />
+                    <p className="text-[10px] text-gray-500 mt-2">Strictly severed wealth engine. Pushed to Vault.</p>
+                </div>
             </div>
 
             {/* Generosity */}
@@ -468,7 +555,7 @@ export const Triage = () => {
             </div>
 
             {/* Goals */}
-            <div className="bg-black/20 p-4 rounded-xl border border-white/10 h-64 overflow-y-auto relative">
+            <div className="bg-black/20 p-4 rounded-xl border border-white/10 max-h-64 overflow-y-auto relative">
               {isCritical && (
                 <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center text-center p-4">
                   <Lock className="text-red-500 mb-2" size={32}/>
@@ -478,8 +565,8 @@ export const Triage = () => {
               )}
 
               <div className="flex justify-between items-center mb-4">
-                 <h3 className="text-xs font-bold text-gray-400 uppercase">Goals</h3>
-                 <button onClick={autoDistribute} className="text-xs text-accent-success flex items-center gap-1 hover:underline"><Wand2 size={12}/> Auto-Fill</button>
+                 <h3 className="text-xs font-bold text-gray-400 uppercase">Strategic Goals</h3>
+                 <button onClick={autoDistributeGoals} className="text-xs text-accent-success flex items-center gap-1 hover:underline"><Wand2 size={12}/> Auto-Fill</button>
               </div>
 
               {goals.filter(g => !g.isCompleted).map(g => (
@@ -498,19 +585,28 @@ export const Triage = () => {
                   />
                 </div>
               ))}
+              {goals.filter(g => !g.isCompleted).length === 0 && (
+                  <div className="text-xs text-gray-500 text-center py-4">No active strategic goals to fund.</div>
+              )}
             </div>
 
-            {/* Summary */}
-            <div className="flex justify-between items-center pt-4 border-t border-white/10">
+            {/* Zero-Based Summary */}
+            <div className={`flex justify-between items-center p-4 border rounded-xl transition-colors ${Math.abs(remaining) < 1 ? 'bg-green-500/10 border-green-500/50' : 'bg-red-500/10 border-red-500/50'}`}>
               <div className="flex flex-col">
-                <span className="text-gray-400 text-sm">Remaining</span>
-                <span className="text-[10px] text-gray-500">(Unallocated Holding)</span>
+                <span className="text-white font-bold text-sm">Unallocated Capital</span>
+                <span className="text-[10px] text-gray-400">Zero-Based Routing requires exactly 0.</span>
               </div>
-              <span className={`font-mono font-bold flex items-center gap-1 ${remaining < 0 ? 'text-red-500' : 'text-green-500'}`}><Naira/>{formatNumber(remaining)}</span>
+              <span className={`font-mono font-bold flex items-center gap-1 text-xl ${Math.abs(remaining) < 1 ? 'text-green-500' : 'text-red-500'}`}>
+                {remaining > 0 ? '+' : ''}<Naira/>{formatNumber(remaining)}
+              </span>
             </div>
 
-            <GlassButton className="w-full" disabled={remaining < 0 || genAmount > 300000} onClick={handleCommit}>
-              <CheckCircle2 size={16} className="mr-2"/> Commit Triage
+            <GlassButton 
+                className="w-full" 
+                disabled={Math.abs(remaining) > 1 || genAmount > 300000} 
+                onClick={handleCommit}
+            >
+              <CheckCircle2 size={16} className="mr-2"/> Commit Zero-Based Triage
             </GlassButton>
           </div>
         )}

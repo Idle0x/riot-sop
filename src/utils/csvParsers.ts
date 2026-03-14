@@ -1,7 +1,6 @@
 import { type TelemetryRecord } from '../types';
 
 // --- THE SMART CLASSIFIER DICTIONARY ---
-// This engine scrubs raw bank narrations into clean, macro-level categories and merchants.
 const classifyTransaction = (rawDescription: string): { merchant: string, category: string } => {
   const desc = rawDescription.toLowerCase();
 
@@ -59,10 +58,10 @@ const classifyTransaction = (rawDescription: string): { merchant: string, catego
 
   // --- FALLBACK CLEANUP ---
   let cleanMerchant = rawDescription
-      .replace(/(POS\/PUR\/|NIP TRF|NIP|TRF|USSD|WDL|WEB\/|MOB\/)/gi, '') // Strip prefixes
-      .replace(/[0-9]{8,}/g, '') // Strip long reference numbers
-      .split('/')[0] // Take first meaningful chunk before slashes
-      .split('*')[0] // Take chunks before asterisks
+      .replace(/(POS\/PUR\/|NIP TRF|NIP|TRF|USSD|WDL|WEB\/|MOB\/)/gi, '') 
+      .replace(/[0-9]{8,}/g, '') 
+      .split('/')[0] 
+      .split('*')[0] 
       .trim();
 
   cleanMerchant = cleanMerchant.charAt(0).toUpperCase() + cleanMerchant.slice(1).toLowerCase();
@@ -82,28 +81,59 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
     reader.onload = (e) => {
       try {
         const text = e.target?.result as string;
-        const rows = text.split('\n');
+
+        // 1. SMART ROW SPLITTER (Respects newlines hidden inside Kuda Bank quotes)
+        const rows: string[] = [];
+        let currentRow = '';
+        let inQuotesForSplit = false;
+
+        for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+            if (char === '"') {
+                inQuotesForSplit = !inQuotesForSplit;
+                currentRow += char;
+            } else if (char === '\n' && !inQuotesForSplit) {
+                rows.push(currentRow);
+                currentRow = '';
+            } else {
+                currentRow += char;
+            }
+        }
+        if (currentRow) rows.push(currentRow);
+
         if (rows.length < 2) throw new Error("File appears empty or invalid.");
 
         let headerRowIndex = -1;
         let headers: string[] = [];
         let dateIdx = -1, descIdx = -1, debitIdx = -1, creditIdx = -1, amountIdx = -1;
 
-        // 1. SCANNER: Hunt down the actual table headers (skipping bank metadata junk at the top)
+        // 2. SCANNER (Hunts for the actual table headers)
         for (let i = 0; i < Math.min(rows.length, 50); i++) {
-            const rowCols = rows[i].split(',');
-            const tempHeaders = rowCols.map(h => h.toLowerCase().replace(/["\r]/g, '').trim());
-            
-            const tempDateIdx = tempHeaders.findIndex(h => h === 'date' || h.includes('date') || h === 'value date' || h === 'txn date');
-            const tempDescIdx = tempHeaders.findIndex(h => h.includes('description') || h.includes('narration') || h.includes('remarks') || h.includes('details'));
-            
+            // Safe comma split
+            let cols = [];
+            let inQ = false;
+            let colStr = '';
+            for (let char of rows[i]) {
+                if (char === '"') inQ = !inQ;
+                else if (char === ',' && !inQ) { cols.push(colStr); colStr = ''; }
+                else colStr += char;
+            }
+            cols.push(colStr);
+
+            const tempHeaders = cols.map(h => h.toLowerCase().replace(/["\r]/g, '').trim());
+
+            // Catch Kuda's "Date/Time"
+            const tempDateIdx = tempHeaders.findIndex(h => h === 'date' || h.includes('date') || h === 'value date' || h === 'txn date' || h === 'date/time');
+            const tempDescIdx = tempHeaders.findIndex(h => h.includes('description') || h.includes('narration') || h.includes('remarks') || h.includes('details') || h === 'category');
+
             if (tempDateIdx !== -1 && tempDescIdx !== -1) {
                 headerRowIndex = i;
                 headers = tempHeaders;
                 dateIdx = tempDateIdx;
                 descIdx = tempDescIdx;
-                debitIdx = headers.findIndex(h => h.includes('debit') || h.includes('withdrawal'));
-                creditIdx = headers.findIndex(h => h.includes('credit') || h.includes('deposit'));
+                // Catch Kuda's "Money out" and "Money in"
+                debitIdx = headers.findIndex(h => h.includes('debit') || h.includes('withdrawal') || h.includes('money out') || h.includes('paid out'));
+                creditIdx = headers.findIndex(h => h.includes('credit') || h.includes('deposit') || h.includes('money in') || h.includes('paid in'));
                 amountIdx = headers.findIndex(h => h === 'amount');
                 break;
             }
@@ -116,12 +146,11 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
         const parsedData: Partial<TelemetryRecord>[] = [];
         const merchantFrequency: Record<string, number> = {};
 
-        // 2. PARSE PHASE: Start reading strictly *after* the header row
+        // 3. PARSE PHASE
         for (let i = headerRowIndex + 1; i < rows.length; i++) {
           const rawRow = rows[i];
           if (!rawRow.trim()) continue; 
 
-          // Robust CSV Splitter: Ignores commas that are trapped inside quotation marks
           let cols = [];
           let inQuotes = false;
           let colStr = '';
@@ -139,13 +168,13 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
 
           if (cols.length <= Math.max(dateIdx, descIdx)) continue;
 
-          const rawDate = cols[dateIdx]?.replace(/["\r]/g, '').trim();
-          const rawDesc = cols[descIdx]?.replace(/["\r]/g, '').trim() || 'Unknown';
+          let rawDate = cols[dateIdx]?.replace(/["\r]/g, '').trim();
+          const rawDesc = cols[descIdx]?.replace(/["\r\n]/g, ' ').trim() || 'Unknown';
           
           let amount = 0;
           let type: 'SPEND' | 'DROP' = 'SPEND';
 
-          // Extract Amount
+          // Extract Amount safely
           if (amountIdx !== -1 && cols[amountIdx]) {
              const val = parseFloat(cols[amountIdx].replace(/[^0-9.-]+/g, ''));
              if (!isNaN(val)) {
@@ -164,8 +193,21 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
 
           if (!amount || isNaN(amount) || !rawDate) continue;
 
+          // Strip the line break from Kuda's date format
+          rawDate = rawDate.replace(/\n/g, ' ');
+
           // Verify Date
-          const parsedDate = new Date(rawDate);
+          let parsedDate = new Date(rawDate);
+          
+          // Auto-Flipper: Fallback for Nigerian DD/MM/YY formats if standard JS parse fails
+          if (isNaN(parsedDate.getTime())) {
+             const parts = rawDate.split(' ')[0].split(/[-/]/);
+             if (parts.length >= 3) {
+                 const timePart = rawDate.split(' ')[1] || '';
+                 parsedDate = new Date(`${parts[1]}/${parts[0]}/${parts[2]} ${timePart}`); // Flips to MM/DD/YY
+             }
+          }
+
           if (isNaN(parsedDate.getTime())) continue;
 
           // Scrub through Classifier
@@ -187,7 +229,6 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
           });
         }
 
-        // 3. APPLY ANOMALY FLAGS
         const finalData = parsedData.map(record => ({
             ...record,
             highVelocityFlag: record.type === 'SPEND' && merchantFrequency[record.title!] > 3

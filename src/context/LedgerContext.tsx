@@ -5,10 +5,10 @@ import { useUser } from './UserContext';
 import { calculateMonthlyBurn } from '../utils/finance';
 import { 
   type Account, type Budget, type Goal, type Signal, type HistoryLog, 
-  type AccountType, type LogType 
+  type AccountType, type LogType, type TelemetryRecord, type JournalEntry
 } from '../types';
 
-export type ResetModule = 'dashboard' | 'goals' | 'signals' | 'budgets' | 'journal' | 'generosity' | 'all';
+export type ResetModule = 'dashboard' | 'goals' | 'signals' | 'budgets' | 'journal' | 'generosity' | 'telemetry' | 'all';
 
 interface LedgerContextType {
   accounts: Account[];
@@ -16,6 +16,8 @@ interface LedgerContextType {
   goals: Goal[];
   signals: Signal[];
   history: HistoryLog[];
+  telemetry: TelemetryRecord[];
+  journals: JournalEntry[];
 
   runwayMonths: number;
   realRunwayMonths: number;
@@ -41,7 +43,10 @@ interface LedgerContextType {
   commitAction: (log: Omit<HistoryLog, 'id'>) => void;
   deleteTransaction: (id: string) => void;
 
-  // NEW FEATURES
+  // THE DATA LAKE & AUDIT ENGINE
+  insertTelemetryBatch: (records: Omit<TelemetryRecord, 'id'>[]) => Promise<{ imported: number, ignored: number }>;
+  addJournalEntry: (entry: Omit<JournalEntry, 'id'>) => void;
+
   resetModule: (module: ResetModule) => void;
   recordGenerosity: (name: string, tier: 'T1' | 'T2' | 'T3', amount: number, notes?: string) => void;
   logWorkSession: (signalId: string, title: string, hours: number, notes: string) => void;
@@ -103,7 +108,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     queryFn: async () => {
       const { data, error } = await supabase.from('signals').select('*');
       if (error) throw error;
-      // Map DB snake_case to CamelCase types
       return (data || []).map((s: any) => ({
         ...s,
         hoursLogged: s.hours_logged,
@@ -112,7 +116,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         redFlags: s.red_flags,
         createdAt: s.created_at,
         updatedAt: s.updated_at,
-        // New Time Fields
         timeEstimates: s.time_estimates,
         sessionLogs: s.session_logs,
         lastSessionAt: s.last_session_at
@@ -132,11 +135,37 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
           linkedGoalId: h.linked_goal_id,
           recipientName: h.recipient_name,
           recipientTier: h.recipient_tier,
-          efficiencyRating: h.efficiency_rating,
-          // Mappings for Telemetry and Ingestion
-          transactionRef: h.transaction_ref,
-          highVelocityFlag: h.high_velocity_flag,
-          categoryGroup: h.category_group
+          efficiencyRating: h.efficiency_rating
+      }));
+    }
+  });
+
+  const { data: telemetry = [] } = useQuery({
+    queryKey: ['telemetry', userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('telemetry_raw').select('*').order('date', { ascending: false });
+      if (error) throw error;
+      return data.map((t: any) => ({
+          ...t,
+          batchId: t.batch_id,
+          transactionRef: t.transaction_ref,
+          categoryGroup: t.category_group,
+          highVelocityFlag: t.high_velocity_flag
+      }));
+    }
+  });
+
+  const { data: journals = [] } = useQuery({
+    queryKey: ['journals', userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('journal').select('*').order('date', { ascending: false });
+      if (error) throw error;
+      return data.map((j: any) => ({
+          ...j,
+          linkedLogId: j.linked_log_id,
+          auditBatchId: j.audit_batch_id
       }));
     }
   });
@@ -208,11 +237,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
          linked_goal_id: log.linkedGoalId,
          recipient_name: log.recipientName,
          recipient_tier: log.recipientTier,
-         efficiency_rating: log.efficiencyRating,
-         // Fields for Telemetry and Ingestion
-         transaction_ref: log.transactionRef,
-         high_velocity_flag: log.highVelocityFlag,
-         category_group: log.categoryGroup
+         efficiency_rating: log.efficiencyRating
        });
        if (error) throw error;
     },
@@ -266,7 +291,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
   const updateSignalMutation = useMutation({
     mutationFn: async (signal: Signal) => {
       const { id, ...rest } = signal;
-      // Convert to DB Columns
       const dbSignal = {
         title: rest.title,
         sector: rest.sector,
@@ -282,7 +306,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         outcome: rest.outcome,
         timeline: rest.timeline,
         updated_at: new Date().toISOString(),
-        // New Time Fields
         time_estimates: rest.timeEstimates,
         session_logs: rest.sessionLogs,
         last_session_at: rest.lastSessionAt
@@ -321,33 +344,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['signals'] })
   });
 
-  const addGoalMutation = useMutation({
-    mutationFn: async (goal: Omit<Goal, 'id'>) => {
-       const dbGoal = {
-         user_id: userId,
-         title: goal.title,
-         phase: goal.phase,
-         target_amount: goal.targetAmount,
-         current_amount: goal.currentAmount,
-         type: goal.type,
-         sub_goals: goal.subGoals
-       };
-       const { data } = await supabase.from('goals').insert(dbGoal).select('id').single();
-       if (data) autoLog('GOAL_CREATE', `New Mission: ${goal.title}`, `Target: ${goal.targetAmount}`, goal.targetAmount, undefined, data.id);
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['goals'] })
-  });
-
-  const updateGoalMutation = useMutation({
-    mutationFn: async (goal: Goal) => {
-       await supabase.from('goals').update({
-         current_amount: goal.currentAmount,
-         is_completed: goal.isCompleted
-       }).eq('id', goal.id);
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['goals'] })
-  });
-
   const deleteTransactionMutation = useMutation({
     mutationFn: async (id: string) => {
       const log = history.find(h => h.id === id);
@@ -372,17 +368,61 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     }
   });
 
-  // --- NEW FEATURES (MUTATIONS) ---
+  // --- NEW: TELEMETRY & JOURNAL MUTATIONS ---
+  const insertTelemetryBatchMutation = useMutation({
+    mutationFn: async (records: Omit<TelemetryRecord, 'id'>[]) => {
+      const payload = records.map(r => ({
+        user_id: userId,
+        batch_id: r.batchId,
+        date: r.date,
+        type: r.type,
+        title: r.title,
+        description: r.description,
+        amount: r.amount,
+        currency: r.currency,
+        transaction_ref: r.transactionRef,
+        category_group: r.categoryGroup,
+        high_velocity_flag: r.highVelocityFlag
+      }));
+
+      const { data, error } = await supabase
+        .from('telemetry_raw')
+        .upsert(payload, { onConflict: 'transaction_ref', ignoreDuplicates: true })
+        .select();
+
+      if (error) throw error;
+      
+      return {
+          imported: data ? data.length : 0,
+          ignored: payload.length - (data ? data.length : 0)
+      };
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['telemetry'] })
+  });
+
+  const addJournalEntryMutation = useMutation({
+    mutationFn: async (entry: Omit<JournalEntry, 'id'>) => {
+        const { error } = await supabase.from('journal').insert({
+            user_id: userId,
+            date: entry.date,
+            content: entry.content,
+            tags: entry.tags,
+            linked_log_id: entry.linkedLogId,
+            audit_batch_id: entry.auditBatchId
+        });
+        if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['journals'] })
+  });
+
 
   const recordGenerosityMutation = useMutation({
     mutationFn: async ({ name, tier, amount, notes }: { name: string, tier: 'T1'|'T2'|'T3', amount: number, notes?: string }) => {
-        // 1. Deduct from Generosity Wallet
         const { data: current } = await supabase.from('accounts').select('balance').eq('type', 'generosity').eq('user_id', userId).single();
         if (!current || current.balance < amount) throw new Error("Insufficient Generosity funds");
 
         await supabase.from('accounts').update({ balance: current.balance - amount }).eq('type', 'generosity').eq('user_id', userId);
 
-        // 2. Log History
         await supabase.from('history').insert({
             user_id: userId,
             date: new Date().toISOString(),
@@ -408,7 +448,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
             type: 'WORK_SESSION',
             title: title,
             description: notes,
-            amount: hours, // Storing HOURS in the amount field
+            amount: hours, 
             linked_signal_id: signalId
         });
     },
@@ -438,7 +478,12 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         await autoLog('SYSTEM_EVENT', 'Budgets Database Wiped', 'Recurring expenses cleared');
       }
       if (module === 'journal' || module === 'all') {
+        await supabase.from('journal').delete().eq('user_id', userId);
         await autoLog('SYSTEM_EVENT', 'Journal Entries Wiped', 'Personal notes cleared');
+      }
+      if (module === 'telemetry' || module === 'all') {
+        await supabase.from('telemetry_raw').delete().eq('user_id', userId);
+        await autoLog('SYSTEM_EVENT', 'Data Lake Cleared', 'All raw telemetry data purged');
       }
       if (module === 'all') {
         await autoLog('SYSTEM_EVENT', 'FACTORY RESET EXECUTED', 'Complete system wipe initiated');
@@ -474,6 +519,8 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
       goals,
       signals,
       history,
+      telemetry,
+      journals,
       runwayMonths,
       realRunwayMonths, 
       monthlyBurn,
@@ -497,6 +544,9 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
       commitAction: (l) => addLogMutation.mutate(l),
       deleteTransaction: (id) => deleteTransactionMutation.mutate(id),
+
+      insertTelemetryBatch: (records) => insertTelemetryBatchMutation.mutateAsync(records),
+      addJournalEntry: (entry) => addJournalEntryMutation.mutate(entry),
 
       resetModule: (m) => resetModuleMutation.mutate(m),
       recordGenerosity: (name, tier, amount, notes) => recordGenerosityMutation.mutate({ name, tier, amount, notes }),

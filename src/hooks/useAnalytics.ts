@@ -4,7 +4,6 @@ import { useLedger } from '../context/LedgerContext';
 export const useAnalytics = () => {
   const { history, telemetry, budgets, signals } = useLedger();
 
-  // Helper to safely merge Ledger History + Data Lake Telemetry
   const combinedFinancialEvents = useMemo(() => {
       const hEvents = history.map(h => ({ 
           id: h.id,
@@ -27,7 +26,6 @@ export const useAnalytics = () => {
       return [...hEvents, ...tEvents].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [history, telemetry]);
 
-  // 1. BURN HISTORY
   const burnHistory = useMemo(() => {
     const data: Record<string, { date: string; burn: number; limit: number }> = {};
     const monthlyLimit = budgets.reduce((sum, b) => sum + (b.frequency === 'monthly' ? b.amount : 0), 0);
@@ -52,7 +50,6 @@ export const useAnalytics = () => {
     return Object.values(data);
   }, [combinedFinancialEvents, budgets]);
 
-  // 2. CATEGORY SPEND (Driven largely by Data Lake categorization)
   const categorySplit = useMemo(() => {
     const map: Record<string, number> = {};
     
@@ -67,7 +64,6 @@ export const useAnalytics = () => {
       .slice(0, 8);
   }, [combinedFinancialEvents]);
 
-  // 3. SIGNAL STATS
   const signalStats = useMemo(() => {
     const data = signals.filter(s => s.totalGenerated > 0 || s.hoursLogged > 0).map(s => ({
         id: s.id, 
@@ -85,7 +81,6 @@ export const useAnalytics = () => {
     return { scatter: data, leaderboard: data, globalYield };
   }, [signals]);
 
-  // 4. MONTHLY STATEMENT
   const monthlyStatement = useMemo(() => {
     const map = new Map<string, { income: number; expense: number }>();
     
@@ -120,7 +115,6 @@ export const useAnalytics = () => {
     }).sort((a, b) => b.month.localeCompare(a.month));
   }, [combinedFinancialEvents]);
 
-  // 5. METRIC RIBBON
   const ribbon = useMemo(() => {
     const lastMonth = monthlyStatement[0] || { savingsRate: 0 };
     const prevMonth = monthlyStatement[1] || { savingsRate: 0 };
@@ -133,7 +127,35 @@ export const useAnalytics = () => {
     };
   }, [monthlyStatement, categorySplit, signalStats]);
 
-  // --- COMPARATOR ENGINE ---
+  // --- NEW: BLEED FORENSICS ENGINE ---
+  const bleedForensics = useMemo(() => {
+    const currentMonthKey = new Date().toISOString().slice(0, 7);
+    
+    // 1. Isolate the bleeding
+    const bleeds = telemetry.filter(t => t.highVelocityFlag && t.date.startsWith(currentMonthKey));
+
+    // 2. Group by exact raw description
+    const map: Record<string, { desc: string; category: string; count: number; total: number; latestDate: string }> = {};
+
+    bleeds.forEach(b => {
+        // We clean the raw string slightly to catch near-matches (e.g. removing reference IDs at the end)
+        const rawDesc = (b.description || b.title || 'Unknown Friction').split(' - ')[0].trim();
+        
+        if (!map[rawDesc]) {
+            map[rawDesc] = { desc: rawDesc, category: b.categoryGroup || 'General', count: 0, total: 0, latestDate: b.date };
+        }
+        
+        map[rawDesc].count += 1;
+        map[rawDesc].total += Math.abs(b.amount || 0);
+        if (new Date(b.date) > new Date(map[rawDesc].latestDate)) {
+            map[rawDesc].latestDate = b.date;
+        }
+    });
+
+    // 3. Return sorted by highest total damage
+    return Object.values(map).sort((a, b) => b.total - a.total);
+  }, [telemetry]);
+
   const getComparatorData = (keys: string[], mode: 'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED') => {
     return keys.map(key => {
         let total = 0;
@@ -201,7 +223,7 @@ export const useAnalytics = () => {
 
   return { 
     burnHistory, categorySplit, signalPerformance: signalStats.scatter, signalLeaderboard: signalStats.leaderboard,
-    monthlyStatement, ribbon, 
+    monthlyStatement, ribbon, bleedForensics, // Exported forensics
     getComparatorData, availablePeriods 
   };
 };

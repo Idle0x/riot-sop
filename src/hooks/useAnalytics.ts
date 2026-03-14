@@ -29,8 +29,8 @@ export const useAnalytics = () => {
     const end = new Date(maxD.getFullYear(), maxD.getMonth(), 1);
     
     while (curr <= end) {
-      const displayKey = curr.toLocaleString('default', { month: 'short', year: '2-digit' }); // e.g. "Jan 21"
-      const sortKey = `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}`; // e.g. "2021-01"
+      const displayKey = curr.toLocaleString('en-US', { month: 'short', year: '2-digit' }); 
+      const sortKey = `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}`; 
       dataMap[sortKey] = { date: displayKey, burn: 0 };
       curr.setMonth(curr.getMonth() + 1);
     }
@@ -45,7 +45,6 @@ export const useAnalytics = () => {
       }
     });
 
-    // Object keys (YYYY-MM) sort naturally
     return Object.keys(dataMap).sort().map(k => dataMap[k]);
   }, [combinedFinancialEvents]);
 
@@ -167,7 +166,15 @@ export const useAnalytics = () => {
                 }
             }
         });
-        return { name: key, value: total };
+        
+        let displayName = key;
+        if (effectiveMode === 'MONTHLY' && key.includes('-')) {
+           const [y, m] = key.split('-');
+           const d = new Date(parseInt(y), parseInt(m) - 1, 1);
+           displayName = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+        }
+
+        return { name: displayName, rawKey: key, value: total };
     });
   };
 

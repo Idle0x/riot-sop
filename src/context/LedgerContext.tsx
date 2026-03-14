@@ -255,7 +255,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const updateGoalMutation = useMutation({
     mutationFn: async (goal: Goal) => {
-       // Diff Engine: Check if goal just hit 100% or target changed
        const oldGoal = goals.find(g => g.id === goal.id);
        
        const { error } = await supabase.from('goals').update({
@@ -370,7 +369,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const updateSignalMutation = useMutation({
     mutationFn: async (signal: Signal) => {
-      // Diff Engine: Catch phase transitions (Kanban drag-and-drop)
       const oldSignal = signals.find(s => s.id === signal.id);
 
       const { id, ...rest } = signal;
@@ -400,13 +398,17 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
           let title = `Signal Advanced: ${signal.title}`;
           let desc = `Shifted from ${oldSignal.phase.toUpperCase()} to ${signal.phase.toUpperCase()}`;
 
-          if (signal.phase === 'graveyard') {
+          // VERCEL CACHE BYPASS
+          const newPhase = signal.phase as string;
+          const oldPhase = oldSignal.phase as string;
+
+          if (newPhase === 'graveyard') {
               type = 'SIGNAL_KILL';
               title = `Signal Terminated: ${signal.title}`;
-          } else if (signal.phase === 'harvested') {
+          } else if (newPhase === 'harvested') {
               type = 'SIGNAL_HARVEST';
               title = `Alpha Harvested: ${signal.title}`;
-          } else if (oldSignal.phase === 'graveyard' && signal.phase !== 'graveyard') {
+          } else if (oldPhase === 'graveyard' && newPhase !== 'graveyard') {
               type = 'SIGNAL_REVIVE';
               title = `Signal Revived: ${signal.title}`;
           }
@@ -514,7 +516,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         
         if (error) throw error;
 
-        // The Ledger records the ACT of journaling
         if (data) {
             const isAudit = entry.tags?.includes('system_audit');
             autoLog('JOURNAL_LOGGED', isAudit ? 'Audit Reviewed & Signed' : 'Operator Log Committed', undefined, undefined, undefined, undefined);
@@ -562,7 +563,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const resetModuleMutation = useMutation({
     mutationFn: async (module: ResetModule) => {
-      // 1. Sever Foreign Key Links in History to bypass Postgres Constraint blocks
       if (module === 'signals' || module === 'all') {
         await supabase.from('history').update({ linked_signal_id: null }).eq('user_id', userId);
         await supabase.from('signals').delete().eq('user_id', userId);
@@ -575,7 +575,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         await autoLog('SYSTEM_RESET', 'Goals Database Wiped', 'All missions deleted');
       }
 
-      // 2. Wipe standard data tables
       if (module === 'budgets' || module === 'all') {
         await supabase.from('budgets').delete().eq('user_id', userId);
         await autoLog('SYSTEM_RESET', 'Budgets Database Wiped', 'Recurring expenses cleared');
@@ -591,7 +590,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         await autoLog('SYSTEM_RESET', 'Data Lake Cleared', 'All raw telemetry data purged');
       }
 
-      // 3. Reset specific account balances to 0
       if (module === 'dashboard' || module === 'all') {
         await supabase.from('accounts').update({ balance: 0 }).eq('user_id', userId);
         await autoLog('SYSTEM_RESET', 'Dashboard Balance Reset', 'All accounts set to 0');

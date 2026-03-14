@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom'; // NEW IMPORT
+import { useNavigate } from 'react-router-dom';
 import { useLedger } from '../context/LedgerContext';
 import { useFinancialStats } from '../hooks/useFinancialStats'; 
 import { GlassCard } from '../components/ui/GlassCard';
@@ -8,10 +8,10 @@ import { GlassButton } from '../components/ui/GlassButton';
 import { GlassProgressBar } from '../components/ui/GlassProgressBar';
 import { Naira } from '../components/ui/Naira';
 import { formatNumber } from '../utils/format';
-import { Trash2, RefreshCcw, Plus, X, Zap, ArrowRight } from 'lucide-react'; // Added ArrowRight
+import { Trash2, RefreshCcw, Plus, X, Zap, ArrowRight } from 'lucide-react';
 
 export const Budget = () => {
-  const navigate = useNavigate(); // NEW ROUTER HOOK
+  const navigate = useNavigate(); 
   const { 
     budgets, telemetry, addBudget, updateAccount, updateBudgetSpent, 
     commitAction, deleteBudget, triggerJournalPrompt 
@@ -202,7 +202,6 @@ export const Budget = () => {
             </GlassCard>
           ))}
 
-          {/* STRATEGIC UPDATE: The leak warning is now a Deep-Link button */}
           {leakOutflow > 0 && (
              <button 
                 onClick={() => navigate('/analytics?view=leaks')}

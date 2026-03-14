@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useUser } from '../context/UserContext';
 import { useLedger } from '../context/LedgerContext';
 import { processStatement } from '../utils/csvParsers';
-import { type HistoryLog } from '../types';
+import { type TelemetryRecord } from '../types';
 
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
@@ -23,16 +23,14 @@ export const Ingestion = () => {
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [previewData, setPreviewData] = useState<Partial<HistoryLog>[]>([]);
+  const [previewData, setPreviewData] = useState<Partial<TelemetryRecord>[]>([]);
   const [uploadStatus, setUploadStatus] = useState<{ imported: number; ignored: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
-  // The Human-in-the-Loop Journal State
   const [journalDraft, setJournalDraft] = useState('');
   const [batchSignature, setBatchSignature] = useState('');
 
-  // --- TIME-SPAN RECOGNITION ENGINE ---
-  const calculateBatchSignature = (data: Partial<HistoryLog>[]) => {
+  const calculateBatchSignature = (data: Partial<TelemetryRecord>[]) => {
     if (data.length === 0) return "Empty Audit";
     
     const dates = data.map(d => new Date(d.date!).getTime()).sort((a, b) => a - b);
@@ -50,7 +48,6 @@ export const Ingestion = () => {
     return `Macro Audit: ${formatMonthYear(minDate)} - ${formatMonthYear(maxDate)}`;
   };
 
-  // --- ANOMALY DETECTION ENGINE ---
   const auditReport = useMemo(() => {
     if (previewData.length === 0) return null;
 
@@ -72,13 +69,11 @@ export const Ingestion = () => {
     const anomalies: { category: string, spent: number, limit: number, deficit: number, unbudgeted: boolean }[] = [];
     
     Object.entries(categorySpend).forEach(([cat, spent]) => {
-      // Fuzzy match against active budgets
       const budget = budgets.find(b => b.name.toLowerCase().includes(cat.toLowerCase()) || b.category.toLowerCase() === cat.toLowerCase());
       
       if (budget && spent > budget.amount) {
          anomalies.push({ category: cat, spent, limit: budget.amount, deficit: spent - budget.amount, unbudgeted: false });
       } else if (!budget && spent > 15000 && cat !== 'General' && cat !== 'Transfer') { 
-         // Flag significant unbudgeted structural categories
          anomalies.push({ category: cat, spent, limit: 0, deficit: spent, unbudgeted: true });
       }
     });
@@ -98,18 +93,15 @@ export const Ingestion = () => {
       const data = await processStatement(file);
       setPreviewData(data);
       
-      // Compute Metadata
       const sig = calculateBatchSignature(data);
       setBatchSignature(sig);
 
-      // We recalculate audit variables locally for the initial draft generation
       let bleedCount = 0;
       let totalBleed = 0;
       data.forEach(log => {
           if (log.highVelocityFlag) { bleedCount++; totalBleed += (log.amount || 0); }
       });
 
-      // Pre-fill the Executive Journal
       let draft = `${sig} System Review\n\n`;
       draft += `Diagnostics:\n`;
       draft += `- Ingested ${data.length} structural records.\n`;
@@ -133,7 +125,6 @@ export const Ingestion = () => {
     setErrorMsg(null);
 
     try {
-      // 1. Commit Raw Data to the Data Lake (telemetry_raw)
       const { imported, ignored } = await insertTelemetryBatch(previewData.map(log => ({
         batchId: batchSignature,
         date: log.date!,
@@ -147,17 +138,13 @@ export const Ingestion = () => {
         highVelocityFlag: log.highVelocityFlag || false
       })));
 
-      // 2. Commit Executive Journal
-      const journalId = crypto.randomUUID();
       addJournalEntry({
-          id: journalId,
           date: new Date().toISOString(),
           content: journalDraft,
           tags: ['system_audit', batchSignature.split(' ')[0].toLowerCase()],
           auditBatchId: batchSignature
       });
 
-      // 3. Ping the Universal Blackbox (Ledger)
       commitAction({
           date: new Date().toISOString(),
           type: 'SYSTEM_EVENT',
@@ -167,7 +154,6 @@ export const Ingestion = () => {
       });
 
       setUploadStatus({ imported, ignored });
-      // Force refresh data
       queryClient.invalidateQueries({ queryKey: ['history'] });
       queryClient.invalidateQueries({ queryKey: ['telemetry'] });
       queryClient.invalidateQueries({ queryKey: ['journals'] });
@@ -206,7 +192,6 @@ export const Ingestion = () => {
       {!uploadStatus && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
-          {/* LEFT: INGESTION & META */}
           <div className="lg:col-span-4 space-y-6">
               <GlassCard className="p-6">
                   <h3 className="font-bold text-white mb-4 uppercase tracking-widest text-xs flex items-center gap-2">
@@ -261,7 +246,6 @@ export const Ingestion = () => {
               )}
           </div>
 
-          {/* RIGHT: AUDIT REVIEW & COMMIT */}
           <div className="lg:col-span-8 flex flex-col gap-6">
               {previewData.length === 0 ? (
                   <GlassCard className="p-0 flex-1 flex flex-col items-center justify-center min-h-[400px] border-dashed border-white/10">
@@ -270,9 +254,7 @@ export const Ingestion = () => {
                   </GlassCard>
               ) : (
                   <>
-                      {/* DIAGNOSTIC PANELS */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* BLEED DETECTOR */}
                           <GlassCard className={`p-5 transition-colors ${auditReport?.bleedCount ? 'border-red-500/40 bg-red-950/10' : 'border-green-500/20'}`}>
                              <div className="flex justify-between items-start mb-2">
                                 <div className={`flex items-center gap-2 text-sm font-bold ${auditReport?.bleedCount ? 'text-red-400' : 'text-green-400'}`}>
@@ -291,7 +273,6 @@ export const Ingestion = () => {
                              )}
                           </GlassCard>
 
-                          {/* STRUCTURAL ANOMALIES */}
                           <GlassCard className={`p-5 transition-colors ${auditReport?.anomalies.length ? 'border-orange-500/40 bg-orange-950/10' : 'border-green-500/20'}`}>
                              <div className="flex items-center gap-2 text-sm font-bold text-orange-400 mb-4">
                                 <TrendingDown size={16}/> Structural Anomalies
@@ -314,7 +295,6 @@ export const Ingestion = () => {
                           </GlassCard>
                       </div>
 
-                      {/* THE JOURNAL COMMIT */}
                       <GlassCard className="p-0 overflow-hidden flex flex-col flex-1 border-blue-500/20">
                           <div className="p-4 border-b border-white/10 bg-blue-950/20 flex items-center gap-2">
                               <BookOpen size={16} className="text-blue-400"/>

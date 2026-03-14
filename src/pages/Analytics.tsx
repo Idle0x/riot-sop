@@ -13,7 +13,7 @@ import { formatNumber } from '../utils/format';
 // ICONS
 import { 
   Download, TrendingUp, PieChart as PieIcon, Target, Calendar, 
-  Zap, AlertTriangle, ShieldCheck, Plus, X, BarChart2, Layers, Search 
+  Zap, AlertTriangle, ShieldCheck, Plus, X, BarChart2, Layers, Search, Briefcase
 } from 'lucide-react';
 
 // CHARTS
@@ -32,7 +32,7 @@ export const Analytics = () => {
   const { 
     burnHistory, categorySplit, signalPerformance,
     monthlyStatement, ribbon, signalLeaderboard,
-    bleedForensics, // NEW
+    bleedForensics, topMerchants, // <--- NEW DATA
     getComparatorData, availablePeriods
   } = useAnalytics();
 
@@ -42,7 +42,7 @@ export const Analytics = () => {
     if (params.get('view') === 'leaks' && bleedSectionRef.current) {
         setTimeout(() => {
             bleedSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 500); // Slight delay ensures rendering is complete
+        }, 500); 
     }
   }, [location]);
 
@@ -69,12 +69,7 @@ export const Analytics = () => {
         case 'ANNUAL': return availablePeriods.years;
         case 'QUARTERLY': return availablePeriods.quarters;
         case 'MONTHLY': return availablePeriods.months;
-        case 'MIXED': 
-            return [
-                ...availablePeriods.years,
-                ...availablePeriods.quarters,
-                ...availablePeriods.months
-            ];
+        case 'MIXED': return [...availablePeriods.years, ...availablePeriods.quarters, ...availablePeriods.months];
         default: return [];
     }
   };
@@ -177,12 +172,12 @@ export const Analytics = () => {
 
       {/* --- TIER 2: BURN & COMPARATOR --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Burn Velocity */}
+        {/* Left: Burn Velocity (UNLOCKED ALL-TIME) */}
         <GlassCard className="p-6 h-[450px]">
           <div className="flex justify-between items-start mb-6">
               <div className="flex items-center gap-2">
                 <TrendingUp className="text-red-500" size={20}/>
-                <h3 className="font-bold text-white">Aggregated Burn Velocity (6 Mo)</h3>
+                <h3 className="font-bold text-white">Aggregated Burn Velocity (All-Time)</h3>
               </div>
           </div>
           <ResponsiveContainer width="100%" height="85%">
@@ -193,7 +188,7 @@ export const Analytics = () => {
                   <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
                 </linearGradient>
               </defs>
-              <XAxis dataKey="date" stroke="#555" fontSize={10} tickLine={false} axisLine={false}/>
+              <XAxis dataKey="date" stroke="#555" fontSize={10} tickLine={false} axisLine={false} minTickGap={30}/>
               <YAxis stroke="#555" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `${val/1000}k`}/>
               <Tooltip content={<CustomTooltip />}/>
               <Area type="monotone" dataKey="burn" stroke="#ef4444" fillOpacity={1} fill="url(#colorBurn)" strokeWidth={2} name="Burn" />
@@ -276,14 +271,17 @@ export const Analytics = () => {
 
       {/* --- TIER 3: FORENSIC TABLES --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+         
+         {/* UNLOCKED: ALL-TIME MONTHLY STATEMENT */}
          <GlassCard className="p-6">
             <div className="flex items-center gap-2 mb-4">
               <ShieldCheck className="text-blue-400" size={20}/>
               <h3 className="font-bold text-white">Aggregated Monthly Statement</h3>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left text-gray-400">
-                <thead className="text-gray-500 border-b border-white/10 uppercase">
+            {/* Added max-height and overflow to allow infinite scrolling of history */}
+            <div className="overflow-x-auto max-h-[300px] overflow-y-auto pr-2">
+              <table className="w-full text-xs text-left text-gray-400 relative">
+                <thead className="text-gray-500 border-b border-white/10 uppercase sticky top-0 bg-[#0a0a0a] z-10">
                   <tr>
                     <th className="py-2">Period</th>
                     <th className="py-2 text-right text-green-500">Income</th>
@@ -293,7 +291,8 @@ export const Analytics = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {monthlyStatement.slice(0, 6).map((m) => (
+                  {/* Removed .slice(0, 6) -> Shows everything back to 2019 */}
+                  {monthlyStatement.map((m) => (
                     <tr key={m.month} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                       <td className="py-3 font-mono text-white">{m.month}</td>
                       <td className="py-3 text-right text-green-400"><Naira/>{formatNumber(m.income)}</td>
@@ -306,6 +305,7 @@ export const Analytics = () => {
                   ))}
                 </tbody>
               </table>
+              {monthlyStatement.length === 0 && <div className="text-center py-4 italic">No statement data found.</div>}
             </div>
          </GlassCard>
 
@@ -314,9 +314,9 @@ export const Analytics = () => {
               <Zap className="text-yellow-400" size={20}/>
               <h3 className="font-bold text-white">Alpha Leaderboard</h3>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left text-gray-400">
-                <thead className="text-gray-500 border-b border-white/10 uppercase">
+            <div className="overflow-x-auto max-h-[300px] overflow-y-auto pr-2">
+              <table className="w-full text-xs text-left text-gray-400 relative">
+                <thead className="text-gray-500 border-b border-white/10 uppercase sticky top-0 bg-[#0a0a0a] z-10">
                   <tr>
                     <th className="py-2">Signal</th>
                     <th className="py-2 text-right">Profit</th>
@@ -325,7 +325,7 @@ export const Analytics = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {signalLeaderboard.slice(0, 6).map((s) => (
+                  {signalLeaderboard.map((s) => (
                     <tr key={s.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                       <td className="py-3">
                          <div className="font-bold text-white">{s.name}</div>
@@ -340,21 +340,24 @@ export const Analytics = () => {
                   ))}
                 </tbody>
               </table>
+              {signalLeaderboard.length === 0 && <div className="text-center py-4 italic">No winning signals harvested yet.</div>}
             </div>
          </GlassCard>
       </div>
 
-      {/* --- TIER 4: VISUAL MATRIX --- */}
+      {/* --- TIER 4: MACRO SPEND ANALYTICS (NEW) --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* The Clean Category Pie */}
         <GlassCard className="p-6 h-[400px]">
           <div className="flex items-center gap-2 mb-6">
             <PieIcon className="text-purple-400" size={20}/>
-            <h3 className="font-bold text-white">Top Spend Categories</h3>
+            <h3 className="font-bold text-white">Macro Category Distribution</h3>
           </div>
           <ResponsiveContainer width="100%" height="85%">
             <BarChart data={categorySplit} layout="vertical" margin={{ left: 10 }}>
               <XAxis type="number" stroke="#555" fontSize={10} tickFormatter={(val) => `${val/1000}k`}/>
-              <YAxis dataKey="name" type="category" stroke="#fff" fontSize={10} width={70}/>
+              <YAxis dataKey="name" type="category" stroke="#fff" fontSize={10} width={100}/>
               <Tooltip content={<CustomTooltip />}/>
               <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} name="Spent" barSize={20}>
                 {categorySplit.map((_entry, index) => (
@@ -365,20 +368,38 @@ export const Analytics = () => {
           </ResponsiveContainer>
         </GlassCard>
 
-        <GlassCard className="p-6 h-[400px]">
-          <div className="flex items-center gap-2 mb-6">
-            <Target className="text-accent-success" size={20}/>
-            <h3 className="font-bold text-white">Signal Alpha (Effort vs Reward)</h3>
-          </div>
-          <ResponsiveContainer width="100%" height="85%">
-            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 0 }}>
-              <XAxis type="number" dataKey="effort" name="Effort" unit="h" stroke="#555" fontSize={10} />
-              <YAxis type="number" dataKey="profit" name="Profit" stroke="#555" fontSize={10} tickFormatter={(val) => `${val/1000}k`} />
-              <ZAxis type="number" dataKey="roi" range={[50, 400]} name="ROI" />
-              <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<CustomTooltip />} />
-              <Scatter name="Signals" data={signalPerformance} fill="#10b981" />
-            </ScatterChart>
-          </ResponsiveContainer>
+        {/* TOP MERCHANTS LEADERBOARD (NEW) */}
+        <GlassCard className="p-6 h-[400px] flex flex-col">
+            <div className="flex items-center gap-2 mb-4">
+              <Briefcase className="text-cyan-400" size={20}/>
+              <h3 className="font-bold text-white">Top 15 Merchants (All-Time)</h3>
+            </div>
+            <div className="overflow-x-auto flex-1 pr-2">
+              <table className="w-full text-xs text-left text-gray-400">
+                <thead className="text-gray-500 border-b border-white/10 uppercase sticky top-0 bg-[#0a0a0a] z-10">
+                  <tr>
+                    <th className="py-2">Merchant</th>
+                    <th className="py-2 text-center">Freq</th>
+                    <th className="py-2 text-right">Total Volume</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topMerchants.map((m, idx) => (
+                    <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      <td className="py-3">
+                         <div className="font-bold text-white">{m.merchant}</div>
+                         <div className="text-[9px] text-cyan-500/80 uppercase">{m.category}</div>
+                      </td>
+                      <td className="py-3 text-center font-mono">{m.count}x</td>
+                      <td className="py-3 text-right font-mono font-bold text-cyan-400">
+                         <Naira/>{formatNumber(m.total)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {topMerchants.length === 0 && <div className="text-center py-12 italic text-gray-600">Upload bank statements to build merchant profile.</div>}
+            </div>
         </GlassCard>
       </div>
 

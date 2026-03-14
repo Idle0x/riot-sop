@@ -1,53 +1,59 @@
-import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
+import { Naira } from '../ui/Naira';
 import { formatNumber } from '../../utils/format';
 
-interface Props {
-  data: { name: string; income: number; expense: number }[];
-}
-
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-black/80 backdrop-blur-md border border-white/10 p-3 rounded-lg text-xs shadow-xl">
-        <p className="font-bold text-white mb-2">{label}</p>
-        <p className="text-green-400">In: ${formatNumber(payload[0].value)}</p>
-        <p className="text-red-400">Out: ${formatNumber(payload[1].value)}</p>
-        <div className="mt-2 pt-2 border-t border-white/10 text-gray-400">
-           Net: <span className={payload[0].value - payload[1].value >= 0 ? 'text-green-400' : 'text-red-400'}>
-             {payload[0].value - payload[1].value >= 0 ? '+' : ''}${formatNumber(payload[0].value - payload[1].value)}
-           </span>
-        </div>
-      </div>
-    );
-  }
-  return null;
+const formatAxisAmount = (val: number) => {
+  if (val === 0) return '0';
+  if (val >= 1000000) return `${(val / 1000000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
+  return val.toString();
 };
 
-export const CashFlowChart = ({ data }: Props) => {
+interface CashFlowChartProps {
+  data: any[];
+}
+
+export const CashFlowChart = ({ data }: CashFlowChartProps) => {
   return (
-    <div className="h-[200px] w-full mt-4">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-          <XAxis 
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+        <XAxis 
             dataKey="name" 
-            axisLine={false} 
+            stroke="#555" 
+            fontSize={10} 
             tickLine={false} 
-            tick={{ fill: '#6b7280', fontSize: 10 }} 
-            dy={10}
-          />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
-          <Bar dataKey="income" radius={[4, 4, 0, 0]}>
-            {data.map((_entry, index) => (
-              <Cell key={`cell-in-${index}`} fill="rgba(34, 197, 94, 0.5)" />
-            ))}
-          </Bar>
-          <Bar dataKey="expense" radius={[4, 4, 0, 0]}>
-            {data.map((_entry, index) => (
-              <Cell key={`cell-out-${index}`} fill="rgba(239, 68, 68, 0.5)" />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
+            axisLine={false} 
+            minTickGap={15} 
+        />
+        <YAxis 
+            stroke="#555" 
+            fontSize={10} 
+            tickLine={false} 
+            axisLine={false} 
+            tickFormatter={(val) => `₦${formatAxisAmount(val)}`} 
+        />
+        <Tooltip
+          content={({ active, payload, label }) => {
+            if (active && payload && payload.length) {
+              return (
+                <div className="bg-black/90 border border-white/10 p-3 rounded-lg shadow-xl text-xs z-50">
+                  <p className="font-bold text-white mb-2">{label}</p>
+                  {payload.map((p: any, idx: number) => (
+                    <p key={idx} style={{ color: p.fill }} className="flex items-center justify-between gap-4">
+                      <span>{p.dataKey === 'income' ? 'Inflow' : 'Outflow'}:</span> 
+                      <span className="font-mono font-bold"><Naira/>{formatNumber(p.value)}</span>
+                    </p>
+                  ))}
+                </div>
+              );
+            }
+            return null;
+          }}
+          cursor={{ fill: '#ffffff0a' }}
+        />
+        <Bar dataKey="income" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+        <Bar dataKey="expense" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={40} />
+      </BarChart>
+    </ResponsiveContainer>
   );
 };

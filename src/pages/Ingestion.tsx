@@ -18,7 +18,6 @@ import {
 export const Ingestion = () => {
   const { session } = useUser();
   const queryClient = useQueryClient();
-  // STRATEGIC UPDATE: We bring in triggerJournalPrompt
   const { budgets, insertTelemetryBatch, commitAction, triggerJournalPrompt } = useLedger();
   const fileInputRef = useRef<HTMLInputElement>(null);
   

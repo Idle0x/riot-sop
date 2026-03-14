@@ -4,10 +4,26 @@ import { useLedger } from '../context/LedgerContext';
 export const useAnalytics = () => {
   const { history, telemetry, budgets, signals } = useLedger();
 
-  // Helper to merge all relevant spend/income events from both databases
+  // Helper to safely merge Ledger History + Data Lake Telemetry
   const combinedFinancialEvents = useMemo(() => {
-      const hEvents = history.map(h => ({ ...h, isTelemetry: false }));
-      const tEvents = telemetry.map(t => ({ ...t, isTelemetry: true, categoryGroup: t.categoryGroup }));
+      const hEvents = history.map(h => ({ 
+          id: h.id,
+          date: h.date,
+          type: h.type,
+          amount: h.amount,
+          title: h.title,
+          isTelemetry: false, 
+          categoryGroup: undefined 
+      }));
+      const tEvents = telemetry.map(t => ({ 
+          id: t.id,
+          date: t.date,
+          type: t.type,
+          amount: t.amount,
+          title: t.title,
+          isTelemetry: true, 
+          categoryGroup: t.categoryGroup 
+      }));
       return [...hEvents, ...tEvents].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [history, telemetry]);
 
@@ -41,7 +57,6 @@ export const useAnalytics = () => {
     const map: Record<string, number> = {};
     
     combinedFinancialEvents.filter(e => e.type === 'SPEND').forEach(e => {
-        // Use Data Lake category if available, fallback to Ledger title
         const key = e.categoryGroup || e.title || 'Uncategorized';
         map[key] = (map[key] || 0) + Math.abs(e.amount || 0);
     });

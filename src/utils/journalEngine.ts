@@ -25,7 +25,6 @@ export interface EngineResult {
   title: string;
 }
 
-// --- THE COMBINATORIAL ENGINE ---
 export const generateSmartPrompt = (
   type: JournalEventType, 
   data: any, 
@@ -35,7 +34,28 @@ export const generateSmartPrompt = (
   const { runwayMonths, recentBleeds } = state;
   const isCritical = runwayMonths < 3;
 
-  // 1. BUDGET SPEND HYDRATION
+  // 1. INGESTION / AUDIT HYDRATION (NEW)
+  if (type === 'AUDIT_INGEST') {
+    const { recordCount, totalBleed, bleedCount, anomaliesCount, batchSignature } = data;
+
+    let synthesis = `Ingested ${recordCount} structural records via ${batchSignature}. `;
+    let prompt = '';
+
+    if (bleedCount > 0) {
+      synthesis += `System flagged ${bleedCount} high-velocity friction points, resulting in ₦${formatNumber(totalBleed)} of systemic leakage. `;
+      prompt = "What psychological or environmental triggers led to these high-frequency micro-bleeds?";
+    } else if (anomaliesCount > 0) {
+      synthesis += `Zero velocity bleeds detected. However, ${anomaliesCount} structural OpEx limits were breached. `;
+      prompt = "Are these budget deficits a one-time anomaly, or is this permanent lifestyle creep requiring budget expansion?";
+    } else {
+      synthesis += `Zero friction or anomalies detected. System is operating within absolute parameters. `;
+      prompt = "Flawless execution this cycle. What specific habits kept your discipline so clean?";
+    }
+
+    return { title: `System Audit: ${batchSignature}`, synthesis, prompt };
+  }
+
+  // 2. BUDGET SPEND HYDRATION
   if (type === 'BUDGET_SPEND') {
     const { amount, budgetName, limit, spentBefore } = data;
     const newTotal = spentBefore + amount;
@@ -65,7 +85,7 @@ export const generateSmartPrompt = (
     return { title: `Budget Protocol: ${budgetName}`, synthesis, prompt };
   }
 
-  // 2. TRIAGE HYDRATION
+  // 3. TRIAGE HYDRATION
   if (type === 'TRIAGE_DROP') {
     const { amountNGN, amountUSD, opExRouted, bufferRouted, coldRouted } = data;
     
@@ -90,7 +110,7 @@ export const generateSmartPrompt = (
     return { title: `Capital Influx: $${formatNumber(amountUSD)}`, synthesis, prompt };
   }
 
-  // 3. SIGNAL HARVEST HYDRATION
+  // 4. SIGNAL HARVEST HYDRATION
   if (type === 'SIGNAL_HARVEST') {
     const { signalName, profit, hours } = data;
     const yieldPerHour = hours > 0 ? profit / hours : profit;
@@ -111,7 +131,7 @@ export const generateSmartPrompt = (
     return { title: `Alpha Harvest: ${signalName}`, synthesis, prompt };
   }
 
-  // 4. SIGNAL KILL HYDRATION
+  // 5. SIGNAL KILL HYDRATION
   if (type === 'SIGNAL_KILL') {
     const { signalName, hours } = data;
     let synthesis = `Terminated [${signalName}]. `;

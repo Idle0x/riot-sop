@@ -28,7 +28,7 @@ export const Triage = () => {
   const { user } = useUser();
   const { 
     runwayMonths, goals, signals, unallocatedCash, history, accounts, monthlyBurn,
-    updateAccount, commitAction, updateSignal, fundGoal 
+    updateAccount, commitAction, updateSignal, fundGoal, triggerJournalPrompt 
   } = useLedger();
 
   // --- STATE 1: EXCHANGE RATE ---
@@ -50,12 +50,12 @@ export const Triage = () => {
 
   // Step 2 Inputs
   const [generosity, setGenerosity] = useState('0');
-  
+
   // Tiered Architecture Inputs
-  const [runwayAlloc, setRunwayAlloc] = useState('0');       // Tier 2: OpEx
-  const [chaosBufferAlloc, setChaosBufferAlloc] = useState('0'); // Tier 1: Local Cache
-  const [coldStorageAlloc, setColdStorageAlloc] = useState('0'); // Tier 3: Wealth Engine
-  
+  const [runwayAlloc, setRunwayAlloc] = useState('0');       
+  const [chaosBufferAlloc, setChaosBufferAlloc] = useState('0'); 
+  const [coldStorageAlloc, setColdStorageAlloc] = useState('0'); 
+
   const [allocations, setAllocations] = useState<Record<string, number>>({});
 
   // --- SILENCE PROTOCOL STATE ---
@@ -156,24 +156,16 @@ export const Triage = () => {
   };
 
   const executeHardForkRouter = () => {
-    // Reset manual allocations
     setAllocations({});
-    
     let pool = netFunds - genAmount;
-
-    // 1. Tier 2: OpEx (Fund exactly 1 month of burn)
     const targetOpEx = Math.min(pool, monthlyBurn);
     setRunwayAlloc(targetOpEx.toString());
     pool -= targetOpEx;
-
-    // 2. Tier 1: Chaos Buffer (Target 100k liquid in holding)
     const holdingBal = accounts.find(a => a.type === 'holding')?.balance || 0;
     const targetBuffer = Math.max(0, 100000 - holdingBal);
     const toBuffer = Math.min(pool, targetBuffer);
     setChaosBufferAlloc(toBuffer.toString());
     pool -= toBuffer;
-
-    // 3. Tier 3: Cold Storage
     setColdStorageAlloc(Math.max(0, pool).toString());
   };
 
@@ -186,7 +178,6 @@ export const Triage = () => {
   };
 
   const handleCommit = () => {
-    // Zero-Based Routing Verification
     if (Math.abs(remaining) > 1) {
         alert("Zero-Based Routing Error: You must allocate exactly 100% of the funds before committing. Remaining balance must be zero.");
         return;
@@ -228,26 +219,22 @@ export const Triage = () => {
     if (dropUSD > 0) updateAccount('holding', grossNGN); 
     updateAccount('holding', -sourceFunds); 
 
-    // Taxes
     if (taxAmount > 0) {
       updateAccount('vault', taxAmount); 
       commitAction({ date: timestamp, type: 'TRANSFER', title: 'Tax Shield Stashed', amount: taxAmount, tags: ['tax_nta2026'] });
     }
     if (ventureAmount > 0) commitAction({ date: timestamp, type: 'SPEND', title: 'Venture Tax Burned', amount: ventureAmount, tags: ['risk'] });
 
-    // Step 1 Vault Auto-Save
     if (vaultAmount > 0) {
       updateAccount('vault', vaultAmount);
       commitAction({ date: timestamp, type: 'TRANSFER', title: 'Vault Pre-Tax Deposit', amount: vaultAmount, tags: ['wealth_defense'] });
     }
 
-    // Generosity
     if (genAmount > 0) {
         updateAccount('generosity', genAmount);
         commitAction({ date: timestamp, type: 'TRANSFER', title: 'Funded Generosity Wallet', amount: genAmount, description: 'Allocated for future giving', tags: ['generosity_fund'] });
     }
 
-    // ARCHITECTURE ROUTING
     if (opExAmount > 0) {
         updateAccount('payroll', opExAmount); 
         commitAction({ date: timestamp, type: 'TRANSFER', title: 'Tier 2: Runway Extension', amount: opExAmount, tags: ['operations'] });
@@ -263,7 +250,6 @@ export const Triage = () => {
         commitAction({ date: timestamp, type: 'TRANSFER', title: 'Tier 3: Cold Storage Secured', amount: coldAmount, tags: ['wealth_building'] });
     }
 
-    // Goals
     Object.entries(allocations).forEach(([goalId, amount]) => {
        if (amount > 0) {
          updateAccount('buffer', amount);
@@ -271,6 +257,20 @@ export const Triage = () => {
          commitAction({ date: timestamp, type: 'GOAL_FUND', title: 'Goal Allocation', amount, linkedGoalId: goalId });
        }
     });
+
+    // 3. TRIGGER AUTO-JOURNAL
+    if (dropUSD > 0) {
+        triggerJournalPrompt({
+            type: 'TRIAGE_DROP',
+            data: {
+                amountNGN: grossNGN,
+                amountUSD: dropUSD,
+                opExRouted: opExAmount,
+                bufferRouted: bufferAmount,
+                coldRouted: coldAmount + vaultAmount
+            }
+        });
+    }
 
     navigate('/');
   };
@@ -467,7 +467,7 @@ export const Triage = () => {
                     )}
                  </div>
                </div>
-               
+
                <button 
                   onClick={executeHardForkRouter} 
                   className="bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-400 text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition-all"

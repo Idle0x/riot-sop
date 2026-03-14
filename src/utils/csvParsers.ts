@@ -46,7 +46,7 @@ const classifyTransaction = (rawDescription: string): { merchant: string, catego
   if (desc.includes('maintenance') || desc.includes('card fee')) return { merchant: 'Card Maintenance', category: 'Bank Charges' };
   if (desc.includes('fee') || desc.includes('charge')) return { merchant: 'Bank Fees', category: 'Bank Charges' };
 
-  // 7. Gateways & Infrastructure (When the specific merchant isn't clear)
+  // 7. Gateways & Infrastructure 
   if (desc.includes('paystack')) return { merchant: 'Paystack Checkout', category: 'Online Payment' };
   if (desc.includes('flutterwave') || desc.includes('flw')) return { merchant: 'Flutterwave', category: 'Online Payment' };
   if (desc.includes('remita')) return { merchant: 'Remita', category: 'Taxes & Levies' };
@@ -58,19 +58,15 @@ const classifyTransaction = (rawDescription: string): { merchant: string, catego
   if (desc.includes('reversal')) return { merchant: 'Reversal', category: 'Refunds' };
 
   // --- FALLBACK CLEANUP ---
-  // If we don't recognize it, we aggressively clean the garbage text to find a readable name.
-  // We remove common banking junk text like "POS/PUR/", "NIP TRF/", dates, and reference numbers.
   let cleanMerchant = rawDescription
       .replace(/(POS\/PUR\/|NIP TRF|NIP|TRF|USSD|WDL|WEB\/|MOB\/)/gi, '') // Strip prefixes
       .replace(/[0-9]{8,}/g, '') // Strip long reference numbers
-      .split('/')[0] // Take the first meaningful chunk before slashes
+      .split('/')[0] // Take first meaningful chunk before slashes
       .split('*')[0] // Take chunks before asterisks
       .trim();
 
-  // Capitalize properly
   cleanMerchant = cleanMerchant.charAt(0).toUpperCase() + cleanMerchant.slice(1).toLowerCase();
   
-  // Ensure it's not too long for the UI
   if (cleanMerchant.length > 25) cleanMerchant = cleanMerchant.substring(0, 25) + '...';
 
   return { 
@@ -86,80 +82,116 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
     reader.onload = (e) => {
       try {
         const text = e.target?.result as string;
-        const rows = text.split('\n').map(row => row.split(','));
+        const rows = text.split('\n');
         if (rows.length < 2) throw new Error("File appears empty or invalid.");
 
-        // Heuristic Header Detection
-        const headers = rows[0].map(h => h.toLowerCase().replace(/["\r]/g, '').trim());
-        
-        const dateIdx = headers.findIndex(h => h.includes('date'));
-        const descIdx = headers.findIndex(h => h.includes('description') || h.includes('narration') || h.includes('remarks') || h.includes('details'));
-        const debitIdx = headers.findIndex(h => h.includes('debit') || h.includes('withdrawal'));
-        const creditIdx = headers.findIndex(h => h.includes('credit') || h.includes('deposit'));
-        const amountIdx = headers.findIndex(h => h === 'amount');
+        let headerRowIndex = -1;
+        let headers: string[] = [];
+        let dateIdx = -1, descIdx = -1, debitIdx = -1, creditIdx = -1, amountIdx = -1;
 
-        if (dateIdx === -1 || descIdx === -1) {
+        // 1. SCANNER: Hunt down the actual table headers (skipping bank metadata junk at the top)
+        for (let i = 0; i < Math.min(rows.length, 50); i++) {
+            const rowCols = rows[i].split(',');
+            const tempHeaders = rowCols.map(h => h.toLowerCase().replace(/["\r]/g, '').trim());
+            
+            const tempDateIdx = tempHeaders.findIndex(h => h === 'date' || h.includes('date') || h === 'value date' || h === 'txn date');
+            const tempDescIdx = tempHeaders.findIndex(h => h.includes('description') || h.includes('narration') || h.includes('remarks') || h.includes('details'));
+            
+            if (tempDateIdx !== -1 && tempDescIdx !== -1) {
+                headerRowIndex = i;
+                headers = tempHeaders;
+                dateIdx = tempDateIdx;
+                descIdx = tempDescIdx;
+                debitIdx = headers.findIndex(h => h.includes('debit') || h.includes('withdrawal'));
+                creditIdx = headers.findIndex(h => h.includes('credit') || h.includes('deposit'));
+                amountIdx = headers.findIndex(h => h === 'amount');
+                break;
+            }
+        }
+
+        if (headerRowIndex === -1) {
            throw new Error("Could not detect standard 'Date' or 'Description' columns.");
         }
 
         const parsedData: Partial<TelemetryRecord>[] = [];
-
-        // Track merchant frequency for the High-Velocity / Bleed detector
         const merchantFrequency: Record<string, number> = {};
 
-        // Parse Phase
-        for (let i = 1; i < rows.length; i++) {
-          const row = rows[i];
-          if (row.length <= Math.max(dateIdx, descIdx)) continue;
+        // 2. PARSE PHASE: Start reading strictly *after* the header row
+        for (let i = headerRowIndex + 1; i < rows.length; i++) {
+          const rawRow = rows[i];
+          if (!rawRow.trim()) continue; 
 
-          const rawDate = row[dateIdx]?.replace(/["\r]/g, '');
-          const rawDesc = row[descIdx]?.replace(/["\r]/g, '') || 'Unknown';
+          // Robust CSV Splitter: Ignores commas that are trapped inside quotation marks
+          let cols = [];
+          let inQuotes = false;
+          let colStr = '';
+          for (let char of rawRow) {
+              if (char === '"') {
+                  inQuotes = !inQuotes;
+              } else if (char === ',' && !inQuotes) {
+                  cols.push(colStr);
+                  colStr = '';
+              } else {
+                  colStr += char;
+              }
+          }
+          cols.push(colStr); 
+
+          if (cols.length <= Math.max(dateIdx, descIdx)) continue;
+
+          const rawDate = cols[dateIdx]?.replace(/["\r]/g, '').trim();
+          const rawDesc = cols[descIdx]?.replace(/["\r]/g, '').trim() || 'Unknown';
           
           let amount = 0;
           let type: 'SPEND' | 'DROP' = 'SPEND';
 
-          if (amountIdx !== -1 && row[amountIdx]) {
-             const val = parseFloat(row[amountIdx].replace(/[^0-9.-]+/g, ''));
-             amount = Math.abs(val);
-             type = val < 0 ? 'SPEND' : 'DROP';
+          // Extract Amount
+          if (amountIdx !== -1 && cols[amountIdx]) {
+             const val = parseFloat(cols[amountIdx].replace(/[^0-9.-]+/g, ''));
+             if (!isNaN(val)) {
+                amount = Math.abs(val);
+                type = val < 0 ? 'SPEND' : 'DROP';
+             }
           } else {
-             const debitVal = parseFloat(row[debitIdx]?.replace(/[^0-9.-]+/g, '') || '0');
-             const creditVal = parseFloat(row[creditIdx]?.replace(/[^0-9.-]+/g, '') || '0');
+             const debitStr = cols[debitIdx]?.replace(/[^0-9.-]+/g, '');
+             const creditStr = cols[creditIdx]?.replace(/[^0-9.-]+/g, '');
+             const debitVal = debitStr ? parseFloat(debitStr) : 0;
+             const creditVal = creditStr ? parseFloat(creditStr) : 0;
+             
              if (debitVal > 0) { amount = debitVal; type = 'SPEND'; }
              else if (creditVal > 0) { amount = creditVal; type = 'DROP'; }
           }
 
           if (!amount || isNaN(amount) || !rawDate) continue;
 
-          // 1. Run the Smart Classifier
+          // Verify Date
+          const parsedDate = new Date(rawDate);
+          if (isNaN(parsedDate.getTime())) continue;
+
+          // Scrub through Classifier
           const { merchant, category } = classifyTransaction(rawDesc);
 
-          // Track frequency to detect systemic leakage (only for spending)
           if (type === 'SPEND') {
               merchantFrequency[merchant] = (merchantFrequency[merchant] || 0) + 1;
           }
 
           parsedData.push({
-            date: new Date(rawDate).toISOString(),
+            date: parsedDate.toISOString(),
             type,
-            title: merchant,           // The clean Merchant name
-            description: rawDesc,      // The original raw string (kept for forensics)
+            title: merchant,
+            description: rawDesc,
             amount,
-            categoryGroup: category,   // The macro category
+            categoryGroup: category,
             currency: 'NGN',
             transactionRef: crypto.randomUUID()
           });
         }
 
-        // 2. The Anomaly / High-Velocity Circuit Breaker
-        // If you hit the same merchant more than 3 times in one statement, it flags as a "Bleed"
-        const finalData = parsedData.map(record => {
-            const isHighVelocity = record.type === 'SPEND' && merchantFrequency[record.title!] > 3;
-            return {
-                ...record,
-                highVelocityFlag: isHighVelocity
-            };
-        });
+        // 3. APPLY ANOMALY FLAGS
+        const finalData = parsedData.map(record => ({
+            ...record,
+            highVelocityFlag: record.type === 'SPEND' && merchantFrequency[record.title!] > 3
+        }));
 
         resolve(finalData);
 

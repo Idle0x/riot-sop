@@ -6,7 +6,7 @@ import { formatNumber } from '../utils/format';
 import { 
   Clock, Undo2, Search, Filter, ArrowDown, 
   Target, Flame, Skull, Zap, Heart, ShieldCheck, Wallet, 
-  ShieldAlert, Play, Gift, FileSpreadsheet
+  ShieldAlert, Play, Gift
 } from 'lucide-react';
 
 export const Ledger = () => {
@@ -16,7 +16,6 @@ export const Ledger = () => {
   const [limit, setLimit] = useState(50);
 
   const isUndoable = (date: string, type: string) => {
-    // Only allow undo for financial moves (SPEND/DROP) within 1 hour
     const isRecent = (new Date().getTime() - new Date(date).getTime()) < (60 * 60 * 1000);
     const isReversible = type === 'SPEND' || type === 'DROP' || type === 'GENEROSITY_GIFT';
     return isRecent && isReversible;
@@ -26,13 +25,10 @@ export const Ledger = () => {
     return history.filter(log => {
       const matchesSearch = log.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                             (log.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            (log.recipientName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            (log.categoryGroup || '').toLowerCase().includes(searchTerm.toLowerCase());
+                            (log.recipientName || '').toLowerCase().includes(searchTerm.toLowerCase());
       
       let matchesType = true;
-      if (filterType === 'BLEEDS') {
-          matchesType = !!log.highVelocityFlag;
-      } else if (filterType !== 'ALL') {
+      if (filterType !== 'ALL') {
           matchesType = log.type === filterType;
       }
 
@@ -42,8 +38,7 @@ export const Ledger = () => {
 
   const visibleHistory = filteredHistory.slice(0, limit);
 
-  // Icon Mapper
-  const getIcon = (type: string, hasRef?: string) => {
+  const getIcon = (type: string) => {
     if (type === 'SYSTEM_EVENT') return <ShieldAlert size={20}/>;
     if (type === 'WORK_SESSION') return <Play size={20}/>; 
     if (type === 'GENEROSITY_GIFT') return <Gift size={20}/>; 
@@ -54,13 +49,10 @@ export const Ledger = () => {
     if (type === 'GENEROSITY') return <Heart size={20}/>;
     if (type === 'TAX_ALLOCATION') return <ShieldCheck size={20}/>;
     if (type === 'DROP') return <Wallet size={20}/>;
-    if (hasRef) return <FileSpreadsheet size={20}/>; // Ingested CSV icon fallback
     return <Clock size={20}/>;
   };
 
-  // Color Mapper
-  const getColor = (type: string, isBleed?: boolean) => {
-    if (isBleed) return 'bg-red-500/20 text-red-500 border border-red-500/50';
+  const getColor = (type: string) => {
     if (type === 'SYSTEM_EVENT') return 'bg-orange-500/10 text-orange-500'; 
     if (type === 'WORK_SESSION') return 'bg-purple-500/10 text-purple-400'; 
     if (type === 'GENEROSITY_GIFT') return 'bg-pink-500/10 text-pink-400'; 
@@ -78,13 +70,12 @@ export const Ledger = () => {
         <div className="text-xs text-gray-500 font-mono">{history.length} Total Records</div>
       </div>
 
-      {/* CONTROLS */}
       <GlassCard className="p-4 flex flex-col md:flex-row gap-4">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16}/>
           <input 
             type="text" 
-            placeholder="Search records, merchants, or categories..." 
+            placeholder="Search records or merchants..." 
             className="w-full bg-black/20 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-white/30"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
@@ -98,7 +89,6 @@ export const Ledger = () => {
             onChange={e => setFilterType(e.target.value)}
           >
             <option value="ALL">All Events</option>
-            <option value="BLEEDS" className="text-red-400">🔥 High Velocity Bleeds</option>
             <option value="SPEND">Spending</option>
             <option value="DROP">Income Drops</option>
             <option value="WORK_SESSION">Labor / Time</option>
@@ -107,21 +97,18 @@ export const Ledger = () => {
         </div>
       </GlassCard>
 
-      {/* LIST */}
       <div className="space-y-4">
         {visibleHistory.map(log => (
-          <GlassCard key={log.id} className={`p-4 flex justify-between items-center group transition-colors ${log.highVelocityFlag ? 'border-red-500/30 bg-red-950/10 hover:border-red-500/50' : 'border-white/5 hover:border-white/20'}`}>
+          <GlassCard key={log.id} className="p-4 flex justify-between items-center group transition-colors border-white/5 hover:border-white/20">
             <div className="flex items-center gap-4">
-               <div className={`p-3 rounded-full ${getColor(log.type, log.highVelocityFlag)}`}>
-                 {getIcon(log.type, log.transactionRef)}
+               <div className={`p-3 rounded-full ${getColor(log.type)}`}>
+                 {getIcon(log.type)}
                </div>
                <div>
                  <div className="font-bold text-white flex items-center gap-2">
-                   {log.categoryGroup || log.title}
+                   {log.title}
                    
-                   {/* Pills */}
-                   {log.highVelocityFlag && <span className="text-[10px] uppercase bg-red-500 text-white px-2 py-0.5 rounded font-bold shadow-[0_0_10px_rgba(239,68,68,0.5)]">BLEED</span>}
-                   {!log.highVelocityFlag && log.categoryGroup && <span className="text-[10px] uppercase bg-white/10 px-2 py-0.5 rounded text-gray-400 font-mono">{log.type}</span>}
+                   <span className="text-[10px] uppercase bg-white/10 px-2 py-0.5 rounded text-gray-400 font-mono">{log.type}</span>
                    {log.recipientTier && (
                       <span className="text-[10px] uppercase bg-pink-500/20 text-pink-400 px-2 py-0.5 rounded font-mono border border-pink-500/30">
                         {log.recipientTier}
@@ -135,7 +122,6 @@ export const Ledger = () => {
             </div>
 
             <div className="text-right">
-              {/* Conditional Display: Hours vs Money */}
               <div className={`font-mono font-bold flex items-center justify-end gap-1 ${
                   log.type === 'WORK_SESSION' ? 'text-purple-400' :
                   log.amount && log.amount < 0 ? 'text-red-400' : 
@@ -147,7 +133,7 @@ export const Ledger = () => {
                 }
               </div>
 
-              {isUndoable(log.date, log.type) && !log.transactionRef && (
+              {isUndoable(log.date, log.type) && (
                 <button 
                   onClick={() => deleteTransaction(log.id)}
                   className="text-xs text-red-400 hover:underline flex items-center gap-1 ml-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity"

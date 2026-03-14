@@ -41,7 +41,6 @@ export const Dashboard = () => {
   const burnCap = user?.burnCap || 0;
   const burnRatio = burnCap > 0 ? (outflow / burnCap) * 100 : 0;
 
-  // Recent Bleeds Context
   const currentMonthKey = new Date().toISOString().slice(0, 7);
   const activeBleedCategories = Array.from(new Set(
       telemetry
@@ -107,29 +106,35 @@ export const Dashboard = () => {
             </div>
             )}
 
+            {/* STRATEGIC UPDATE: The Leak Alert is now a button that executes the Deep Link */}
             {leakOutflow > 0 && (
-            <div className="bg-red-500/10 border border-red-500/50 p-6 rounded-2xl flex flex-col md:flex-row items-center justify-between shadow-[0_0_20px_rgba(239,68,68,0.15)] gap-4 animate-fade-in">
+            <button 
+                onClick={() => navigate('/analytics?view=leaks')}
+                className="w-full text-left bg-red-500/10 border border-red-500/50 p-6 rounded-2xl flex flex-col md:flex-row items-center justify-between shadow-[0_0_20px_rgba(239,68,68,0.15)] gap-4 hover:bg-red-500/20 transition-all cursor-pointer group animate-fade-in"
+            >
                 <div className="flex items-center gap-4">
-                <div className="p-3 bg-red-500/20 rounded-xl text-red-500 animate-pulse"><Zap size={24}/></div>
-                <div>
-                    <h3 className="font-bold text-white text-lg">System Leak Detected</h3>
-                    <p className="text-sm text-red-400">High-frequency micro-transactions are draining liquidity.</p>
-                    <div className="flex gap-2 mt-2">
-                        {activeBleedCategories.map(cat => (
-                            <span key={cat} className="text-[10px] bg-red-500/20 border border-red-500/30 text-red-300 px-2 py-0.5 rounded uppercase font-bold">
-                                {cat}
-                            </span>
-                        ))}
-                    </div>
-                </div>
+                  <div className="p-3 bg-red-500/20 rounded-xl text-red-500 group-hover:bg-red-500 group-hover:text-white transition-colors animate-pulse"><Zap size={24}/></div>
+                  <div>
+                      <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                        System Leak Detected <ArrowRight size={16} className="text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"/>
+                      </h3>
+                      <p className="text-sm text-red-400">High-frequency micro-transactions are draining liquidity.</p>
+                      <div className="flex gap-2 mt-2">
+                          {activeBleedCategories.map(cat => (
+                              <span key={cat} className="text-[10px] bg-red-500/20 border border-red-500/30 text-red-300 px-2 py-0.5 rounded uppercase font-bold">
+                                  {cat}
+                              </span>
+                          ))}
+                      </div>
+                  </div>
                 </div>
                 <div className="flex flex-col md:items-end gap-2">
-                    <div className="text-xs text-gray-400 uppercase tracking-widest font-bold">Leaked (Mo)</div>
+                    <div className="text-xs text-gray-400 uppercase tracking-widest font-bold group-hover:text-red-300 transition-colors">Click for Forensics</div>
                     <div className="font-mono font-bold text-red-500 text-2xl flex items-center justify-end gap-1">
                         -<Naira/>{formatNumber(leakOutflow)}
                     </div>
                 </div>
-            </div>
+            </button>
             )}
         </div>
 

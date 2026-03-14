@@ -17,7 +17,7 @@ import { TreasuryVault } from '../components/signals/TreasuryVault';
 // UTILS
 import { formatNumber } from '../utils/format';
 import { getSectorStyle, generateAssetID } from '../utils/colors'; 
-import { transitionLifecycle } from '../utils/lifecycle'; // NEW: Lifecycle Engine
+import { transitionLifecycle } from '../utils/lifecycle'; 
 import { type Signal, type SignalPhase } from '../types';
 
 // ICONS
@@ -28,7 +28,8 @@ import {
 
 export const Signals = () => {
   const navigate = useNavigate();
-  const { signals, updateSignal, addSignal, commitAction } = useLedger();
+  // STRATEGIC UPDATE: Import triggerJournalPrompt
+  const { signals, updateSignal, addSignal, commitAction, triggerJournalPrompt } = useLedger();
 
   // --- STATE MANAGEMENT ---
   const [isDrillOpen, setIsDrillOpen] = useState(false);
@@ -45,7 +46,6 @@ export const Signals = () => {
   // --- ANALYTICS ---
   const analytics = useMemo(() => {
     const totalSignals = signals.length;
-    // Wins are signals that have generated revenue > 0
     const wins = signals.filter(s => s.totalGenerated > 0);
     const winRate = totalSignals > 0 ? (wins.length / totalSignals) * 100 : 0;
 
@@ -61,13 +61,10 @@ export const Signals = () => {
     return { winRate, bestSector };
   }, [signals]);
 
-  // --- NERVOUS SYSTEM ---
   const handleManualAction = (actionId: string) => {
     if (actionId === 'open_drill') setIsDrillOpen(true);
     if (actionId === 'open_triage') navigate('/triage');
   };
-
-  // --- ACTIONS ---
 
   const handleDossierUpdate = async (updatedSignal: Signal, logContent: string) => {
     updateSignal(updatedSignal);
@@ -93,10 +90,7 @@ export const Signals = () => {
 
   const handleCreateFromDrill = (data: Partial<Signal>) => {
     if (!data.title) { alert("Title required"); return; }
-
     const now = new Date().toISOString();
-
-    // Initialize Lifecycle
     const initialLifecycle = [{
         phase: 'discovery' as SignalPhase,
         enteredAt: now,
@@ -119,21 +113,18 @@ export const Signals = () => {
         timeline: [],
         createdAt: now,
         updatedAt: now,
-        lifecycle: initialLifecycle, // Initialize History
+        lifecycle: initialLifecycle,
         ...data as any
     });
     setIsDrillOpen(false);
   };
 
-  // UPDATED: Handle both Forward (Next) and Backward (Prev) movements
   const initiateMove = (signal: Signal, currentPhase: SignalPhase, direction: 'next' | 'prev') => {
     const currentIndex = activeColumns.findIndex(c => c.id === currentPhase);
-
     let nextIndex = -1;
     if (direction === 'next') nextIndex = currentIndex + 1;
     if (direction === 'prev') nextIndex = currentIndex - 1;
 
-    // Boundary Check
     if (nextIndex >= 0 && nextIndex < activeColumns.length) {
        const nextPhase = activeColumns[nextIndex].id;
        setPromoteSignal({ signal, phase: nextPhase });
@@ -144,11 +135,8 @@ export const Signals = () => {
     if (!promoteSignal) return;
     const { signal, phase } = promoteSignal;
     const newTotalHours = (signal.hoursLogged || 0) + addedHours;
-
-    // 1. Calculate new Lifecycle Array using Utility
     const updatedLifecycle = transitionLifecycle(signal, phase, newTotalHours, notes);
 
-    // 2. Update Signal
     updateSignal({ 
         ...signal, 
         phase, 
@@ -172,7 +160,6 @@ export const Signals = () => {
   const confirmKill = (outcome: any) => {
     if (!killSignal) return;
 
-    // 1. Transition to 'graveyard' phase
     const updatedLifecycle = transitionLifecycle(
         killSignal, 
         'graveyard', 
@@ -195,12 +182,37 @@ export const Signals = () => {
         description: `${outcome.status}: ${outcome.reason}`, 
         linkedSignalId: killSignal.id 
     });
+
+    // 1. TRIGGER JOURNAL INTERCEPT
+    triggerJournalPrompt({
+        type: 'SIGNAL_KILL',
+        data: {
+            signalName: killSignal.title,
+            hours: killSignal.hoursLogged || 0
+        }
+    });
+
     setKillSignal(null);
     setSelectedSignalId(null);
   };
 
-  // UPDATED: Redirect to Triage
   const handleHarvestClick = (signal: Signal) => {
+    // We navigate to triage first, the actual harvest logic runs during the drop triage.
+    // However, if the user explicitly clicks harvest here, we prompt them for the psychological win.
+    
+    // Check if they've logged hours but no cash yet (signaling a fresh win)
+    if (signal.totalGenerated === 0 && signal.hoursLogged > 0) {
+       // Just a visual intercept before they triage
+       triggerJournalPrompt({
+           type: 'SIGNAL_HARVEST',
+           data: {
+               signalName: signal.title,
+               profit: 0, // Not realized yet, but they are initiating
+               hours: signal.hoursLogged || 0
+           }
+       });
+    }
+
     navigate(`/triage?amount=${signal.totalGenerated}&source=${encodeURIComponent(signal.id)}`);
   };
 

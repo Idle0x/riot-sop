@@ -100,14 +100,13 @@ export interface SignalSession {
   type: 'active' | 'adjustment';
 }
 
-// NEW: Lifecycle Engine Structure
 export interface LifecycleChapter {
   phase: SignalPhase;
-  enteredAt: string;        // ISO Date
-  exitedAt?: string;        // ISO Date (undefined = currently active)
-  hoursAtEntry: number;     // Total hours logged when this phase started
-  hoursAtExit?: number;     // Total hours logged when this phase ended
-  notes?: string;           // Optional context
+  enteredAt: string;        
+  exitedAt?: string;        
+  hoursAtEntry: number;     
+  hoursAtExit?: number;     
+  notes?: string;           
 }
 
 export interface Signal {
@@ -118,7 +117,6 @@ export interface Signal {
   confidence: number;        
   effort: 'low' | 'med' | 'high';
 
-  // Time Architecture
   timeEstimates?: {
     weekly: number;        
     total: number;         
@@ -127,7 +125,6 @@ export interface Signal {
   sessionLogs?: SignalSession[]; 
   lastSessionAt?: string;      
 
-  // NEW: Lifecycle History
   lifecycle: LifecycleChapter[]; 
 
   thesis: {
@@ -173,14 +170,10 @@ export interface Signal {
 
 // --- HISTORY (BLACK BOX) ---
 export type LogType = 
-  // Financial
   'DROP' | 'SPEND' | 'TRANSFER' | 'TRIAGE' | 'TRIAGE_SESSION' | 'TAX_ALLOCATION' | 'GENEROSITY' | 'GENEROSITY_GIFT' |
-  // Signals
   'SIGNAL_CREATE' | 'SIGNAL_PROMOTE' | 'SIGNAL_KILL' | 'SIGNAL_REVIVE' | 'SIGNAL_UPDATE' | 'SIGNAL_HARVEST' | 'SIGNAL_ADVANCE' | 'FIELD_REPORT' | 'WORK_SESSION' |
-  // Goals & Budgets
   'GOAL_CREATE' | 'GOAL_FUND' | 'GOAL_DELETE' | 
   'BUDGET_CREATE' | 'BUDGET_DELETE' |
-  // System
   'SYSTEM_EVENT' | 'JOURNAL' | 'EMERGENCY_ACCESS';
 
 export interface HistoryLog {
@@ -188,26 +181,18 @@ export interface HistoryLog {
   date: string;
   type: LogType;
   title: string;
-  amount?: number; // Used for Currency OR Hours (context dependent)
+  amount?: number; 
   currency?: Currency;
   description?: string;
 
-  // Linkage
   linkedSignalId?: string;
   linkedGoalId?: string;
   tags?: string[];
 
-  // Forensic Metadata
-  efficiencyRating?: number; // $/hr
-  recipientName?: string;    // Generosity
-  recipientTier?: 'T1' | 'T2' | 'T3' | 'T4'; // Generosity
+  efficiencyRating?: number; 
+  recipientName?: string;    
+  recipientTier?: 'T1' | 'T2' | 'T3' | 'T4'; 
 
-  // Telemetry & Ingestion Metadata
-  transactionRef?: string;     // Unique bank reference to prevent duplicate CSV uploads
-  highVelocityFlag?: boolean;  // True if this is part of a micro-bleed cluster
-  categoryGroup?: string;      // Normalized merchant category (e.g., 'Telecom', 'Betting')
-
-  // Snapshot Data (Treasury)
   metadata?: {
     phase?: SignalPhase;
     hoursLogged?: number;
@@ -217,40 +202,54 @@ export interface HistoryLog {
   };
 }
 
-// The Studio Palette: Professional, high-contrast, dark-mode friendly
+// --- NEW: THE DATA LAKE (TELEMETRY) ---
+export interface TelemetryRecord {
+  id: string;
+  batchId: string;
+  date: string;
+  type: 'DROP' | 'SPEND';
+  title: string;
+  description: string;
+  amount: number;
+  currency: Currency;
+  transactionRef: string;
+  categoryGroup: string;
+  highVelocityFlag: boolean;
+}
+
+// --- NEW: JOURNAL ENTRIES ---
+export interface JournalEntry {
+  id: string;
+  date: string;
+  content: string;
+  tags?: string[];
+  linkedLogId?: string;
+  auditBatchId?: string;
+}
+
+// --- PALETTES & UTILS ---
 const SECTOR_PALETTE = [
-  // 1. Emerald (Growth/Money)
   { border: 'border-emerald-500', shadow: 'shadow-emerald-500/10', text: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-  // 2. Blue (Tech/Stability)
   { border: 'border-blue-500', shadow: 'shadow-blue-500/10', text: 'text-blue-400', bg: 'bg-blue-500/10' },
-  // 3. Violet (Deep Work/L2)
   { border: 'border-violet-500', shadow: 'shadow-violet-500/10', text: 'text-violet-400', bg: 'bg-violet-500/10' },
-  // 4. Rose (Passion/Speculation)
   { border: 'border-rose-500', shadow: 'shadow-rose-500/10', text: 'text-rose-400', bg: 'bg-rose-500/10' },
-  // 5. Amber (Infrastructure/Building)
   { border: 'border-amber-500', shadow: 'shadow-amber-500/10', text: 'text-amber-400', bg: 'bg-amber-500/10' },
-  // 6. Cyan (Future/AI)
   { border: 'border-cyan-500', shadow: 'shadow-cyan-500/10', text: 'text-cyan-400', bg: 'bg-cyan-500/10' },
-  // 7. Indigo (Corporate/Formal)
   { border: 'border-indigo-500', shadow: 'shadow-indigo-500/10', text: 'text-indigo-400', bg: 'bg-indigo-500/10' },
-  // 8. Lime (Experimental)
   { border: 'border-lime-500', shadow: 'shadow-lime-500/10', text: 'text-lime-400', bg: 'bg-lime-500/10' },
 ];
 
 export const getSectorStyle = (sectorName: string) => {
-  if (!sectorName) return SECTOR_PALETTE[1]; // Default to Blue
-
+  if (!sectorName) return SECTOR_PALETTE[1]; 
   let hash = 0;
   for (let i = 0; i < sectorName.length; i++) {
     hash = sectorName.charCodeAt(i) + ((hash << 5) - hash);
   }
-
   const index = Math.abs(hash) % SECTOR_PALETTE.length;
   return SECTOR_PALETTE[index];
 };
 
 export const generateAssetID = (title: string, dateStr: string) => {
-  // Generates something like "SUP-07"
   const prefix = title.substring(0, 3).toUpperCase().replace(/[^A-Z]/g, 'X');
   const suffix = new Date(dateStr).getDate().toString().padStart(2, '0');
   return `${prefix}-${suffix}`;

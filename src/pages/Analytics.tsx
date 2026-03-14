@@ -25,8 +25,8 @@ import {
 
 export const Analytics = () => {
   const { user } = useUser();
-  const { history, budgets } = useLedger();
-  
+  const { history, budgets, telemetry } = useLedger(); // STRATEGIC UPDATE: Added telemetry for backups
+
   // --- ANALYTICS ENGINE ---
   const { 
     burnHistory, categorySplit, signalPerformance,
@@ -50,10 +50,9 @@ export const Analytics = () => {
             setSelectedPeriods(defaults);
         }
     }
-  }, [availablePeriods]);
+  }, [availablePeriods, selectedPeriods.length]);
 
   // 2. Generate Data based on selection
-  // Note: getComparatorData needs to handle the logic of fetching data regardless of mode
   const comparisonData = getComparatorData(selectedPeriods, compMode);
 
   // 3. Dynamic Options Logic (The "Crazy" Mode)
@@ -63,8 +62,6 @@ export const Analytics = () => {
         case 'QUARTERLY': return availablePeriods.quarters;
         case 'MONTHLY': return availablePeriods.months;
         case 'MIXED': 
-            // Combine all and sort/group them. 
-            // Assuming strings are distinct like "2025", "Q1 2025", "Jan 2025"
             return [
                 ...availablePeriods.years,
                 ...availablePeriods.quarters,
@@ -87,7 +84,8 @@ export const Analytics = () => {
   const clearAll = () => setSelectedPeriods([]);
 
   const handleExport = () => {
-    const data = JSON.stringify({ user, history, budgets }, null, 2);
+    // STRATEGIC UPDATE: The export now securely backs up the Data Lake (telemetry) alongside everything else
+    const data = JSON.stringify({ user, history, telemetry, budgets }, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -122,10 +120,10 @@ export const Analytics = () => {
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
            <h1 className="text-3xl font-bold text-white">Intelligence Hub</h1>
-           <p className="text-gray-400 text-sm">Deep forensic analysis of your financial sovereignty.</p>
+           <p className="text-gray-400 text-sm">Deep forensic analysis of aggregated system & bank data.</p>
         </div>
         <GlassButton size="sm" onClick={handleExport}>
-          <Download size={16} className="mr-2"/> Export Data (JSON)
+          <Download size={16} className="mr-2"/> Export Full Data Lake (JSON)
         </GlassButton>
       </div>
 
@@ -151,12 +149,13 @@ export const Analytics = () => {
            <div className="text-[10px] text-gray-500 mt-1">Total Signal ROI</div>
         </GlassCard>
 
-        <GlassCard className="p-4 relative overflow-hidden">
+        {/* STRATEGIC UPDATE: Enhanced visual danger for largest system leak */}
+        <GlassCard className="p-4 relative overflow-hidden border-red-500/20 bg-red-950/10">
            <div className="flex items-center gap-2 mb-2 text-red-400">
-             <AlertTriangle size={16}/> <span className="text-xs font-bold uppercase">Largest Leak</span>
+             <AlertTriangle size={16}/> <span className="text-xs font-bold uppercase">Largest System Leak</span>
            </div>
            <div className="text-lg font-bold text-white truncate">{ribbon.largestLeak?.name || 'None'}</div>
-           <div className="text-[10px] text-gray-500 mt-1 font-mono">
+           <div className="text-[10px] text-red-400 mt-1 font-mono font-bold">
              <Naira/>{formatNumber(ribbon.largestLeak?.amount || 0)} (Total Spend)
            </div>
         </GlassCard>
@@ -174,12 +173,14 @@ export const Analytics = () => {
 
       {/* --- TIER 2: BURN & COMPARATOR --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
+
         {/* Left: Burn Velocity */}
         <GlassCard className="p-6 h-[450px]">
-          <div className="flex items-center gap-2 mb-6">
-            <TrendingUp className="text-red-500" size={20}/>
-            <h3 className="font-bold text-white">Burn Velocity (6 Mo)</h3>
+          <div className="flex justify-between items-start mb-6">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="text-red-500" size={20}/>
+                <h3 className="font-bold text-white">Aggregated Burn Velocity (6 Mo)</h3>
+              </div>
           </div>
           <ResponsiveContainer width="100%" height="85%">
             <AreaChart data={burnHistory}>
@@ -197,7 +198,7 @@ export const Analytics = () => {
           </ResponsiveContainer>
         </GlassCard>
 
-        {/* Right: Dynamic Comparator (Updated) */}
+        {/* Right: Dynamic Comparator */}
         <GlassCard className="p-6 h-[450px] flex flex-col">
           <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-4">
             <div className="flex items-center gap-2">
@@ -216,7 +217,6 @@ export const Analytics = () => {
                        {m.charAt(0) + m.slice(1, 3).toLowerCase()}
                    </button>
                ))}
-               {/* THE CRAZY MODE BUTTON */}
                <button 
                  onClick={() => { setCompMode('MIXED'); setSelectedPeriods([]); }} 
                  className={`text-[10px] px-2 py-1 rounded border transition-colors flex items-center gap-1 ${compMode === 'MIXED' ? 'bg-purple-500 text-white border-purple-500' : 'text-gray-500 border-white/10 hover:border-white/30'}`}
@@ -262,7 +262,6 @@ export const Analytics = () => {
                         <XAxis dataKey="name" stroke="#555" fontSize={10} />
                         <YAxis stroke="#555" fontSize={10} tickFormatter={(val) => `${val/1000}k`} />
                         <Tooltip content={<CustomTooltip />}/>
-                        {/* FIXED: barSize={40} ensures they stay sleek and don't balloon up */}
                         <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={40}>
                             {comparisonData.map((_entry, index) => (
                                 <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#3b82f6' : '#60a5fa'} />
@@ -286,7 +285,7 @@ export const Analytics = () => {
          <GlassCard className="p-6">
             <div className="flex items-center gap-2 mb-4">
               <ShieldCheck className="text-blue-400" size={20}/>
-              <h3 className="font-bold text-white">Monthly Statement</h3>
+              <h3 className="font-bold text-white">Aggregated Monthly Statement</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left text-gray-400">
@@ -295,7 +294,7 @@ export const Analytics = () => {
                     <th className="py-2">Period</th>
                     <th className="py-2 text-right text-green-500">Income</th>
                     <th className="py-2 text-right text-red-500">Expense</th>
-                    <th className="py-2 text-right">Net</th>
+                    <th className="py-2 text-right">Net Flow</th>
                     <th className="py-2 text-right">NSR</th>
                   </tr>
                 </thead>
@@ -306,7 +305,7 @@ export const Analytics = () => {
                       <td className="py-3 text-right text-green-400"><Naira/>{formatNumber(m.income)}</td>
                       <td className="py-3 text-right text-red-400"><Naira/>{formatNumber(m.expense)}</td>
                       <td className={`py-3 text-right font-bold ${m.net >= 0 ? 'text-blue-400' : 'text-red-500'}`}>
-                         <Naira/>{formatNumber(m.net)}
+                         {m.net >= 0 ? '+' : '-'}<Naira/>{formatNumber(Math.abs(m.net))}
                       </td>
                       <td className="py-3 text-right">{m.savingsRate.toFixed(1)}%</td>
                     </tr>
@@ -365,7 +364,6 @@ export const Analytics = () => {
               <XAxis type="number" stroke="#555" fontSize={10} tickFormatter={(val) => `${val/1000}k`}/>
               <YAxis dataKey="name" type="category" stroke="#fff" fontSize={10} width={70}/>
               <Tooltip content={<CustomTooltip />}/>
-              {/* FIXED: Bar size constraint */}
               <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} name="Spent" barSize={20}>
                 {categorySplit.map((_entry, index) => (
                   <Cell key={`cell-${index}`} fill={index === 0 ? '#ef4444' : '#8b5cf6'} />

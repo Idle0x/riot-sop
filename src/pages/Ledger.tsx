@@ -6,7 +6,7 @@ import { formatNumber } from '../utils/format';
 import { 
   Clock, Undo2, Search, Filter, ArrowDown, 
   Target, Flame, Skull, Zap, Heart, ShieldCheck, Wallet, 
-  ShieldAlert, Play, Gift
+  ShieldAlert, Play, Gift, Database, BookOpen
 } from 'lucide-react';
 
 export const Ledger = () => {
@@ -39,7 +39,9 @@ export const Ledger = () => {
   const visibleHistory = filteredHistory.slice(0, limit);
 
   const getIcon = (type: string) => {
-    if (type === 'SYSTEM_EVENT') return <ShieldAlert size={20}/>;
+    if (type === 'AUDIT_COMPLETED') return <Database size={20}/>;
+    if (type === 'JOURNAL_LOGGED' || type === 'JOURNAL') return <BookOpen size={20}/>;
+    if (type === 'SYSTEM_EVENT' || type.includes('UPDATE')) return <ShieldAlert size={20}/>;
     if (type === 'WORK_SESSION') return <Play size={20}/>; 
     if (type === 'GENEROSITY_GIFT') return <Gift size={20}/>; 
     if (type.includes('SIGNAL_KILL')) return <Skull size={20}/>;
@@ -53,7 +55,9 @@ export const Ledger = () => {
   };
 
   const getColor = (type: string) => {
-    if (type === 'SYSTEM_EVENT') return 'bg-orange-500/10 text-orange-500'; 
+    if (type === 'AUDIT_COMPLETED') return 'bg-cyan-500/10 text-cyan-400';
+    if (type === 'JOURNAL_LOGGED' || type === 'JOURNAL') return 'bg-blue-500/10 text-blue-400';
+    if (type === 'SYSTEM_EVENT' || type.includes('UPDATE')) return 'bg-orange-500/10 text-orange-500'; 
     if (type === 'WORK_SESSION') return 'bg-purple-500/10 text-purple-400'; 
     if (type === 'GENEROSITY_GIFT') return 'bg-pink-500/10 text-pink-400'; 
     if (type.includes('KILL') || type.includes('DELETE') || type === 'SPEND') return 'bg-red-500/10 text-red-500';
@@ -93,6 +97,7 @@ export const Ledger = () => {
             <option value="DROP">Income Drops</option>
             <option value="WORK_SESSION">Labor / Time</option>
             <option value="SYSTEM_EVENT">System Audits</option>
+            <option value="JOURNAL_LOGGED">Journal Entries</option>
           </select>
         </div>
       </GlassCard>

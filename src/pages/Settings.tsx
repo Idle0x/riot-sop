@@ -45,7 +45,7 @@ export const Settings = () => {
             inflationRate: newInf
         });
 
-        // STEP 3 WIRED: The System automatically logs parameter changes to the Blackbox
+        // System automatically logs parameter changes to the Blackbox
         if (user?.burnCap !== newBurn) {
             commitAction({
                 date: new Date().toISOString(),
@@ -160,8 +160,8 @@ export const Settings = () => {
                     <div className="text-[10px] text-gray-500">Delete active deal flow & pipeline.</div>
                 </button>
                 <button onClick={() => setConfirmReset('telemetry')} className="p-3 border border-white/10 rounded-xl text-left hover:border-red-500/50 hover:bg-red-500/10 transition-all group">
-                    <div className="text-sm font-bold text-white group-hover:text-red-400">Purge Data Lake</div>
-                    <div className="text-[10px] text-gray-500">Delete all ingested bank CSV data.</div>
+                    <div className="text-sm font-bold text-white group-hover:text-red-400">Wipe Ingestions</div>
+                    <div className="text-[10px] text-gray-500">Purge Data Lake & Bank CSVs.</div>
                 </button>
             </div>
 
@@ -170,7 +170,7 @@ export const Settings = () => {
                     <AlertOctagon size={18}/> EXECUTE TOTAL FACTORY RESET
                 </button>
                 <p className="text-center text-[10px] text-red-400 mt-2 font-mono">
-                    WARNING: Irreversible.
+                    WARNING: Irreversible. Excludes Blackbox History.
                 </p>
             </div>
         </GlassCard>

@@ -16,7 +16,7 @@ export interface GlobalHydrationState {
   budgets: Budget[];
   signals: Signal[];
   history: HistoryLog[];
-  recentBleeds: number; // Sum of leakOutflow this month
+  recentBleeds: number; 
 }
 
 export interface EngineResult {
@@ -34,14 +34,13 @@ export const generateSmartPrompt = (
 
   const { runwayMonths, recentBleeds } = state;
   const isCritical = runwayMonths < 3;
-  const isSecure = runwayMonths >= 6;
 
   // 1. BUDGET SPEND HYDRATION
   if (type === 'BUDGET_SPEND') {
     const { amount, budgetName, limit, spentBefore } = data;
     const newTotal = spentBefore + amount;
     const isBreach = newTotal > limit;
-    const isSignificant = amount > limit * 0.4; // Spend is 40% of the whole budget
+    const isSignificant = amount > limit * 0.4; 
 
     let synthesis = `Deployed ₦${formatNumber(amount)} to ${budgetName}. `;
     let prompt = '';
@@ -49,7 +48,6 @@ export const generateSmartPrompt = (
     if (isBreach) {
       synthesis += `This breaches the operational cap by ₦${formatNumber(newTotal - limit)}. `;
       
-      // Interlink checks
       if (isCritical) {
         synthesis += `System is in CRITICAL state (Runway: ${runwayMonths.toFixed(1)}mo). Discretionary overspending during survival mode threatens the architecture. `;
         prompt = "This is a direct violation of survival protocols. What psychological trigger caused this transaction?";
@@ -61,7 +59,6 @@ export const generateSmartPrompt = (
       synthesis += `Capacity consumed rapidly (${((newTotal/limit)*100).toFixed(0)}% full). `;
       prompt = "Large single-ticket deployment detected. Was this forecasted in the Roadmap?";
     } else {
-      // Routine, small spends do not trigger the journal modal to prevent fatigue.
       return null; 
     }
 
@@ -131,6 +128,5 @@ export const generateSmartPrompt = (
     return { title: `Pipeline Pruned: ${signalName}`, synthesis, prompt };
   }
 
-  // 5. DEFAULT FALLBACK
   return null;
 };

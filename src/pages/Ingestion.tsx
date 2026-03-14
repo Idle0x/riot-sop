@@ -1,7 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
 import { useUser } from '../context/UserContext';
+import { useLedger } from '../context/LedgerContext';
 import { processStatement } from '../utils/csvParsers';
 import { type HistoryLog } from '../types';
 
@@ -10,11 +10,15 @@ import { GlassButton } from '../components/ui/GlassButton';
 import { Naira } from '../components/ui/Naira';
 import { formatNumber } from '../utils/format';
 
-import { UploadCloud, CheckCircle2, Database, Zap, FileSpreadsheet, AlertTriangle } from 'lucide-react';
+import { 
+  UploadCloud, CheckCircle2, Database, Zap, 
+  AlertTriangle, BookOpen, TrendingDown, Clock, Activity 
+} from 'lucide-react';
 
 export const Ingestion = () => {
   const { session } = useUser();
   const queryClient = useQueryClient();
+  const { budgets, insertTelemetryBatch, commitAction, addJournalEntry } = useLedger();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [isProcessing, setIsProcessing] = useState(false);
@@ -22,6 +26,65 @@ export const Ingestion = () => {
   const [previewData, setPreviewData] = useState<Partial<HistoryLog>[]>([]);
   const [uploadStatus, setUploadStatus] = useState<{ imported: number; ignored: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  
+  // The Human-in-the-Loop Journal State
+  const [journalDraft, setJournalDraft] = useState('');
+  const [batchSignature, setBatchSignature] = useState('');
+
+  // --- TIME-SPAN RECOGNITION ENGINE ---
+  const calculateBatchSignature = (data: Partial<HistoryLog>[]) => {
+    if (data.length === 0) return "Empty Audit";
+    
+    const dates = data.map(d => new Date(d.date!).getTime()).sort((a, b) => a - b);
+    const minDate = new Date(dates[0]);
+    const maxDate = new Date(dates[dates.length - 1]);
+    
+    const diffDays = Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 3600 * 24));
+    
+    const formatShort = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const formatMonthYear = (d: Date) => d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+    if (diffDays <= 7) return `Weekly Audit: ${formatShort(minDate)} - ${formatShort(maxDate)}`;
+    if (diffDays <= 21) return `Sprint Audit: ${formatShort(minDate)} - ${formatShort(maxDate)}`;
+    if (diffDays <= 35) return `Monthly Audit: ${formatMonthYear(maxDate)}`;
+    return `Macro Audit: ${formatMonthYear(minDate)} - ${formatMonthYear(maxDate)}`;
+  };
+
+  // --- ANOMALY DETECTION ENGINE ---
+  const auditReport = useMemo(() => {
+    if (previewData.length === 0) return null;
+
+    let bleedCount = 0;
+    let totalBleed = 0;
+    const categorySpend: Record<string, number> = {};
+
+    previewData.forEach(log => {
+      if (log.highVelocityFlag) {
+        bleedCount++;
+        totalBleed += (log.amount || 0);
+      }
+      if (log.type === 'SPEND') {
+        const cat = log.categoryGroup || 'General';
+        categorySpend[cat] = (categorySpend[cat] || 0) + (log.amount || 0);
+      }
+    });
+
+    const anomalies: { category: string, spent: number, limit: number, deficit: number, unbudgeted: boolean }[] = [];
+    
+    Object.entries(categorySpend).forEach(([cat, spent]) => {
+      // Fuzzy match against active budgets
+      const budget = budgets.find(b => b.name.toLowerCase().includes(cat.toLowerCase()) || b.category.toLowerCase() === cat.toLowerCase());
+      
+      if (budget && spent > budget.amount) {
+         anomalies.push({ category: cat, spent, limit: budget.amount, deficit: spent - budget.amount, unbudgeted: false });
+      } else if (!budget && spent > 15000 && cat !== 'General' && cat !== 'Transfer') { 
+         // Flag significant unbudgeted structural categories
+         anomalies.push({ category: cat, spent, limit: 0, deficit: spent, unbudgeted: true });
+      }
+    });
+
+    return { bleedCount, totalBleed, anomalies };
+  }, [previewData, budgets]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -32,9 +95,29 @@ export const Ingestion = () => {
     setErrorMsg(null);
 
     try {
-      // The Master Router automatically handles Excel (.xls/.xlsx) or CSV files
       const data = await processStatement(file);
       setPreviewData(data);
+      
+      // Compute Metadata
+      const sig = calculateBatchSignature(data);
+      setBatchSignature(sig);
+
+      // We recalculate audit variables locally for the initial draft generation
+      let bleedCount = 0;
+      let totalBleed = 0;
+      data.forEach(log => {
+          if (log.highVelocityFlag) { bleedCount++; totalBleed += (log.amount || 0); }
+      });
+
+      // Pre-fill the Executive Journal
+      let draft = `${sig} System Review\n\n`;
+      draft += `Diagnostics:\n`;
+      draft += `- Ingested ${data.length} structural records.\n`;
+      if (bleedCount > 0) draft += `- Detected ${bleedCount} high-velocity friction points causing ₦${formatNumber(totalBleed)} in leakage.\n`;
+      draft += `\nStrategic Adjustment & Protocol for next cycle:\n> `;
+
+      setJournalDraft(draft);
+
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to parse document.");
       console.error(err);
@@ -44,165 +127,222 @@ export const Ingestion = () => {
     }
   };
 
-  const handleCommitToLedger = async () => {
+  const handleCommitAudit = async () => {
     if (!session?.user?.id || previewData.length === 0) return;
     setIsUploading(true);
     setErrorMsg(null);
 
     try {
-      // Prepare the payload mapping to snake_case for DB
-      const payload = previewData.map(log => ({
-        user_id: session.user.id,
-        date: log.date,
-        type: log.type,
-        title: log.title,
-        amount: log.amount,
-        currency: log.currency,
-        description: log.description,
-        transaction_ref: log.transactionRef,
-        high_velocity_flag: log.highVelocityFlag,
-        category_group: log.categoryGroup,
-        tags: log.tags
-      }));
+      // 1. Commit Raw Data to the Data Lake (telemetry_raw)
+      const { imported, ignored } = await insertTelemetryBatch(previewData.map(log => ({
+        batchId: batchSignature,
+        date: log.date!,
+        type: log.type as 'DROP' | 'SPEND',
+        title: log.title || 'Unknown',
+        description: log.description || '',
+        amount: log.amount || 0,
+        currency: log.currency || 'NGN',
+        transactionRef: log.transactionRef || crypto.randomUUID(),
+        categoryGroup: log.categoryGroup || 'General',
+        highVelocityFlag: log.highVelocityFlag || false
+      })));
 
-      // Bulk Insert with Idempotency
-      const { data, error } = await supabase
-        .from('history')
-        .upsert(payload, { onConflict: 'transaction_ref', ignoreDuplicates: true })
-        .select();
+      // 2. Commit Executive Journal
+      const journalId = crypto.randomUUID();
+      addJournalEntry({
+          id: journalId,
+          date: new Date().toISOString(),
+          content: journalDraft,
+          tags: ['system_audit', batchSignature.split(' ')[0].toLowerCase()],
+          auditBatchId: batchSignature
+      });
 
-      if (error) throw error;
+      // 3. Ping the Universal Blackbox (Ledger)
+      commitAction({
+          date: new Date().toISOString(),
+          type: 'SYSTEM_EVENT',
+          title: `${batchSignature} Completed`,
+          description: `Ingested ${imported} records. Logged ${auditReport?.bleedCount} bleeds.`,
+          tags: ['telemetry_sync']
+      });
 
-      const importedCount = data ? data.length : 0;
-      const ignoredCount = payload.length - importedCount;
-      
-      setUploadStatus({ imported: importedCount, ignored: ignoredCount });
+      setUploadStatus({ imported, ignored });
+      // Force refresh data
       queryClient.invalidateQueries({ queryKey: ['history'] });
+      queryClient.invalidateQueries({ queryKey: ['telemetry'] });
+      queryClient.invalidateQueries({ queryKey: ['journals'] });
       
     } catch (err: any) {
-      setErrorMsg(`Upload failed: ${err.message}`);
+      setErrorMsg(`Audit Commit failed: ${err.message}`);
     } finally {
       setIsUploading(false);
     }
   };
 
-  const bleedCount = previewData.filter(d => d.highVelocityFlag).length;
-
   return (
-    <div className="max-w-5xl mx-auto p-4 md:p-8 space-y-8 pb-20 animate-fade-in">
+    <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-8 pb-20 animate-fade-in">
       <div>
         <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-          <Database className="text-accent-info" /> Data Ingestion
+          <Database className="text-accent-info" /> Telemetry & Audit Engine
         </h1>
-        <p className="text-gray-400 text-sm mt-1">Upload native bank statements. Duplicates are automatically ignored.</p>
+        <p className="text-gray-400 text-sm mt-1">Ingest raw statements to run anomaly detection. Data routes safely to the Lake.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
-        {/* CONTROLS */}
-        <GlassCard className="p-6 h-fit md:col-span-1">
-          <h3 className="font-bold text-white mb-4 uppercase tracking-widest text-xs">Upload Statement</h3>
-          
-          <label className="border-2 border-dashed border-white/20 rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-accent-info/50 hover:bg-white/5 transition-all group">
-             <UploadCloud size={32} className="text-gray-500 group-hover:text-accent-info mb-3"/>
-             <span className="text-sm font-bold text-white mb-1 text-center">Click to Upload Statement</span>
-             <span className="text-xs text-gray-500">.xls, .xlsx, or .csv</span>
-             <input 
-                type="file" 
-                accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" 
-                className="hidden" 
-                onChange={handleFileUpload} 
-                disabled={isProcessing}
-                ref={fileInputRef}
-             />
-          </label>
-
-          {isProcessing && <div className="mt-4 text-center text-xs text-blue-400 animate-pulse">Extracting Financial Data...</div>}
-          
-          {errorMsg && (
-             <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs flex items-start gap-2">
-                 <AlertTriangle size={14} className="shrink-0 mt-0.5"/>
-                 <div>{errorMsg}</div>
-             </div>
-          )}
-        </GlassCard>
-
-        {/* PREVIEW & TELEMETRY */}
-        <GlassCard className="p-0 overflow-hidden flex flex-col md:col-span-2 min-h-[500px]">
-          <div className="p-6 border-b border-white/10 flex justify-between items-center bg-black/40">
-             <div>
-                <h3 className="font-bold text-white flex items-center gap-2">
-                   <FileSpreadsheet size={18}/> Telemetry Preview
-                </h3>
-                <div className="text-xs text-gray-500 mt-1">{previewData.length} records parsed</div>
-             </div>
-             
-             {bleedCount > 0 && (
-                <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold">
-                   <Zap size={14}/> {bleedCount} High-Velocity Bleeds Detected
+      {uploadStatus && (
+          <div className="p-6 bg-green-950/20 border border-green-500/20 rounded-xl flex items-center justify-between animate-fade-in shadow-[0_0_20px_rgba(34,197,94,0.1)]">
+            <div className="flex items-center gap-3 text-green-400">
+                <CheckCircle2 size={24}/>
+                <div>
+                  <div className="font-bold">Audit Successfully Committed to Ledger & Data Lake</div>
+                  <div className="text-xs text-gray-400">
+                      <strong className="text-white">{uploadStatus.imported}</strong> new records added. <strong className="text-gray-500">{uploadStatus.ignored}</strong> duplicates ignored.
+                  </div>
                 </div>
-             )}
+            </div>
+            <button onClick={() => { setPreviewData([]); setUploadStatus(null); setJournalDraft(''); }} className="text-sm font-bold text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg transition-colors">Start New Audit</button>
+          </div>
+      )}
+
+      {!uploadStatus && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          {/* LEFT: INGESTION & META */}
+          <div className="lg:col-span-4 space-y-6">
+              <GlassCard className="p-6">
+                  <h3 className="font-bold text-white mb-4 uppercase tracking-widest text-xs flex items-center gap-2">
+                      <UploadCloud size={14}/> Statement Drop
+                  </h3>
+                  <label className="border-2 border-dashed border-white/20 rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-accent-info/50 hover:bg-white/5 transition-all group">
+                    <Database size={32} className="text-gray-500 group-hover:text-accent-info mb-3"/>
+                    <span className="text-sm font-bold text-white mb-1 text-center">Click to Drop Statement</span>
+                    <span className="text-xs text-gray-500 text-center">.xls, .xlsx, or .csv</span>
+                    <input 
+                        type="file" 
+                        accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" 
+                        className="hidden" 
+                        onChange={handleFileUpload} 
+                        disabled={isProcessing}
+                        ref={fileInputRef}
+                    />
+                  </label>
+
+                  {isProcessing && <div className="mt-4 text-center text-xs text-blue-400 animate-pulse">Running ETL Pipeline...</div>}
+                  
+                  {errorMsg && (
+                    <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs flex items-start gap-2">
+                        <AlertTriangle size={14} className="shrink-0 mt-0.5"/>
+                        <div>{errorMsg}</div>
+                    </div>
+                  )}
+              </GlassCard>
+
+              {previewData.length > 0 && (
+                  <GlassCard className="p-6 border-blue-500/20 bg-blue-950/10">
+                      <h3 className="font-bold text-blue-400 mb-4 uppercase tracking-widest text-xs flex items-center gap-2">
+                          <Activity size={14}/> Batch Metadata
+                      </h3>
+                      <div className="space-y-4">
+                          <div>
+                              <div className="text-[10px] text-gray-500 uppercase">System Signature</div>
+                              <div className="font-bold text-white font-mono text-sm mt-1 bg-black/40 p-2 rounded border border-white/10">{batchSignature}</div>
+                          </div>
+                          <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                              <span className="text-xs text-gray-400">Total Records</span>
+                              <span className="font-mono text-white font-bold">{previewData.length}</span>
+                          </div>
+                          <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                              <span className="text-xs text-gray-400">Time Span</span>
+                              <span className="font-mono text-white text-xs">
+                                 {new Date(previewData[0]?.date || '').toLocaleDateString()} - {new Date(previewData[previewData.length - 1]?.date || '').toLocaleDateString()}
+                              </span>
+                          </div>
+                      </div>
+                  </GlassCard>
+              )}
           </div>
 
-          <div className="flex-1 overflow-y-auto bg-black/20 p-4">
-             {previewData.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-gray-600 space-y-2">
-                   <Database size={48} className="opacity-20"/>
-                   <p className="text-sm">Awaiting native Excel or CSV payload...</p>
-                </div>
-             ) : (
-                <div className="space-y-2">
-                   {previewData.slice(0, 100).map((row, idx) => (
-                      <div key={idx} className={`p-3 rounded-xl border flex items-center justify-between text-sm ${row.highVelocityFlag ? 'bg-red-950/20 border-red-500/30' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}>
-                         <div className="flex items-center gap-3 overflow-hidden">
-                            <div className={`w-2 h-2 rounded-full shrink-0 ${row.type === 'DROP' ? 'bg-green-500' : 'bg-red-500'}`}/>
-                            <div className="truncate">
-                               <div className="flex items-center gap-2">
-                                  <span className="font-bold text-white">{row.categoryGroup}</span>
-                                  {row.highVelocityFlag && <span className="text-[10px] bg-red-500 text-white px-1.5 rounded uppercase font-bold">Bleed</span>}
-                               </div>
-                               <div className="text-xs text-gray-500 truncate max-w-[200px] md:max-w-[300px]">{row.description}</div>
-                            </div>
-                         </div>
-                         <div className="text-right shrink-0">
-                            <div className={`font-mono font-bold ${row.type === 'DROP' ? 'text-green-400' : 'text-red-400'}`}>
-                               {row.type === 'DROP' ? '+' : '-'}<Naira/>{formatNumber(row.amount || 0)}
-                            </div>
-                            <div className="text-[10px] text-gray-600">{new Date(row.date!).toLocaleDateString()}</div>
-                         </div>
+          {/* RIGHT: AUDIT REVIEW & COMMIT */}
+          <div className="lg:col-span-8 flex flex-col gap-6">
+              {previewData.length === 0 ? (
+                  <GlassCard className="p-0 flex-1 flex flex-col items-center justify-center min-h-[400px] border-dashed border-white/10">
+                     <Clock size={48} className="opacity-20 text-gray-500 mb-4"/>
+                     <p className="text-gray-400 font-mono text-sm tracking-widest">AWAITING_PAYLOAD</p>
+                  </GlassCard>
+              ) : (
+                  <>
+                      {/* DIAGNOSTIC PANELS */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* BLEED DETECTOR */}
+                          <GlassCard className={`p-5 transition-colors ${auditReport?.bleedCount ? 'border-red-500/40 bg-red-950/10' : 'border-green-500/20'}`}>
+                             <div className="flex justify-between items-start mb-2">
+                                <div className={`flex items-center gap-2 text-sm font-bold ${auditReport?.bleedCount ? 'text-red-400' : 'text-green-400'}`}>
+                                   <Zap size={16}/> High-Velocity Bleeds
+                                </div>
+                             </div>
+                             {auditReport?.bleedCount ? (
+                                <div>
+                                    <div className="text-3xl font-mono font-bold text-red-500 mb-1">
+                                        <Naira/>{formatNumber(auditReport.totalBleed)}
+                                    </div>
+                                    <div className="text-xs text-red-400/80">From {auditReport.bleedCount} unbatched micro-transactions.</div>
+                                </div>
+                             ) : (
+                                <div className="text-sm text-green-500/80 mt-2">Zero systemic friction detected. Batched architecture is holding.</div>
+                             )}
+                          </GlassCard>
+
+                          {/* STRUCTURAL ANOMALIES */}
+                          <GlassCard className={`p-5 transition-colors ${auditReport?.anomalies.length ? 'border-orange-500/40 bg-orange-950/10' : 'border-green-500/20'}`}>
+                             <div className="flex items-center gap-2 text-sm font-bold text-orange-400 mb-4">
+                                <TrendingDown size={16}/> Structural Anomalies
+                             </div>
+                             {auditReport?.anomalies.length ? (
+                                <div className="space-y-3 h-24 overflow-y-auto pr-2">
+                                    {auditReport.anomalies.map((a, i) => (
+                                        <div key={i} className="flex justify-between items-center text-xs">
+                                            <span className="text-white font-bold">{a.category}</span>
+                                            <div className="text-right">
+                                                <span className="font-mono text-orange-400">Deficit: ₦{formatNumber(a.deficit)}</span>
+                                                {a.unbudgeted && <span className="block text-[9px] text-gray-500 uppercase">Unbudgeted Category</span>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                             ) : (
+                                <div className="text-sm text-green-500/80 mt-2">All spending categories within OpEx operational limits.</div>
+                             )}
+                          </GlassCard>
                       </div>
-                   ))}
-                   {previewData.length > 100 && (
-                      <div className="text-center py-4 text-xs text-gray-500 italic">...and {previewData.length - 100} more records hidden from preview.</div>
-                   )}
-                </div>
-             )}
+
+                      {/* THE JOURNAL COMMIT */}
+                      <GlassCard className="p-0 overflow-hidden flex flex-col flex-1 border-blue-500/20">
+                          <div className="p-4 border-b border-white/10 bg-blue-950/20 flex items-center gap-2">
+                              <BookOpen size={16} className="text-blue-400"/>
+                              <span className="font-bold text-white text-sm">Executive Audit Summary</span>
+                          </div>
+                          <textarea 
+                              className="flex-1 w-full bg-black/40 p-6 text-sm text-gray-300 outline-none resize-none min-h-[200px] focus:bg-black/60 transition-colors font-mono"
+                              value={journalDraft}
+                              onChange={(e) => setJournalDraft(e.target.value)}
+                          />
+                          <div className="p-4 bg-black/80 border-t border-white/10 flex justify-between items-center">
+                              <span className="text-[10px] text-gray-500 uppercase tracking-widest hidden md:block">
+                                  Human-in-the-loop verification required.
+                              </span>
+                              <GlassButton 
+                                  onClick={handleCommitAudit} 
+                                  disabled={isUploading || !journalDraft}
+                                  className="w-full md:w-auto"
+                              >
+                                  {isUploading ? 'Committing to Architecture...' : 'Sign & Commit Audit'}
+                              </GlassButton>
+                          </div>
+                      </GlassCard>
+                  </>
+              )}
           </div>
-
-          {previewData.length > 0 && !uploadStatus && (
-             <div className="p-4 bg-black/60 border-t border-white/10 flex justify-end">
-                <GlassButton onClick={handleCommitToLedger} disabled={isUploading} className="w-full md:w-auto">
-                   {isUploading ? 'Executing Bulk Insert...' : `Commit ${previewData.length} Records to Ledger`}
-                </GlassButton>
-             </div>
-          )}
-
-          {uploadStatus && (
-             <div className="p-6 bg-green-950/20 border-t border-green-500/20 flex items-center justify-between">
-                <div className="flex items-center gap-3 text-green-400">
-                   <CheckCircle2 size={24}/>
-                   <div>
-                      <div className="font-bold">Ingestion Complete</div>
-                      <div className="text-xs text-gray-400">
-                         <strong className="text-white">{uploadStatus.imported}</strong> new records added. <strong className="text-gray-500">{uploadStatus.ignored}</strong> duplicates ignored.
-                      </div>
-                   </div>
-                </div>
-                <button onClick={() => { setPreviewData([]); setUploadStatus(null); }} className="text-xs text-gray-500 hover:text-white underline">Upload Another</button>
-             </div>
-          )}
-        </GlassCard>
-      </div>
+        </div>
+      )}
     </div>
   );
 };

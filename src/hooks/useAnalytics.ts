@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { useLedger } from '../context/LedgerContext';
 
 export const useAnalytics = () => {
-  const { history, telemetry, budgets, signals } = useLedger();
+  // Removed unused 'budgets'
+  const { history, telemetry, signals } = useLedger();
 
   const combinedFinancialEvents = useMemo(() => {
       const hEvents = history.map(h => ({ 
@@ -26,7 +27,6 @@ export const useAnalytics = () => {
       return [...hEvents, ...tEvents].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [history, telemetry]);
 
-  // --- UNLOCKED: CONTINUOUS BURN HISTORY ---
   const burnHistory = useMemo(() => {
     if (combinedFinancialEvents.length === 0) return [];
 
@@ -36,7 +36,6 @@ export const useAnalytics = () => {
     
     const dataMap: Record<string, { date: string; burn: number }> = {};
     
-    // Generate a continuous timeline from the oldest record to the newest
     let curr = new Date(minD.getFullYear(), minD.getMonth(), 1);
     const end = new Date(maxD.getFullYear(), maxD.getMonth(), 1);
     
@@ -63,7 +62,6 @@ export const useAnalytics = () => {
     const map: Record<string, number> = {};
     
     combinedFinancialEvents.filter(e => e.type === 'SPEND').forEach(e => {
-        // Use the scrubbed category from the CSV parser if it exists, otherwise fallback
         const key = e.categoryGroup || e.title || 'Uncategorized';
         map[key] = (map[key] || 0) + Math.abs(e.amount || 0);
     });
@@ -74,7 +72,6 @@ export const useAnalytics = () => {
       .slice(0, 10);
   }, [combinedFinancialEvents]);
 
-  // --- NEW: TOP MERCHANTS LEADERBOARD ---
   const topMerchants = useMemo(() => {
     const map: Record<string, { merchant: string; total: number; count: number; category: string }> = {};
     
@@ -87,7 +84,7 @@ export const useAnalytics = () => {
 
     return Object.values(map)
       .sort((a, b) => b.total - a.total)
-      .slice(0, 15); // Top 15 All-Time Merchants
+      .slice(0, 15);
   }, [telemetry]);
 
   const signalStats = useMemo(() => {
@@ -107,12 +104,11 @@ export const useAnalytics = () => {
     return { scatter: data, leaderboard: data, globalYield };
   }, [signals]);
 
-  // --- UNLOCKED: ALL-TIME MONTHLY STATEMENT ---
   const monthlyStatement = useMemo(() => {
     const map = new Map<string, { income: number; expense: number }>();
 
     combinedFinancialEvents.forEach(log => {
-      const key = log.date.slice(0, 7); // YYYY-MM
+      const key = log.date.slice(0, 7);
       if (!map.has(key)) {
         map.set(key, { income: 0, expense: 0 });
       }
@@ -133,7 +129,7 @@ export const useAnalytics = () => {
           net, 
           savingsRate: data.income > 0 ? (net / data.income) * 100 : 0 
       };
-    }).sort((a, b) => b.month.localeCompare(a.month)); // Sort Newest to Oldest
+    }).sort((a, b) => b.month.localeCompare(a.month)); 
   }, [combinedFinancialEvents]);
 
   const ribbon = useMemo(() => {

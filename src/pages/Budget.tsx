@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLedger } from '../context/LedgerContext';
-import { useFinancialStats } from '../hooks/useFinancialStats'; // NEW IMPORT
+import { useFinancialStats } from '../hooks/useFinancialStats'; 
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
@@ -11,11 +11,11 @@ import { Trash2, RefreshCcw, Plus, X, Zap } from 'lucide-react';
 
 export const Budget = () => {
   const { 
-    budgets, addBudget, updateAccount, updateBudgetSpent, 
+    budgets, telemetry, addBudget, updateAccount, updateBudgetSpent, 
     commitAction, deleteBudget 
   } = useLedger();
 
-  const { leakOutflow } = useFinancialStats(); // Pull true bleed metric
+  const { leakOutflow } = useFinancialStats();
 
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
@@ -33,7 +33,7 @@ export const Budget = () => {
       amount: parseFloat(amount),
       spent: 0,
       frequency: freq,
-      category: 'General',
+      category: name, // Default category to name for easier fuzzy matching
       autoDeduct: true,
       subscriptionDay: subDay ? parseInt(subDay) : undefined 
     });
@@ -68,8 +68,21 @@ export const Budget = () => {
     alert("In Cloud V2, Budget Cycles reset automatically via the Monthly Checkpoint!");
   };
 
-  const activeBudgets = budgets;
-  const totalMonthly = activeBudgets.reduce((sum, b) => sum + b.amount, 0);
+  // --- AUTOMATED BUDGET TRACKING (Data Lake Integration) ---
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const telemetryThisMonth = telemetry.filter(t => t.date.startsWith(currentMonthKey) && t.type === 'SPEND');
+
+  const activeBudgetsWithTelemetry = budgets.map(b => {
+      // Find all raw bank transactions that fuzzy-match this budget's name or category
+      const autoSpent = telemetryThisMonth
+         .filter(t => t.categoryGroup.toLowerCase().includes(b.category.toLowerCase()) || t.categoryGroup.toLowerCase().includes(b.name.toLowerCase()))
+         .reduce((sum, t) => sum + t.amount, 0);
+
+      // The total is what you manually logged + what the bank proved you spent
+      return { ...b, totalSpent: (b.spent || 0) + autoSpent };
+  });
+
+  const totalMonthly = activeBudgetsWithTelemetry.reduce((sum, b) => sum + b.amount, 0);
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 pb-20 animate-fade-in">
@@ -168,7 +181,7 @@ export const Budget = () => {
 
         {/* ACTIVE BUDGETS */}
         <div className="space-y-3">
-          {activeBudgets.map(b => (
+          {activeBudgetsWithTelemetry.map(b => (
             <GlassCard key={b.id} className="p-4" hoverEffect>
               <div className="flex justify-between items-center mb-2">
                 <div>
@@ -178,7 +191,7 @@ export const Budget = () => {
                     {b.subscriptionDay && <span className="text-[10px] bg-purple-500/20 text-purple-400 px-1.5 rounded border border-purple-500/30">Day {b.subscriptionDay}</span>}
                   </div>
                   <div className="text-xs text-gray-500 flex items-center gap-1">
-                     <span className="text-white flex items-center"><Naira/>{formatNumber(b.spent || 0)}</span> / <span className="flex items-center"><Naira/>{formatNumber(b.amount)}</span>
+                     <span className="text-white flex items-center"><Naira/>{formatNumber(b.totalSpent)}</span> / <span className="flex items-center"><Naira/>{formatNumber(b.amount)}</span>
                   </div>
                 </div>
                 <button 
@@ -189,9 +202,9 @@ export const Budget = () => {
                 </button>
               </div>
               <GlassProgressBar 
-                value={b.spent || 0} 
+                value={b.totalSpent} 
                 max={b.amount} 
-                color={(b.spent || 0) > b.amount ? 'danger' : (b.spent || 0) > (b.amount * 0.8) ? 'warning' : 'success'} 
+                color={b.totalSpent > b.amount ? 'danger' : b.totalSpent > (b.amount * 0.8) ? 'warning' : 'success'} 
                 size="sm"
               />
             </GlassCard>

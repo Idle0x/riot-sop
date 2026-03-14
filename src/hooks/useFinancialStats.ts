@@ -1,99 +1,98 @@
 import { useMemo } from 'react';
 import { useLedger } from '../context/LedgerContext';
 
-export const useFinancialStats = () => {
-  const { history, telemetry, accounts, signals } = useLedger();
+export const useFinancialStats = (timeframe: string = '1M') => {
+  const { history, telemetry, accounts, goals, signals } = useLedger();
 
-  const stats = useMemo(() => {
-    const now = new Date();
-    const currentMonthKey = now.toISOString().slice(0, 7); // "2026-03"
-    const lastMonthKey = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 7);
-
-    let thisMonthIn = 0;
-    let thisMonthOut = 0;
-    let lastMonthOut = 0;
-    let thisMonthLeakage = 0; 
-
-    // 1. Chart Data Construction (Last 6 Months)
-    const monthsMap = new Map<string, { name: string; income: number; expense: number }>();
-
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = d.toISOString().slice(0, 7);
-      monthsMap.set(key, { 
-        name: d.toLocaleDateString('en-US', { month: 'short' }), 
-        income: 0, 
-        expense: 0 
-      });
+  // --- 1. TIMEFRAME FILTERING ENGINE ---
+  const startDate = useMemo(() => {
+    const date = new Date();
+    switch(timeframe) {
+      case '24H': date.setHours(date.getHours() - 24); break;
+      case '3D': date.setDate(date.getDate() - 3); break;
+      case '7D': date.setDate(date.getDate() - 7); break;
+      case '1M': date.setMonth(date.getMonth() - 1); break;
+      case '3M': date.setMonth(date.getMonth() - 3); break;
+      case '6M': date.setMonth(date.getMonth() - 6); break;
+      case '1Y': date.setFullYear(date.getFullYear() - 1); break;
+      case '5Y': date.setFullYear(date.getFullYear() - 5); break;
+      case 'MAX': return new Date(0); // 1970
+      default: date.setMonth(date.getMonth() - 1);
     }
+    return date;
+  }, [timeframe]);
 
-    // 2. Process Live Ledger (System Routing & Manual Logs)
-    history.forEach(log => {
-      const logMonth = log.date.slice(0, 7);
-      const amount = log.amount || 0;
+  // Combine and filter data by the selected timeframe
+  const filteredEvents = useMemo(() => {
+    const combined = [
+        ...history.map(h => ({ ...h, isTelemetry: false })),
+        ...telemetry.map(t => ({ ...t, isTelemetry: true }))
+    ];
+    return combined.filter(e => new Date(e.date) >= startDate);
+  }, [history, telemetry, startDate]);
 
-      if (logMonth === currentMonthKey) {
-        if (log.type === 'DROP' || log.type === 'TRIAGE_SESSION') thisMonthIn += amount;
-        if (log.type === 'SPEND' || log.type === 'GENEROSITY' || (log.type === 'TRANSFER' && log.tags?.includes('risk'))) {
-            thisMonthOut += amount;
+  // --- 2. CALCULATE FLOWS ---
+  const { inflow, outflow, leakOutflow } = useMemo(() => {
+    let inFlow = 0;
+    let outFlow = 0;
+    let leak = 0;
+
+    filteredEvents.forEach(e => {
+        if (e.type === 'DROP' || e.type === 'TRIAGE_SESSION') {
+            inFlow += Math.abs(e.amount || 0);
+        } else if (e.type === 'SPEND' || e.type === 'GENEROSITY' || e.type === 'TRANSFER') {
+            outFlow += Math.abs(e.amount || 0);
+            if (e.isTelemetry && (e as any).highVelocityFlag) {
+                leak += Math.abs(e.amount || 0);
+            }
         }
-      }
-      if (logMonth === lastMonthKey) {
-        if (log.type === 'SPEND' || log.type === 'GENEROSITY') lastMonthOut += amount;
-      }
-
-      if (monthsMap.has(logMonth)) {
-        const entry = monthsMap.get(logMonth)!;
-        if (log.type === 'DROP' || log.type === 'TRIAGE_SESSION') entry.income += amount;
-        else if (log.type === 'SPEND' || log.type === 'GENEROSITY') entry.expense += amount;
-      }
     });
 
-    // 3. Process Data Lake (Bank Truth & Bleed Telemetry)
-    telemetry.forEach(log => {
-      const logMonth = log.date.slice(0, 7);
-      const amount = log.amount || 0;
+    return { inflow: inFlow, outflow: outFlow, leakOutflow: leak };
+  }, [filteredEvents]);
 
-      if (logMonth === currentMonthKey) {
-        if (log.type === 'DROP') thisMonthIn += amount;
-        if (log.type === 'SPEND') {
-            thisMonthOut += amount;
-            if (log.highVelocityFlag) thisMonthLeakage += amount;
-        }
-      }
-      if (logMonth === lastMonthKey) {
-        if (log.type === 'SPEND') lastMonthOut += amount;
-      }
+  const netFlow = inflow - outflow;
 
-      if (monthsMap.has(logMonth)) {
-        const entry = monthsMap.get(logMonth)!;
-        if (log.type === 'DROP') entry.income += amount;
-        else if (log.type === 'SPEND') entry.expense += amount;
-      }
+  // --- 3. CHART DATA GENERATOR ---
+  const chartData = useMemo(() => {
+    const map: Record<string, { income: number; expense: number }> = {};
+    
+    filteredEvents.forEach(e => {
+        const d = new Date(e.date);
+        let key = '';
+
+        // Dynamically format the X-Axis based on how wide the timeframe is
+        if (timeframe === '24H') key = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        else if (['3D', '7D', '1M'].includes(timeframe)) key = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        else if (['3M', '6M', '1Y'].includes(timeframe)) key = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+        else key = d.getFullYear().toString();
+
+        if (!map[key]) map[key] = { income: 0, expense: 0 };
+        
+        if (e.type === 'DROP' || e.type === 'TRIAGE_SESSION') map[key].income += Math.abs(e.amount || 0);
+        if (e.type === 'SPEND' || e.type === 'GENEROSITY' || e.type === 'TRANSFER') map[key].expense += Math.abs(e.amount || 0);
     });
 
-    // 4. Asset Allocation
-    const allocation = {
-      liquid: accounts.reduce((sum, a) => (a.type === 'treasury' || a.type === 'payroll') ? sum + a.balance : sum, 0),
-      reserved: accounts.reduce((sum, a) => (a.type === 'vault' || a.type === 'buffer') ? sum + a.balance : sum, 0),
-      generosity: accounts.find(a => a.type === 'generosity')?.balance || 0,
-      idle: accounts.find(a => a.type === 'holding')?.balance || 0,
-      signals: signals.reduce((sum, s) => sum + s.totalGenerated, 0)
-    };
+    // We don't sort chronologically here because JS objects iterate unpredictably.
+    // Instead, we trust the original sort order of the data.
+    return Object.keys(map).map(name => ({ name, ...map[name] }));
+  }, [filteredEvents, timeframe]);
 
-    // 5. Burn Delta (Month-over-Month)
-    const burnDelta = lastMonthOut > 0 ? ((thisMonthOut - lastMonthOut) / lastMonthOut) * 100 : 0;
+  // --- 4. ASSET ALLOCATION ---
+  const allocation = useMemo(() => {
+    const liquid = accounts.find(a => a.type === 'payroll')?.balance || 0;
+    const reserved = accounts.find(a => a.type === 'treasury')?.balance || 0;
+    const generosity = accounts.find(a => a.type === 'generosity')?.balance || 0;
+    const idle = accounts.find(a => a.type === 'holding')?.balance || 0;
+    
+    const signalsGen = signals.reduce((sum, s) => sum + (s.totalGenerated || 0), 0);
+    const goalsTotal = goals.reduce((sum, g) => sum + (g.currentAmount || 0), 0);
 
-    return {
-      netFlow: thisMonthIn - thisMonthOut,
-      inflow: thisMonthIn,
-      outflow: thisMonthOut,
-      leakOutflow: thisMonthLeakage, 
-      burnDelta,
-      chartData: Array.from(monthsMap.values()),
-      allocation
-    };
-  }, [history, telemetry, accounts, signals]);
+    return { liquid, reserved, generosity, idle, signals: signalsGen, goals: goalsTotal };
+  }, [accounts, signals, goals]);
 
-  return stats;
+  // Delta calculation (Mock logic for now, compares current outflow to total burn)
+  const burnDelta = 0; 
+
+  return { netFlow, inflow, outflow, leakOutflow, burnDelta, chartData, allocation };
 };

@@ -1,362 +1,181 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '../context/UserContext';
 import { useLedger, type ResetModule } from '../context/LedgerContext';
-import { generateSecurityPhrase } from '../utils/security'; 
 
-// COMPONENTS
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassInput } from '../components/ui/GlassInput';
 import { GlassButton } from '../components/ui/GlassButton';
+import { formatNumber } from '../utils/format';
 
-// ICONS
 import { 
-  Settings as Gear, ShieldAlert, Landmark, Lock, 
-  Trash2, AlertTriangle, XCircle, RefreshCw 
-} from 'lucide-react'; 
-// FIX: Removed 'Unlock' from imports above
+  Settings as SettingsIcon, ShieldAlert, Zap, Save, 
+  Flame, Home, TrendingUp, AlertOctagon, Skull 
+} from 'lucide-react';
 
 export const Settings = () => {
   const { user, updateProfile } = useUser();
-  const { resetModule, commitAction } = useLedger();
+  const { commitAction, resetModule } = useLedger();
 
-  // Core Settings States
-  const [newBurn, setNewBurn] = useState(user?.burnCap?.toString() || '');
-  const [newInflation, setNewInflation] = useState(user?.inflationRate?.toString() || '0');
-  const [reason, setReason] = useState('');
-  const [rent, setRent] = useState(user?.annualRent?.toString() || '0');
+  const [burnCap, setBurnCap] = useState('');
+  const [annualRent, setAnnualRent] = useState('');
+  const [inflationRate, setInflationRate] = useState('');
+  
+  const [isSaving, setIsSaving] = useState(false);
+  const [confirmReset, setConfirmReset] = useState<ResetModule | null>(null);
 
-  // --- NEW: SOVEREIGN TYPER STATE ---
-  const [isZoneUnlocked, setIsZoneUnlocked] = useState(false);
-  const [challengePhrase, setChallengePhrase] = useState('');
-  const [typerInput, setTyperInput] = useState('');
-
-  // Nuclear & Security States (Existing)
-  const [nuclearStep, setNuclearStep] = useState(0); // 0=Selection, 1=Key, 2=Confirm
-  const [masterPassInput, setMasterPassInput] = useState('');
-  const [newMasterKey, setNewMasterKey] = useState('');
-  const [selectedReset, setSelectedReset] = useState<ResetModule | null>(null);
-
-  const hasMasterKey = !!user?.settings?.masterKey;
-
-  // Initialize Challenge
   useEffect(() => {
-    setChallengePhrase(generateSecurityPhrase());
-  }, []);
-
-  // Real-Time Validation
-  useEffect(() => {
-    if (typerInput === challengePhrase && challengePhrase !== '') {
-        setIsZoneUnlocked(true);
-        setTyperInput(''); // Clear for cleanliness
+    if (user) {
+      setBurnCap(user.burnCap?.toString() || '0');
+      setAnnualRent(user.annualRent?.toString() || '0');
+      setInflationRate(user.inflationRate?.toString() || '0');
     }
-  }, [typerInput, challengePhrase]);
+  }, [user]);
 
-  const handleRefreshChallenge = () => {
-      setChallengePhrase(generateSecurityPhrase());
-      setTyperInput('');
-  };
+  const handleSaveParameters = async () => {
+    setIsSaving(true);
+    
+    const newBurn = parseFloat(burnCap);
+    const newRent = parseFloat(annualRent);
+    const newInf = parseFloat(inflationRate);
 
-  // --- EXISTING HANDLERS ---
+    try {
+        await updateProfile({
+            burnCap: newBurn,
+            annualRent: newRent,
+            inflationRate: newInf
+        });
 
-  const handleUpdateProfile = async () => {
-    const effectiveDate = new Date();
-    effectiveDate.setDate(effectiveDate.getDate() + 7);
-
-    if (!user) return;
-
-    if (parseFloat(newBurn) !== user.burnCap) {
-        commitAction({ date: new Date().toISOString(), type: 'SYSTEM_EVENT', title: 'Burn Cap Updated', description: `${user.burnCap} -> ${newBurn}` });
-    }
-    if (parseFloat(newInflation) !== user.inflationRate) {
-        commitAction({ date: new Date().toISOString(), type: 'SYSTEM_EVENT', title: 'Inflation Rate Adjusted', description: `${user.inflationRate}% -> ${newInflation}%` });
-    }
-
-    await updateProfile({ 
-      annualRent: parseFloat(rent), 
-      inflationRate: parseFloat(newInflation),
-      pendingChanges: [
-        ...(user.pendingChanges || []), 
-        { 
-          id: crypto.randomUUID(), 
-          key: 'burnCap' as any, 
-          value: parseFloat(newBurn), 
-          effectiveDate: effectiveDate.toISOString() 
+        // STEP 3 WIRED: The System automatically logs parameter changes to the Blackbox
+        if (user?.burnCap !== newBurn) {
+            commitAction({
+                date: new Date().toISOString(),
+                type: 'PARAM_UPDATE',
+                title: 'Burn Cap Adjusted',
+                description: `Shifted from ₦${formatNumber(user?.burnCap || 0)} to ₦${formatNumber(newBurn)}`
+            });
         }
-      ] 
-    });
-    setReason('');
-    alert("Profile Updated: Changes logged.");
-  };
 
-  const handleSetMasterKey = async () => {
-    if (!newMasterKey || newMasterKey.length < 6) {
-      alert("Master Key must be at least 6 characters.");
-      return;
+        if (user?.inflationRate !== newInf) {
+            commitAction({
+                date: new Date().toISOString(),
+                type: 'PARAM_UPDATE',
+                title: 'Inflation Target Adjusted',
+                description: `Shifted from ${user?.inflationRate || 0}% to ${newInf}%`
+            });
+        }
+
+    } catch (e) {
+        console.error(e);
+    } finally {
+        setIsSaving(false);
     }
-    await updateProfile({
-      settings: {
-        ...user?.settings,
-        allowNegativeBalance: user?.settings?.allowNegativeBalance || false,
-        monthlyCheckpointDay: user?.settings?.monthlyCheckpointDay || 1,
-        masterKey: newMasterKey
-      }
-    });
-    setNewMasterKey('');
-    alert("Master Key Established. Do not lose this.");
   };
 
-  const verifyKey = () => {
-      if (masterPassInput === user?.settings?.masterKey) {
-          setNuclearStep(2); // Move to Final Confirmation
-      } else {
-          alert("Invalid Master Password.");
+  const handleExecuteReset = () => {
+      if (confirmReset) {
+          resetModule(confirmReset);
+          setConfirmReset(null);
       }
   };
-
-  const executeReset = () => {
-      if (selectedReset) {
-          resetModule(selectedReset);
-          alert(`${selectedReset.toUpperCase()} RESET EXECUTED.`);
-          // Reset State
-          setNuclearStep(0);
-          setMasterPassInput('');
-          setSelectedReset(null);
-          setIsZoneUnlocked(false); // Re-lock the zone for safety
-          setChallengePhrase(generateSecurityPhrase()); // New challenge
-      }
-  };
-
-  const initiateReset = (module: ResetModule) => {
-      setSelectedReset(module);
-      setNuclearStep(1);
-  };
-
-  const cancelReset = () => {
-      setNuclearStep(0);
-      setMasterPassInput('');
-      setSelectedReset(null);
-  };
-
-  if (!user) return <div>Loading settings...</div>;
 
   return (
-    <div className="max-w-3xl mx-auto p-4 md:p-8 space-y-8 pb-20 animate-fade-in">
-      <h1 className="text-3xl font-bold text-white">System Configuration</h1>
+    <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 pb-20 animate-fade-in relative">
 
-      {/* CORE SETTINGS */}
-      <GlassCard className="p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <Gear className="text-gray-400" />
-          <h3 className="font-bold text-white">Operating Parameters</h3>
-        </div>
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <GlassInput 
-              label="Monthly Burn Cap (₦)" 
-              type="number" 
-              value={newBurn} 
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewBurn(e.target.value)} 
-            />
-            <GlassInput 
-              label="Inflation Rate (%)" 
-              type="number"
-              value={newInflation} 
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewInflation(e.target.value)}
-              placeholder="e.g. 30"
-            />
+      {/* RESET CONFIRMATION MODAL */}
+      {confirmReset && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-fade-in">
+              <div className="w-full max-w-md bg-zinc-900 border border-red-500/50 rounded-2xl p-6 shadow-[0_0_50px_rgba(239,68,68,0.2)] text-center">
+                  <AlertOctagon size={48} className="mx-auto text-red-500 mb-4 animate-pulse"/>
+                  <h2 className="text-2xl font-bold text-white uppercase tracking-widest mb-2">Confirm Purge</h2>
+                  <p className="text-gray-400 text-sm mb-8">
+                      You are about to permanently execute a <strong className="text-white uppercase">{confirmReset}</strong> wipe. This data cannot be recovered.
+                  </p>
+                  <div className="flex gap-4">
+                      <button onClick={() => setConfirmReset(null)} className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-colors">Cancel</button>
+                      <button onClick={handleExecuteReset} className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
+                          <Skull size={16}/> Execute Wipe
+                      </button>
+                  </div>
+              </div>
           </div>
-          <GlassInput 
-            label="Reason for Change" 
-            placeholder="Required for audit trail..." 
-            value={reason} 
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReason(e.target.value)} 
-          />
-        </div>
-      </GlassCard>
+      )}
 
-      {/* TAX PROFILE */}
-      <GlassCard className="p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <Landmark className="text-accent-info" />
-          <h3 className="font-bold text-white">Tax Profile (NTA 2026)</h3>
-        </div>
-        <div className="space-y-4">
-           <GlassInput 
-              label="Your Annual Rent (₦)" 
-              type="number" 
-              placeholder="e.g. 1,500,000"
-              value={rent} 
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRent(e.target.value)} 
-           />
-           <div className="p-3 bg-accent-info/5 border border-accent-info/20 rounded-xl">
-              <div className="text-[10px] text-gray-500 uppercase font-bold mb-1">Legal Rent Shield</div>
-              <div className="text-xs text-blue-300">
-                You are eligible for 20% relief on this amount (capped at ₦500k).
-              </div>
-           </div>
-           <GlassButton className="w-full" onClick={handleUpdateProfile}>
-             Save Profile & Tax Data
-           </GlassButton>
-        </div>
-      </GlassCard>
+      <div>
+        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+          <SettingsIcon className="text-gray-400" /> System Governance
+        </h1>
+        <p className="text-gray-400 text-sm mt-1">Manage global macro parameters and execute structural overrides.</p>
+      </div>
 
-      {/* DANGER ZONE */}
-      <GlassCard className="p-6 border-red-900/30 relative overflow-hidden">
-          <h3 className="font-bold text-red-500 mb-4 flex items-center gap-2">
-            <ShieldAlert size={18}/> Danger Zone: Factory Resets
-          </h3>
-
-          {!hasMasterKey ? (
-            <div className="space-y-4 animate-fade-in">
-              <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-yellow-500 text-xs">
-                <strong className="block mb-1">Security Alert</strong>
-                You must set a Master Key to access Reset Protocols.
-              </div>
-              <GlassInput 
-                type="password" 
-                label="Create Master Key" 
-                placeholder="Unique Password" 
-                value={newMasterKey} 
-                onChange={(e) => setNewMasterKey(e.target.value)} 
-              />
-              <GlassButton variant="secondary" className="w-full" onClick={handleSetMasterKey}>
-                <Lock size={16} className="mr-2"/> Set Master Key
-              </GlassButton>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+        {/* --- GLOBAL PARAMETERS --- */}
+        <GlassCard className="p-6 h-fit space-y-6">
+            <div className="flex items-center gap-2 border-b border-white/10 pb-4">
+                <ShieldAlert className="text-blue-400" size={20}/>
+                <h2 className="font-bold text-white">Macro Parameters</h2>
             </div>
-          ) : (
-            <>
-              {/* --- LEVEL 1: COGNITIVE FRICTION (THE TYPER) --- */}
-              {!isZoneUnlocked ? (
-                 <div className="space-y-6 animate-fade-in py-4">
-                    <div className="text-center">
-                        <Lock className="mx-auto text-gray-600 mb-2 w-12 h-12"/>
-                        <h4 className="text-white font-bold uppercase tracking-widest text-sm">Protocols Locked</h4>
-                        <p className="text-xs text-gray-500 mt-2">Type the phrase below exactly to unlock manual overrides.</p>
-                    </div>
-
-                    <div className="bg-black/40 p-4 rounded-xl border border-white/5 relative group">
-                        <p className="text-center font-mono text-sm md:text-base text-red-400 select-none tracking-tight leading-relaxed">
-                            {challengePhrase}
-                        </p>
-                        <button onClick={handleRefreshChallenge} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 hover:text-white p-2">
-                            <RefreshCw size={14}/>
-                        </button>
-                    </div>
-
-                    <div className="relative">
-                        <input 
-                            value={typerInput}
-                            onChange={(e) => setTyperInput(e.target.value)}
-                            className={`w-full bg-transparent border-b-2 py-2 text-center font-mono text-white focus:outline-none transition-colors ${
-                                typerInput && challengePhrase.startsWith(typerInput) 
-                                    ? 'border-blue-500' 
-                                    : typerInput ? 'border-red-500' : 'border-gray-700'
-                            }`}
-                            placeholder="Type to unlock..."
-                            autoComplete="off"
-                            autoCorrect="off"
-                            spellCheck="false"
-                        />
-                    </div>
-                 </div>
-              ) : (
-                /* --- LEVEL 2: THE EXISTING LOGIC (UNLOCKED) --- */
-                <div className="animate-fade-in">
-                    {/* STEP 0: SELECTION GRID */}
-                    {nuclearStep === 0 && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <button onClick={() => initiateReset('dashboard')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
-                                <div className="font-bold text-white group-hover:text-red-400">Wipe Dashboard</div>
-                                <div className="text-[10px] text-gray-500">Resets all account balances to 0.</div>
-                            </button>
-                            <button onClick={() => initiateReset('generosity')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
-                                <div className="font-bold text-white group-hover:text-red-400">Wipe Generosity</div>
-                                <div className="text-[10px] text-gray-500">Empties the Generosity Wallet.</div>
-                            </button>
-                            <button onClick={() => initiateReset('goals')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
-                                <div className="font-bold text-white group-hover:text-red-400">Wipe Goals</div>
-                                <div className="text-[10px] text-gray-500">Deletes all active missions.</div>
-                            </button>
-                            <button onClick={() => initiateReset('signals')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
-                                <div className="font-bold text-white group-hover:text-red-400">Wipe Signals</div>
-                                <div className="text-[10px] text-gray-500">Deletes all deal flow data.</div>
-                            </button>
-                            <button onClick={() => initiateReset('budgets')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
-                                <div className="font-bold text-white group-hover:text-red-400">Wipe Budgets</div>
-                                <div className="text-[10px] text-gray-500">Removes recurring expenses.</div>
-                            </button>
-                            <button onClick={() => initiateReset('journal')} className="p-4 border border-red-500/20 rounded-xl hover:bg-red-500/10 text-left transition-colors group">
-                                <div className="font-bold text-white group-hover:text-red-400">Wipe Journal</div>
-                                <div className="text-[10px] text-gray-500">Deletes personal entries.</div>
-                            </button>
-
-                            <div className="md:col-span-2 mt-2">
-                                <button onClick={() => initiateReset('all')} className="w-full py-4 border border-red-500 text-red-500 hover:bg-red-500 hover:text-white rounded-xl text-sm font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2">
-                                    <Trash2 size={16}/> Factory Reset (Total Wipe)
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* STEP 1: VERIFY KEY */}
-                    {nuclearStep === 1 && (
-                        <div className="space-y-4 animate-fade-in bg-black/40 p-6 rounded-xl border border-red-500/30">
-                        <div className="text-center">
-                            <Lock size={32} className="mx-auto text-red-500 mb-2"/>
-                            <p className="text-sm text-white font-bold uppercase">Security Check</p>
-                            <p className="text-xs text-gray-400">Enter Master Key to proceed with {selectedReset?.toUpperCase()} Reset.</p>
-                        </div>
-
-                        <GlassInput 
-                            type="password" 
-                            placeholder="Enter Master Key" 
-                            value={masterPassInput} 
-                            onChange={(e) => setMasterPassInput(e.target.value)} 
-                            className="text-center border-red-500/50"
-                            autoFocus
-                        />
-
-                        <div className="flex gap-2">
-                            <GlassButton variant="ghost" onClick={cancelReset} className="flex-1">Cancel</GlassButton>
-                            <GlassButton variant="danger" onClick={verifyKey} className="flex-1">Verify</GlassButton>
-                        </div>
-                        </div>
-                    )}
-
-                    {/* STEP 2: FINAL CONFIRMATION */}
-                    {nuclearStep === 2 && (
-                        <div className="space-y-6 animate-fade-in bg-red-950/20 p-6 rounded-xl border border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.2)]">
-                        <div className="text-center space-y-2">
-                            <AlertTriangle size={48} className="mx-auto text-red-500 animate-pulse"/>
-                            <h3 className="text-xl text-white font-bold uppercase tracking-wider">Final Warning</h3>
-                            <p className="text-sm text-red-300 px-4">
-                                Are you absolutely sure you want to wipe 
-                                <strong className="text-white block text-lg my-1">{selectedReset?.toUpperCase()}</strong>
-                                This action cannot be undone. History will be logged.
-                            </p>
-                        </div>
-
-                        <div className="flex flex-col gap-3">
-                            <button 
-                            onClick={executeReset} 
-                            className="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg transition-all scale-100 hover:scale-[1.02]"
-                            >
-                            YES, DELETE DATA
-                            </button>
-                            <button 
-                            onClick={cancelReset} 
-                            className="w-full py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2"
-                            >
-                            <XCircle size={16}/> ABORT MISSION
-                            </button>
-                        </div>
-                        </div>
-                    )}
+            
+            <div className="space-y-4">
+                <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2"><Flame size={12}/> Global Burn Cap (OpEx)</label>
+                    <GlassInput type="number" value={burnCap} onChange={(e) => setBurnCap(e.target.value)} />
                 </div>
-              )}
-            </>
-          )}
-      </GlassCard>
+                <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2"><Home size={12}/> Annual Rent Base</label>
+                    <GlassInput type="number" value={annualRent} onChange={(e) => setAnnualRent(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2"><TrendingUp size={12}/> Target Inflation Rate (%)</label>
+                    <GlassInput type="number" value={inflationRate} onChange={(e) => setInflationRate(e.target.value)} />
+                </div>
+            </div>
+
+            <GlassButton className="w-full" onClick={handleSaveParameters} disabled={isSaving}>
+                {isSaving ? 'Synchronizing...' : <><Save size={16} className="mr-2"/> Commit Parameters</>}
+            </GlassButton>
+        </GlassCard>
+
+        {/* --- NUCLEAR CONTROLS --- */}
+        <GlassCard className="p-6 h-fit space-y-6 border-red-500/20 bg-red-950/5">
+            <div className="flex flex-col border-b border-red-500/20 pb-4">
+                <div className="flex items-center gap-2 text-red-500">
+                    <Zap size={20}/>
+                    <h2 className="font-bold text-white">Nuclear Overrides</h2>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-1">Executing these protocols will permanently wipe selected environments.</p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => setConfirmReset('dashboard')} className="p-3 border border-white/10 rounded-xl text-left hover:border-red-500/50 hover:bg-red-500/10 transition-all group">
+                    <div className="text-sm font-bold text-white group-hover:text-red-400">Wipe Balances</div>
+                    <div className="text-[10px] text-gray-500">Reset all Tier 1/2/3 wallets to zero.</div>
+                </button>
+                <button onClick={() => setConfirmReset('budgets')} className="p-3 border border-white/10 rounded-xl text-left hover:border-red-500/50 hover:bg-red-500/10 transition-all group">
+                    <div className="text-sm font-bold text-white group-hover:text-red-400">Wipe Budgets</div>
+                    <div className="text-[10px] text-gray-500">Delete all OpEx tracking caps.</div>
+                </button>
+                <button onClick={() => setConfirmReset('signals')} className="p-3 border border-white/10 rounded-xl text-left hover:border-red-500/50 hover:bg-red-500/10 transition-all group">
+                    <div className="text-sm font-bold text-white group-hover:text-red-400">Wipe Signals</div>
+                    <div className="text-[10px] text-gray-500">Delete active deal flow & pipeline.</div>
+                </button>
+                <button onClick={() => setConfirmReset('telemetry')} className="p-3 border border-white/10 rounded-xl text-left hover:border-red-500/50 hover:bg-red-500/10 transition-all group">
+                    <div className="text-sm font-bold text-white group-hover:text-red-400">Purge Data Lake</div>
+                    <div className="text-[10px] text-gray-500">Delete all ingested bank CSV data.</div>
+                </button>
+            </div>
+
+            <div className="pt-4 border-t border-red-500/20">
+                <button onClick={() => setConfirmReset('all')} className="w-full p-4 bg-red-600/10 border border-red-600/50 text-red-500 font-bold rounded-xl hover:bg-red-600 hover:text-white transition-colors flex items-center justify-center gap-2">
+                    <AlertOctagon size={18}/> EXECUTE TOTAL FACTORY RESET
+                </button>
+                <p className="text-center text-[10px] text-red-400 mt-2 font-mono">
+                    WARNING: Irreversible.
+                </p>
+            </div>
+        </GlassCard>
+
+      </div>
     </div>
   );
 };

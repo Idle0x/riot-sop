@@ -12,13 +12,14 @@ import { formatNumber } from '../utils/format';
 
 import { 
   UploadCloud, CheckCircle2, Database, Zap, 
-  AlertTriangle, BookOpen, TrendingDown, Clock, Activity 
+  AlertTriangle, TrendingDown, Clock, Activity, Fingerprint 
 } from 'lucide-react';
 
 export const Ingestion = () => {
   const { session } = useUser();
   const queryClient = useQueryClient();
-  const { budgets, insertTelemetryBatch, commitAction, addJournalEntry } = useLedger();
+  // STRATEGIC UPDATE: We bring in triggerJournalPrompt
+  const { budgets, insertTelemetryBatch, commitAction, triggerJournalPrompt } = useLedger();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [isProcessing, setIsProcessing] = useState(false);
@@ -27,7 +28,6 @@ export const Ingestion = () => {
   const [uploadStatus, setUploadStatus] = useState<{ imported: number; ignored: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
-  const [journalDraft, setJournalDraft] = useState('');
   const [batchSignature, setBatchSignature] = useState('');
 
   const calculateBatchSignature = (data: Partial<TelemetryRecord>[]) => {
@@ -92,24 +92,8 @@ export const Ingestion = () => {
     try {
       const data = await processStatement(file);
       setPreviewData(data);
-      
       const sig = calculateBatchSignature(data);
       setBatchSignature(sig);
-
-      let bleedCount = 0;
-      let totalBleed = 0;
-      data.forEach(log => {
-          if (log.highVelocityFlag) { bleedCount++; totalBleed += (log.amount || 0); }
-      });
-
-      let draft = `${sig} System Review\n\n`;
-      draft += `Diagnostics:\n`;
-      draft += `- Ingested ${data.length} structural records.\n`;
-      if (bleedCount > 0) draft += `- Detected ${bleedCount} high-velocity friction points causing ₦${formatNumber(totalBleed)} in leakage.\n`;
-      draft += `\nStrategic Adjustment & Protocol for next cycle:\n> `;
-
-      setJournalDraft(draft);
-
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to parse document.");
       console.error(err);
@@ -125,6 +109,7 @@ export const Ingestion = () => {
     setErrorMsg(null);
 
     try {
+      // 1. Commit to Data Lake
       const { imported, ignored } = await insertTelemetryBatch(previewData.map(log => ({
         batchId: batchSignature,
         date: log.date!,
@@ -138,25 +123,30 @@ export const Ingestion = () => {
         highVelocityFlag: log.highVelocityFlag || false
       })));
 
-      addJournalEntry({
-          date: new Date().toISOString(),
-          content: journalDraft,
-          tags: ['system_audit', batchSignature.split(' ')[0].toLowerCase()],
-          auditBatchId: batchSignature
-      });
-
+      // 2. Ping the Universal Blackbox
       commitAction({
           date: new Date().toISOString(),
-          type: 'SYSTEM_EVENT',
-          title: `${batchSignature} Completed`,
-          description: `Ingested ${imported} records. Logged ${auditReport?.bleedCount} bleeds.`,
+          type: 'AUDIT_COMPLETED',
+          title: `Data Lake Sync: ${batchSignature}`,
+          description: `Ingested ${imported} records. Detected ${auditReport?.bleedCount} bleeds.`,
           tags: ['telemetry_sync']
+      });
+
+      // 3. Trigger Smart Interceptor Modal
+      triggerJournalPrompt({
+          type: 'AUDIT_INGEST',
+          data: {
+              recordCount: imported,
+              totalBleed: auditReport?.totalBleed || 0,
+              bleedCount: auditReport?.bleedCount || 0,
+              anomaliesCount: auditReport?.anomalies.length || 0,
+              batchSignature
+          }
       });
 
       setUploadStatus({ imported, ignored });
       queryClient.invalidateQueries({ queryKey: ['history'] });
       queryClient.invalidateQueries({ queryKey: ['telemetry'] });
-      queryClient.invalidateQueries({ queryKey: ['journals'] });
       
     } catch (err: any) {
       setErrorMsg(`Audit Commit failed: ${err.message}`);
@@ -179,13 +169,13 @@ export const Ingestion = () => {
             <div className="flex items-center gap-3 text-green-400">
                 <CheckCircle2 size={24}/>
                 <div>
-                  <div className="font-bold">Audit Successfully Committed to Ledger & Data Lake</div>
+                  <div className="font-bold">Audit Successfully Committed to Data Lake</div>
                   <div className="text-xs text-gray-400">
-                      <strong className="text-white">{uploadStatus.imported}</strong> new records added. <strong className="text-gray-500">{uploadStatus.ignored}</strong> duplicates ignored.
+                      <strong className="text-white">{uploadStatus.imported}</strong> new records synced. <strong className="text-gray-500">{uploadStatus.ignored}</strong> duplicates ignored.
                   </div>
                 </div>
             </div>
-            <button onClick={() => { setPreviewData([]); setUploadStatus(null); setJournalDraft(''); }} className="text-sm font-bold text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg transition-colors">Start New Audit</button>
+            <button onClick={() => { setPreviewData([]); setUploadStatus(null); }} className="text-sm font-bold text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg transition-colors">Start New Audit</button>
           </div>
       )}
 
@@ -295,28 +285,21 @@ export const Ingestion = () => {
                           </GlassCard>
                       </div>
 
-                      <GlassCard className="p-0 overflow-hidden flex flex-col flex-1 border-blue-500/20">
-                          <div className="p-4 border-b border-white/10 bg-blue-950/20 flex items-center gap-2">
-                              <BookOpen size={16} className="text-blue-400"/>
-                              <span className="font-bold text-white text-sm">Executive Audit Summary</span>
+                      {/* EXECUTION ACTION */}
+                      <GlassCard className="p-6 border-blue-500/20 flex flex-col md:flex-row justify-between items-center gap-4">
+                          <div>
+                              <h3 className="font-bold text-white flex items-center gap-2">
+                                 <Fingerprint size={16} className="text-blue-400"/> Authorize Data Sync
+                              </h3>
+                              <p className="text-xs text-gray-400 mt-1">This will commit the records to the Data Lake and trigger the Journal engine.</p>
                           </div>
-                          <textarea 
-                              className="flex-1 w-full bg-black/40 p-6 text-sm text-gray-300 outline-none resize-none min-h-[200px] focus:bg-black/60 transition-colors font-mono"
-                              value={journalDraft}
-                              onChange={(e) => setJournalDraft(e.target.value)}
-                          />
-                          <div className="p-4 bg-black/80 border-t border-white/10 flex justify-between items-center">
-                              <span className="text-[10px] text-gray-500 uppercase tracking-widest hidden md:block">
-                                  Human-in-the-loop verification required.
-                              </span>
-                              <GlassButton 
-                                  onClick={handleCommitAudit} 
-                                  disabled={isUploading || !journalDraft}
-                                  className="w-full md:w-auto"
-                              >
-                                  {isUploading ? 'Committing to Architecture...' : 'Sign & Commit Audit'}
-                              </GlassButton>
-                          </div>
+                          <GlassButton 
+                              onClick={handleCommitAudit} 
+                              disabled={isUploading}
+                              className="w-full md:w-auto"
+                          >
+                              {isUploading ? 'Executing Sync...' : 'Commit Data & Trigger Audit'}
+                          </GlassButton>
                       </GlassCard>
                   </>
               )}

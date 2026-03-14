@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom'; // NEW IMPORT
 import { useLedger } from '../context/LedgerContext';
 import { useFinancialStats } from '../hooks/useFinancialStats'; 
 import { GlassCard } from '../components/ui/GlassCard';
@@ -7,12 +8,13 @@ import { GlassButton } from '../components/ui/GlassButton';
 import { GlassProgressBar } from '../components/ui/GlassProgressBar';
 import { Naira } from '../components/ui/Naira';
 import { formatNumber } from '../utils/format';
-import { Trash2, RefreshCcw, Plus, X, Zap } from 'lucide-react';
+import { Trash2, RefreshCcw, Plus, X, Zap, ArrowRight } from 'lucide-react'; // Added ArrowRight
 
 export const Budget = () => {
+  const navigate = useNavigate(); // NEW ROUTER HOOK
   const { 
     budgets, telemetry, addBudget, updateAccount, updateBudgetSpent, 
-    commitAction, deleteBudget, triggerJournalPrompt // NEW EXTRACT
+    commitAction, deleteBudget, triggerJournalPrompt 
   } = useLedger();
 
   const { leakOutflow } = useFinancialStats();
@@ -50,7 +52,6 @@ export const Budget = () => {
     const targetBudget = budgets.find(b => b.id === selectedBudgetId);
     const budgetName = targetBudget?.name || 'Uncategorized';
 
-    // 1. Commit to the immutable Ledger
     commitAction({
         date: new Date().toISOString(),
         type: 'SPEND',
@@ -59,7 +60,6 @@ export const Budget = () => {
         description: spendNote
     });
 
-    // 2. Trigger the Context Engine!
     if (targetBudget) {
         triggerJournalPrompt({
            type: 'BUDGET_SPEND',
@@ -201,6 +201,26 @@ export const Budget = () => {
               />
             </GlassCard>
           ))}
+
+          {/* STRATEGIC UPDATE: The leak warning is now a Deep-Link button */}
+          {leakOutflow > 0 && (
+             <button 
+                onClick={() => navigate('/analytics?view=leaks')}
+                className="w-full text-left p-4 border border-red-500/50 bg-red-500/10 rounded-2xl flex justify-between items-center hover:bg-red-500/20 transition-all group cursor-pointer"
+             >
+                <div>
+                  <div className="font-bold text-red-400 flex items-center gap-2">
+                    <Zap size={14}/> Unbudgeted System Leakage
+                  </div>
+                  <div className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1 group-hover:text-red-300 transition-colors">
+                     Click to view forensic matrix <ArrowRight size={10}/>
+                  </div>
+                </div>
+                <div className="font-mono font-bold text-red-500 flex items-center gap-1 text-xl">
+                   <Naira/>{formatNumber(leakOutflow)}
+                </div>
+             </button>
+          )}
         </div>
       </div>
     </div>

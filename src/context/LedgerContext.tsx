@@ -28,7 +28,6 @@ interface LedgerContextType {
   unallocatedCash: number;
   isSyncing: boolean;
 
-  // Global Journal Interceptor State
   activeJournalPrompt: ActiveJournalPrompt | null;
   triggerJournalPrompt: (payload: JournalPromptPayload) => void;
   closeJournalPrompt: () => void;
@@ -192,7 +191,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     queryClient.invalidateQueries({ queryKey: ['history'] });
   };
 
-  // --- COMPUTED LOGIC FOR ENGINE ---
   const monthlyBurn = calculateMonthlyBurn(budgets);
   const totalLiquid = (accounts.find(a => a.type === 'payroll')?.balance || 0) + 
                       (accounts.find(a => a.type === 'treasury')?.balance || 0);
@@ -210,18 +208,14 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     realRunwayMonths = runwayMonths; 
   }
 
-  // Calculate recent bleeds for the engine
   const currentMonthKey = new Date().toISOString().slice(0, 7);
   const recentBleeds = telemetry
     .filter(t => t.date.startsWith(currentMonthKey) && t.highVelocityFlag)
     .reduce((sum, t) => sum + t.amount, 0);
 
-  // --- ENGINE INTERCEPTOR ---
   const triggerJournalPrompt = (payload: JournalPromptPayload) => {
     const globalState = { runwayMonths, unallocatedCash, budgets, signals, history, recentBleeds };
     const engineResult = generateSmartPrompt(payload.type, payload.data, globalState);
-    
-    // Only intercept the UI if the engine decides the event is significant enough to warrant a journal
     if (engineResult) {
       setActiveJournalPrompt({ ...payload, engineResult });
     }
@@ -229,7 +223,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const closeJournalPrompt = () => setActiveJournalPrompt(null);
 
-  // --- MUTATIONS (Standard ones collapsed for brevity but fully intact below) ---
+  // --- MUTATIONS ---
   const updateAccountMutation = useMutation({
     mutationFn: async ({ id, amount }: { id: AccountType; amount: number }) => {
       const { data: current } = await supabase.from('accounts').select('balance').eq('type', id).eq('user_id', userId).single();
@@ -238,6 +232,35 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
       await supabase.from('accounts').update({ balance: newBalance }).eq('type', id).eq('user_id', userId);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['accounts'] })
+  });
+
+  const addGoalMutation = useMutation({
+    mutationFn: async (goal: Omit<Goal, 'id'>) => {
+       const dbGoal = {
+         user_id: userId,
+         title: goal.title,
+         phase: goal.phase,
+         target_amount: goal.targetAmount,
+         current_amount: goal.currentAmount,
+         type: goal.type,
+         sub_goals: goal.subGoals
+       };
+       const { data, error } = await supabase.from('goals').insert(dbGoal).select('id').single();
+       if (error) throw error;
+       if (data) autoLog('GOAL_CREATE', `New Mission: ${goal.title}`, `Target: ${goal.targetAmount}`, goal.targetAmount, undefined, data.id);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['goals'] })
+  });
+
+  const updateGoalMutation = useMutation({
+    mutationFn: async (goal: Goal) => {
+       const { error } = await supabase.from('goals').update({
+         current_amount: goal.currentAmount,
+         is_completed: goal.isCompleted
+       }).eq('id', goal.id);
+       if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['goals'] })
   });
 
   const fundGoalMutation = useMutation({
@@ -497,10 +520,40 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const resetModuleMutation = useMutation({
     mutationFn: async (module: ResetModule) => {
-      //... implementation omitted for brevity, kept exactly same as before ...
+      if (module === 'dashboard' || module === 'all') {
+        await supabase.from('accounts').update({ balance: 0 }).eq('user_id', userId);
+        await autoLog('SYSTEM_EVENT', 'Dashboard Balance Reset', 'All accounts set to 0');
+      }
+      if (module === 'generosity' || module === 'all') {
+        await supabase.from('accounts').update({ balance: 0 }).eq('user_id', userId).eq('type', 'generosity');
+        await autoLog('SYSTEM_EVENT', 'Generosity Wallet Emptied', 'Funds cleared');
+      }
+      if (module === 'goals' || module === 'all') {
+        await supabase.from('goals').delete().eq('user_id', userId);
+        await autoLog('SYSTEM_EVENT', 'Goals Database Wiped', 'All missions deleted');
+      }
+      if (module === 'signals' || module === 'all') {
+        await supabase.from('signals').delete().eq('user_id', userId);
+        await autoLog('SYSTEM_EVENT', 'Signals Database Wiped', 'All deal flow deleted');
+      }
+      if (module === 'budgets' || module === 'all') {
+        await supabase.from('budgets').delete().eq('user_id', userId);
+        await autoLog('SYSTEM_EVENT', 'Budgets Database Wiped', 'Recurring expenses cleared');
+      }
+      if (module === 'journal' || module === 'all') {
+        await supabase.from('journal').delete().eq('user_id', userId);
+        await autoLog('SYSTEM_EVENT', 'Journal Entries Wiped', 'Personal notes cleared');
+      }
+      if (module === 'telemetry' || module === 'all') {
+        await supabase.from('telemetry_raw').delete().eq('user_id', userId);
+        await autoLog('SYSTEM_EVENT', 'Data Lake Cleared', 'All raw telemetry data purged');
+      }
+      if (module === 'all') {
+        await autoLog('SYSTEM_EVENT', 'FACTORY RESET EXECUTED', 'Complete system wipe initiated');
+      }
     },
     onSuccess: () => queryClient.invalidateQueries(),
-    onError: (e) => alert(`Reset Failed: ${e.message}`)
+    onError: (e: any) => alert(`Reset Failed: ${e.message}`)
   });
 
   return (

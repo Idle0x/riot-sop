@@ -1,310 +1,174 @@
-import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
-import { differenceInHours } from 'date-fns';
 import { type TelemetryRecord } from '../types';
 
-export type RawTransaction = {
-  date: string;
-  description: string;
-  amount: number;
-  type: 'DROP' | 'SPEND';
-  reference: string;
-};
+// --- THE SMART CLASSIFIER DICTIONARY ---
+// This engine scrubs raw bank narrations into clean, macro-level categories and merchants.
+const classifyTransaction = (rawDescription: string): { merchant: string, category: string } => {
+  const desc = rawDescription.toLowerCase();
 
-// --- 1. CATEGORIZATION ENGINE ---
-export const categorizeTransaction = (description: string): string => {
-  const desc = (description || '').toLowerCase();
+  // 1. Betting & Gaming
+  if (desc.includes('sportybet') || desc.includes('sporty')) return { merchant: 'SportyBet', category: 'Betting & Gaming' };
+  if (desc.includes('bet9ja')) return { merchant: 'Bet9ja', category: 'Betting & Gaming' };
+  if (desc.includes('1xbet')) return { merchant: '1xBet', category: 'Betting & Gaming' };
+  if (desc.includes('msport')) return { merchant: 'MSport', category: 'Betting & Gaming' };
+
+  // 2. Transport & Mobility
+  if (desc.includes('uber')) return { merchant: 'Uber', category: 'Transport' };
+  if (desc.includes('bolt')) return { merchant: 'Bolt', category: 'Transport' };
+  if (desc.includes('indrive')) return { merchant: 'inDrive', category: 'Transport' };
+  if (desc.includes('lago') || desc.includes('cowry')) return { merchant: 'Public Transit', category: 'Transport' };
+
+  // 3. Telecom & Utilities
+  if (desc.includes('mtn') || desc.includes('vtu') || desc.includes('airtime')) return { merchant: 'Telecom / Airtime', category: 'Utilities' };
+  if (desc.includes('airtel')) return { merchant: 'Airtel', category: 'Utilities' };
+  if (desc.includes('glo') && desc.includes('data')) return { merchant: 'Glo', category: 'Utilities' };
+  if (desc.includes('dstv') || desc.includes('multichoice') || desc.includes('gotv')) return { merchant: 'Cable TV', category: 'Subscriptions' };
+  if (desc.includes('ikedc') || desc.includes('ekedc') || desc.includes('power') || desc.includes('token') || desc.includes('aedc')) return { merchant: 'Electricity (Power)', category: 'Utilities' };
+
+  // 4. Global Subscriptions & Software
+  if (desc.includes('netflix')) return { merchant: 'Netflix', category: 'Subscriptions' };
+  if (desc.includes('apple') || desc.includes('itunes')) return { merchant: 'Apple Services', category: 'Subscriptions' };
+  if (desc.includes('spotify')) return { merchant: 'Spotify', category: 'Subscriptions' };
+  if (desc.includes('amazon') || desc.includes('aws')) return { merchant: 'Amazon', category: 'Subscriptions' };
+  if (desc.includes('google') || desc.includes('gsuite')) return { merchant: 'Google', category: 'Subscriptions' };
+  if (desc.includes('openai') || desc.includes('chatgpt')) return { merchant: 'OpenAI', category: 'Software' };
+  if (desc.includes('vercel') || desc.includes('github')) return { merchant: 'Dev Tools', category: 'Software' };
+
+  // 5. Food & Groceries
+  if (desc.includes('shoprite')) return { merchant: 'Shoprite', category: 'Groceries' };
+  if (desc.includes('spar')) return { merchant: 'Spar', category: 'Groceries' };
+  if (desc.includes('chicken republic')) return { merchant: 'Chicken Republic', category: 'Food & Dining' };
+  if (desc.includes('domino') || desc.includes('pizza')) return { merchant: 'Dominos Pizza', category: 'Food & Dining' };
+  if (desc.includes('chowdeck') || desc.includes('glovo') || desc.includes('food')) return { merchant: 'Food Delivery', category: 'Food & Dining' };
+
+  // 6. Bank Charges & Taxes
+  if (desc.includes('stamp duty') || desc.includes('fgn') || desc.includes('vat')) return { merchant: 'FGN Stamp Duty/VAT', category: 'Bank Charges' };
+  if (desc.includes('sms') || desc.includes('alert')) return { merchant: 'SMS Alert Fee', category: 'Bank Charges' };
+  if (desc.includes('maintenance') || desc.includes('card fee')) return { merchant: 'Card Maintenance', category: 'Bank Charges' };
+  if (desc.includes('fee') || desc.includes('charge')) return { merchant: 'Bank Fees', category: 'Bank Charges' };
+
+  // 7. Gateways & Infrastructure (When the specific merchant isn't clear)
+  if (desc.includes('paystack')) return { merchant: 'Paystack Checkout', category: 'Online Payment' };
+  if (desc.includes('flutterwave') || desc.includes('flw')) return { merchant: 'Flutterwave', category: 'Online Payment' };
+  if (desc.includes('remita')) return { merchant: 'Remita', category: 'Taxes & Levies' };
+
+  // 8. General Transfers & POS
+  if (desc.includes('pos')) return { merchant: 'POS Terminal', category: 'POS / Cash' };
+  if (desc.includes('atm') && desc.includes('wdl')) return { merchant: 'ATM Withdrawal', category: 'POS / Cash' };
+  if (desc.includes('trf') || desc.includes('transfer') || desc.includes('nip') || desc.includes('ussd')) return { merchant: 'Bank Transfer', category: 'Transfers' };
+  if (desc.includes('reversal')) return { merchant: 'Reversal', category: 'Refunds' };
+
+  // --- FALLBACK CLEANUP ---
+  // If we don't recognize it, we aggressively clean the garbage text to find a readable name.
+  // We remove common banking junk text like "POS/PUR/", "NIP TRF/", dates, and reference numbers.
+  let cleanMerchant = rawDescription
+      .replace(/(POS\/PUR\/|NIP TRF|NIP|TRF|USSD|WDL|WEB\/|MOB\/)/gi, '') // Strip prefixes
+      .replace(/[0-9]{8,}/g, '') // Strip long reference numbers
+      .split('/')[0] // Take the first meaningful chunk before slashes
+      .split('*')[0] // Take chunks before asterisks
+      .trim();
+
+  // Capitalize properly
+  cleanMerchant = cleanMerchant.charAt(0).toUpperCase() + cleanMerchant.slice(1).toLowerCase();
   
-  if (desc.match(/\b(pos|atm|cash withdrawal|withdrawal)\b/)) return 'Cash/POS';
-  if (desc.match(/\b(airtime|data|vtu|recharge|telecom)\b/)) return 'Telecom';
-  if (desc.match(/\b(bet|betting|gaming|casino|sporty|1xbet|bet9ja)\b/)) return 'Betting'; 
-  if (desc.match(/\b(fee|charge|sms alert|stamp duty|vat|maintenance)\b/)) return 'Bank Fees';
-  if (desc.match(/\b(owealth|spend\+save|interest)\b/)) return 'Internal Routing';
-  if (desc.match(/\b(transfer|trf|nip)\b/)) return 'Transfer';
-  
-  return 'General';
+  // Ensure it's not too long for the UI
+  if (cleanMerchant.length > 25) cleanMerchant = cleanMerchant.substring(0, 25) + '...';
+
+  return { 
+      merchant: cleanMerchant || 'Unknown Merchant', 
+      category: 'Uncategorized' 
+  };
 };
 
-// --- 2. UTILITIES ---
-const parseAmount = (val: any) => {
-  if (val === undefined || val === null || val === '') return 0;
-  if (typeof val === 'number') return val;
-  
-  const clean = String(val).replace(/,/g, '').replace(/N/g, '').replace(/₦/g, '').replace(/#/g, '').trim();
-  const parsed = parseFloat(clean);
-  return isNaN(parsed) ? 0 : Math.abs(parsed); 
-};
-
-const parseDate = (dateStr: string) => {
-  try {
-    const d = new Date(dateStr);
-    if (!isNaN(d.getTime())) return d.toISOString();
-    return new Date().toISOString(); 
-  } catch (e) {
-    return new Date().toISOString();
-  }
-};
-
-// --- 3. DYNAMIC HEADER HUNTER & EXTRACTOR ---
-const extractFrom2DArray = (rows: any[][]): RawTransaction[] => {
-  const transactions: RawTransaction[] = [];
-  let headerRowIndex = -1;
-  let colMap = { date: -1, desc: -1, debit: -1, credit: -1, amount: -1, ref: -1 };
-
-  for (let i = 0; i < Math.min(rows.length, 50); i++) {
-    if (!rows[i] || !Array.isArray(rows[i])) continue;
-    
-    const rowStrings = rows[i].map(c => String(c || '').toLowerCase().trim());
-    
-    const hasDate = rowStrings.findIndex(c => c.includes('date') || c.includes('time'));
-    const hasDesc = rowStrings.findIndex(c => c.includes('description') || c.includes('category') || c.includes('details') || c.includes('remarks'));
-    const hasDebit = rowStrings.findIndex(c => c.includes('debit') || c === 'money out' || c.includes('withdrawal'));
-    const hasCredit = rowStrings.findIndex(c => c.includes('credit') || c === 'money in' || c.includes('deposit'));
-    const hasAmount = rowStrings.findIndex(c => c === 'amount');
-    
-    if (hasDate !== -1 && (hasDebit !== -1 || hasAmount !== -1 || hasCredit !== -1)) {
-      headerRowIndex = i;
-      colMap.date = hasDate;
-      colMap.desc = hasDesc;
-      colMap.debit = hasDebit;
-      colMap.credit = hasCredit;
-      colMap.amount = hasAmount;
-      colMap.ref = rowStrings.findIndex(c => c.includes('reference') || c.includes('transaction id') || c === 'ref');
-      break;
-    }
-  }
-
-  if (headerRowIndex !== -1) {
-    for (let i = headerRowIndex + 1; i < rows.length; i++) {
-      const row = rows[i];
-      if (!row || !Array.isArray(row) || row.length === 0) continue;
-
-      const dateVal = row[colMap.date];
-      if (!dateVal) continue; 
-
-      let amount = 0;
-      let isSpend = false;
-
-      const debitVal = colMap.debit !== -1 ? parseAmount(row[colMap.debit]) : 0;
-      const creditVal = colMap.credit !== -1 ? parseAmount(row[colMap.credit]) : 0;
-      
-      let amtVal = 0;
-      if (colMap.amount !== -1 && row[colMap.amount] !== undefined) {
-         amtVal = parseFloat(String(row[colMap.amount]).replace(/,/g, ''));
-      }
-
-      if (debitVal > 0) {
-        amount = debitVal;
-        isSpend = true;
-      } else if (creditVal > 0) {
-        amount = creditVal;
-        isSpend = false;
-      } else if (!isNaN(amtVal) && amtVal !== 0) {
-        amount = Math.abs(amtVal);
-        isSpend = amtVal < 0;
-      } else {
-        continue; 
-      }
-
-      const desc = colMap.desc !== -1 && row[colMap.desc] ? String(row[colMap.desc]) : 'Bank Transaction';
-      const ref = colMap.ref !== -1 && row[colMap.ref] ? String(row[colMap.ref]) : `AUTO-${dateVal}-${amount}`;
-
-      transactions.push({
-        date: parseDate(String(dateVal)),
-        description: desc,
-        amount,
-        type: isSpend ? 'SPEND' : 'DROP',
-        reference: String(ref).replace(/[^a-zA-Z0-9-]/g, '')
-      });
-    }
-  }
-
-  return transactions;
-};
-
-// --- 4. BRUTE FORCE SEQUENCE PARSER ---
-const parseMangledSequence = (data: any[][]): RawTransaction[] => {
-  const sequence: string[] = [];
-  data.forEach(row => {
-    if (Array.isArray(row)) {
-        row.forEach(cell => {
-        if (typeof cell === 'string' && cell.trim()) sequence.push(cell.trim());
-        });
-    }
-  });
-
-  const transactions: RawTransaction[] = [];
-  
-  for (let i = 0; i < sequence.length; i++) {
-    const token = sequence[i];
-    
-    const dateMatch = token.match(/^(\d{2}\s[a-zA-Z]{3}\s\d{4}\s\d{2}:\d{2}:\d{2})/);
-    if (dateMatch) {
-      const dateStr = dateMatch[1];
-      let desc = sequence[i + 1] || 'Unknown Transaction';
-      let amount = 0;
-      let isSpend = false;
-      let ref = `RECOVERY-${crypto.randomUUID().slice(0, 8)}`;
-
-      for (let j = 1; j <= 6; j++) {
-        const lookAhead = sequence[i + j];
-        if (!lookAhead) break;
-        
-        const opayFinMatch = lookAhead.match(/^(--|[\d,]+\.\d{2})(--|[\d,]+\.\d{2})([\d,]+\.\d{2})/);
-        if (opayFinMatch) {
-          const debitStr = opayFinMatch[1];
-          const creditStr = opayFinMatch[2];
-          
-          if (debitStr !== '--') {
-            amount = parseFloat(debitStr.replace(/,/g, ''));
-            isSpend = true;
-          } else if (creditStr !== '--') {
-            amount = parseFloat(creditStr.replace(/,/g, ''));
-            isSpend = false;
-          }
-          
-          ref = sequence[i + j + 1] || ref;
-          break;
-        }
-      }
-
-      if (amount > 0) {
-        if (desc.includes('OWealth') && sequence[i+2]?.includes('Transaction')) {
-            desc = desc + " " + sequence[i+2];
-        }
-        transactions.push({
-          date: new Date(dateStr).toISOString(),
-          description: desc,
-          amount,
-          type: isSpend ? 'SPEND' : 'DROP',
-          reference: ref.replace(/[^a-zA-Z0-9-]/g, '')
-        });
-      }
-    }
-  }
-  return transactions;
-};
-
-// --- 5. THE VELOCITY ALGORITHM ---
-export const applyTelemetryFlags = (transactions: RawTransaction[]): Partial<TelemetryRecord>[] => {
-  const sorted = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  const flaggedData: Partial<TelemetryRecord>[] = [];
-
-  for (let i = 0; i < sorted.length; i++) {
-    const current = sorted[i];
-    const category = categorizeTransaction(current.description);
-    let isHighVelocity = false;
-
-    if (current.type === 'SPEND' && ['Betting', 'Telecom', 'Cash/POS'].includes(category)) {
-      let countInWindow = 1; 
-
-      for (let j = i - 1; j >= 0; j--) {
-        const prev = sorted[j];
-        if (prev.type !== 'SPEND' || categorizeTransaction(prev.description) !== category) continue;
-
-        const hoursDiff = Math.abs(differenceInHours(new Date(current.date), new Date(prev.date)));
-        if (hoursDiff > 48) break;
-        countInWindow++;
-      }
-
-      if (countInWindow >= 3) {
-        isHighVelocity = true;
-      }
-    }
-
-    flaggedData.push({
-      date: current.date,
-      type: current.type,
-      title: category === 'General' ? current.description.slice(0, 30) : category,
-      description: current.description,
-      amount: current.amount,
-      currency: 'NGN',
-      transactionRef: current.reference,
-      categoryGroup: category,
-      highVelocityFlag: isHighVelocity
-    });
-  }
-
-  return flaggedData.reverse();
-};
-
-// --- 6. EXCEL PROCESSING ENGINE ---
-const processExcel = async (file: File): Promise<Partial<TelemetryRecord>[]> => {
-  try {
-      const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, { type: 'array' });
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      
-      const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" }) as any[][];
-      
-      if (!rawData || rawData.length === 0) throw new Error("The Excel file is empty.");
-      
-      const transactions = extractFrom2DArray(rawData);
-      if (transactions.length > 0) return applyTelemetryFlags(transactions);
-      
-      throw new Error("Standard extraction failed.");
-  } catch (err) {
-      const text = await file.text();
-      if (text.toLowerCase().includes('<table') || text.toLowerCase().includes('<html')) {
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(text, 'text/html');
-          
-          const rows = Array.from(doc.querySelectorAll('tr'));
-          const rawData = rows.map(tr => {
-              const cells = Array.from(tr.querySelectorAll('td, th'));
-              return cells.map(td => td.textContent?.trim() || '');
-          });
-
-          if (rawData.length > 0) {
-              const transactions = extractFrom2DArray(rawData);
-              if (transactions.length > 0) return applyTelemetryFlags(transactions);
-          }
-      }
-      throw new Error("Could not extract financial data. The file appears to be corrupted or in an unsupported structure.");
-  }
-};
-
-// --- 7. CSV PROCESSING ENGINE ---
-const processCSVFile = async (file: File): Promise<Partial<TelemetryRecord>[]> => {
-  return new Promise((resolve, reject) => {
-    Papa.parse(file, {
-      header: false, 
-      skipEmptyLines: true,
-      complete: (results) => {
-        try {
-          const rawData = results.data as any[][];
-          if (!rawData || rawData.length === 0) throw new Error("The CSV file is empty.");
-
-          let transactions = extractFrom2DArray(rawData);
-
-          if (transactions.length === 0) {
-             transactions = parseMangledSequence(rawData);
-          }
-
-          if (transactions.length === 0) {
-             throw new Error("Parser failed to locate header columns (Date, Amount, etc).");
-          }
-
-          resolve(applyTelemetryFlags(transactions));
-        } catch (err) {
-          reject(err);
-        }
-      },
-      error: (error) => reject(error)
-    });
-  });
-};
-
-// --- 8. MASTER ROUTER ---
 export const processStatement = async (file: File): Promise<Partial<TelemetryRecord>[]> => {
-  const fileName = file.name.toLowerCase();
-  
-  if (fileName.endsWith('.xls') || fileName.endsWith('.xlsx')) {
-      return await processExcel(file);
-  } else if (fileName.endsWith('.csv')) {
-      return await processCSVFile(file);
-  } else {
-      throw new Error("Unsupported file type. Please upload .csv, .xls, or .xlsx files.");
-  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const rows = text.split('\n').map(row => row.split(','));
+        if (rows.length < 2) throw new Error("File appears empty or invalid.");
+
+        // Heuristic Header Detection
+        const headers = rows[0].map(h => h.toLowerCase().replace(/["\r]/g, '').trim());
+        
+        const dateIdx = headers.findIndex(h => h.includes('date'));
+        const descIdx = headers.findIndex(h => h.includes('description') || h.includes('narration') || h.includes('remarks') || h.includes('details'));
+        const debitIdx = headers.findIndex(h => h.includes('debit') || h.includes('withdrawal'));
+        const creditIdx = headers.findIndex(h => h.includes('credit') || h.includes('deposit'));
+        const amountIdx = headers.findIndex(h => h === 'amount');
+
+        if (dateIdx === -1 || descIdx === -1) {
+           throw new Error("Could not detect standard 'Date' or 'Description' columns.");
+        }
+
+        const parsedData: Partial<TelemetryRecord>[] = [];
+
+        // Track merchant frequency for the High-Velocity / Bleed detector
+        const merchantFrequency: Record<string, number> = {};
+
+        // Parse Phase
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          if (row.length <= Math.max(dateIdx, descIdx)) continue;
+
+          const rawDate = row[dateIdx]?.replace(/["\r]/g, '');
+          const rawDesc = row[descIdx]?.replace(/["\r]/g, '') || 'Unknown';
+          
+          let amount = 0;
+          let type: 'SPEND' | 'DROP' = 'SPEND';
+
+          if (amountIdx !== -1 && row[amountIdx]) {
+             const val = parseFloat(row[amountIdx].replace(/[^0-9.-]+/g, ''));
+             amount = Math.abs(val);
+             type = val < 0 ? 'SPEND' : 'DROP';
+          } else {
+             const debitVal = parseFloat(row[debitIdx]?.replace(/[^0-9.-]+/g, '') || '0');
+             const creditVal = parseFloat(row[creditIdx]?.replace(/[^0-9.-]+/g, '') || '0');
+             if (debitVal > 0) { amount = debitVal; type = 'SPEND'; }
+             else if (creditVal > 0) { amount = creditVal; type = 'DROP'; }
+          }
+
+          if (!amount || isNaN(amount) || !rawDate) continue;
+
+          // 1. Run the Smart Classifier
+          const { merchant, category } = classifyTransaction(rawDesc);
+
+          // Track frequency to detect systemic leakage (only for spending)
+          if (type === 'SPEND') {
+              merchantFrequency[merchant] = (merchantFrequency[merchant] || 0) + 1;
+          }
+
+          parsedData.push({
+            date: new Date(rawDate).toISOString(),
+            type,
+            title: merchant,           // The clean Merchant name
+            description: rawDesc,      // The original raw string (kept for forensics)
+            amount,
+            categoryGroup: category,   // The macro category
+            currency: 'NGN',
+            transactionRef: crypto.randomUUID()
+          });
+        }
+
+        // 2. The Anomaly / High-Velocity Circuit Breaker
+        // If you hit the same merchant more than 3 times in one statement, it flags as a "Bleed"
+        const finalData = parsedData.map(record => {
+            const isHighVelocity = record.type === 'SPEND' && merchantFrequency[record.title!] > 3;
+            return {
+                ...record,
+                highVelocityFlag: isHighVelocity
+            };
+        });
+
+        resolve(finalData);
+
+      } catch (err: any) {
+        reject(err);
+      }
+    };
+
+    reader.onerror = () => reject(new Error("Failed to read file."));
+    reader.readAsText(file);
+  });
 };

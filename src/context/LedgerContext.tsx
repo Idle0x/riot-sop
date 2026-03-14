@@ -131,13 +131,30 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     }
   });
 
+  // UNLOCKED: Recursive Paginator for History (Bypasses 1,000 row limit)
   const { data: history = [] } = useQuery({
     queryKey: ['history', userId],
     enabled: !!userId,
     queryFn: async () => {
-      const { data, error } = await supabase.from('history').select('*').order('date', { ascending: false });
-      if (error) throw error;
-      return data.map((h: any) => ({
+      let allData: any[] = [];
+      let from = 0;
+      const step = 1000;
+      
+      while (true) {
+        const { data, error } = await supabase.from('history')
+            .select('*')
+            .order('date', { ascending: false })
+            .range(from, from + step - 1);
+            
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        
+        allData = [...allData, ...data];
+        if (data.length < step) break;
+        from += step;
+      }
+
+      return allData.map((h: any) => ({
           ...h,
           linkedSignalId: h.linked_signal_id,
           linkedGoalId: h.linked_goal_id,
@@ -148,13 +165,30 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     }
   });
 
+  // UNLOCKED: Recursive Paginator for Telemetry (Bypasses 1,000 row limit)
   const { data: telemetry = [] } = useQuery({
     queryKey: ['telemetry', userId],
     enabled: !!userId,
     queryFn: async () => {
-      const { data, error } = await supabase.from('telemetry_raw').select('*').order('date', { ascending: false });
-      if (error) throw error;
-      return data.map((t: any) => ({
+      let allData: any[] = [];
+      let from = 0;
+      const step = 1000;
+      
+      while (true) {
+        const { data, error } = await supabase.from('telemetry_raw')
+            .select('*')
+            .order('date', { ascending: false })
+            .range(from, from + step - 1);
+            
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        
+        allData = [...allData, ...data];
+        if (data.length < step) break;
+        from += step;
+      }
+
+      return allData.map((t: any) => ({
           ...t,
           batchId: t.batch_id,
           transactionRef: t.transaction_ref,
@@ -224,7 +258,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const closeJournalPrompt = () => setActiveJournalPrompt(null);
 
-  // --- MUTATIONS WITH STATE DIFFING ENGINE ---
+  // --- MUTATIONS ---
   const updateAccountMutation = useMutation({
     mutationFn: async ({ id, amount }: { id: AccountType; amount: number }) => {
       const { data: current } = await supabase.from('accounts').select('balance').eq('type', id).eq('user_id', userId).single();
@@ -389,7 +423,8 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         updated_at: new Date().toISOString(),
         time_estimates: rest.timeEstimates,
         session_logs: rest.sessionLogs,
-        last_session_at: rest.lastSessionAt
+        last_session_at: rest.lastSessionAt,
+        lifecycle: rest.lifecycle // Important: Save the lifecycle history array
       };
       await supabase.from('signals').update(dbSignal).eq('id', id);
 
@@ -440,7 +475,8 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         updated_at: signal.updatedAt,
         time_estimates: signal.timeEstimates,
         session_logs: signal.sessionLogs,
-        last_session_at: signal.lastSessionAt
+        last_session_at: signal.lastSessionAt,
+        lifecycle: signal.lifecycle
       };
       const { data } = await supabase.from('signals').insert(dbSignal).select('id').single();
       if (data) autoLog('SIGNAL_CREATE', `New Deal Sourced: ${signal.title}`, `Sector: ${signal.sector}`, undefined, data.id);

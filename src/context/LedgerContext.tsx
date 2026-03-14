@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useUser } from './UserContext';
 import { calculateMonthlyBurn } from '../utils/finance';
 import { generateSmartPrompt } from '../utils/journalEngine';
+import { formatNumber } from '../utils/format';
 import { 
   type Account, type Budget, type Goal, type Signal, type HistoryLog, 
   type AccountType, type LogType, type TelemetryRecord, type JournalEntry,

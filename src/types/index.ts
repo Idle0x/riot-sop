@@ -202,7 +202,7 @@ export interface HistoryLog {
   };
 }
 
-// --- NEW: THE DATA LAKE (TELEMETRY) ---
+// --- THE DATA LAKE (TELEMETRY) ---
 export interface TelemetryRecord {
   id: string;
   batchId: string;
@@ -217,7 +217,7 @@ export interface TelemetryRecord {
   highVelocityFlag: boolean;
 }
 
-// --- NEW: JOURNAL ENTRIES ---
+// --- JOURNAL ENTRIES ---
 export interface JournalEntry {
   id: string;
   date: string;
@@ -225,6 +225,20 @@ export interface JournalEntry {
   tags?: string[];
   linkedLogId?: string;
   auditBatchId?: string;
+}
+
+// --- AUTO-JOURNAL PAYLOADS ---
+export interface JournalPromptPayload {
+  type: 'BUDGET_SPEND' | 'TRIAGE_DROP' | 'SIGNAL_HARVEST' | 'SIGNAL_KILL' | 'GOAL_FUND' | 'GENEROSITY_DEPLOY' | 'AUDIT_INGEST';
+  data: any;
+}
+
+export interface ActiveJournalPrompt extends JournalPromptPayload {
+  engineResult: {
+    title: string;
+    synthesis: string;
+    prompt: string;
+  };
 }
 
 // --- PALETTES & UTILS ---

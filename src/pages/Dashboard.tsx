@@ -21,7 +21,7 @@ import { ActionCenter } from '../components/ActionCenter';
 import { 
   Clock, AlertTriangle, ArrowRight, Activity, ShieldCheck, 
   BarChart3, Wallet, Heart, Zap, TrendingUp, TrendingDown, 
-  ArrowDownLeft, ArrowUpRight
+  ArrowDownLeft, ArrowUpRight, Target, Box
 } from 'lucide-react';
 
 export const Dashboard = () => {
@@ -29,11 +29,11 @@ export const Dashboard = () => {
   const { user, isGhostMode } = useUser();
   const [time, setTime] = useState(new Date());
   
-  // New state to toggle the Action Center
   const [showActionCenter, setShowActionCenter] = useState(false);
+  const [chartTimeframe, setChartTimeframe] = useState('1M');
 
   const { runwayMonths, history, telemetry } = useLedger();
-  const { netFlow, inflow, outflow, leakOutflow, burnDelta, chartData, allocation } = useFinancialStats();
+  const { netFlow, inflow, outflow, leakOutflow, burnDelta, chartData, allocation } = useFinancialStats(chartTimeframe);
 
   const [activityFilter, setActivityFilter] = useState<'ALL' | 'IN' | 'OUT'>('ALL');
 
@@ -42,7 +42,9 @@ export const Dashboard = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const totalNetWorth = allocation.liquid + allocation.reserved + allocation.generosity + allocation.idle;
+  // UPDATED: Total Net Worth now accurately tracks deployed Goal Capital
+  const totalNetWorth = allocation.liquid + allocation.reserved + allocation.generosity + allocation.idle + allocation.goals;
+  
   const burnCap = user?.burnCap || 0;
   const burnRatio = burnCap > 0 ? (outflow / burnCap) * 100 : 0;
 
@@ -53,10 +55,13 @@ export const Dashboard = () => {
         .map(t => t.categoryGroup || 'Uncategorized')
   ));
 
+  // UPDATED: Added Goals (Missions) to the Pie Chart
   const allocationData = [
     { name: 'Ops', value: allocation.liquid, color: '#10b981' }, 
     { name: 'Defense', value: allocation.reserved, color: '#3b82f6' }, 
     { name: 'Idle', value: allocation.idle, color: '#eab308' }, 
+    { name: 'Missions', value: allocation.goals, color: '#a855f7' }, 
+    { name: 'Generosity', value: allocation.generosity, color: '#ec4899' }, 
   ].filter(d => d.value > 0);
 
   const filteredActivity = history.filter(log => {
@@ -111,7 +116,6 @@ export const Dashboard = () => {
             </div>
             )}
 
-            {/* STRATEGIC UPDATE: Toggles the Action Center inline */}
             {leakOutflow > 0 && (
             <>
                 <button 
@@ -144,7 +148,6 @@ export const Dashboard = () => {
                     </div>
                 </button>
                 
-                {/* ACTION CENTER INJECTION */}
                 {showActionCenter && (
                     <div className="animate-fade-in -mt-2">
                         <ActionCenter />
@@ -252,21 +255,40 @@ export const Dashboard = () => {
         {/* TACTICAL GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
            <div className="lg:col-span-2">
-              <GlassCard className="p-6 h-full min-h-[300px]">
+              <GlassCard className="p-6 h-full min-h-[300px] flex flex-col">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="font-bold text-white flex items-center gap-2">
                     <Activity size={16} className="text-purple-400"/> Global Cash Flow (Ledger + Lake)
                   </h3>
-                  <div className="flex gap-3 text-xs text-gray-400">
-                    <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500"/> In</div>
-                    <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500"/> Out</div>
+                  <div className="flex items-center gap-4">
+                    <div className="hidden md:flex gap-3 text-xs text-gray-400">
+                      <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500"/> In</div>
+                      <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500"/> Out</div>
+                    </div>
+                    <select 
+                      value={chartTimeframe}
+                      onChange={(e) => setChartTimeframe(e.target.value)}
+                      className="bg-black/40 border border-white/10 text-white text-xs rounded px-2 py-1.5 outline-none focus:border-white/30 cursor-pointer"
+                    >
+                      <option value="24H">Last 24 Hours</option>
+                      <option value="3D">Last 3 Days</option>
+                      <option value="7D">Last 7 Days</option>
+                      <option value="1M">1 Month</option>
+                      <option value="3M">3 Months</option>
+                      <option value="6M">6 Months</option>
+                      <option value="1Y">1 Year</option>
+                      <option value="5Y">5 Years</option>
+                      <option value="MAX">Max All-Time</option>
+                    </select>
                   </div>
                 </div>
-                <div className="h-64 w-full">
+
+                <div className="flex-1 w-full min-h-[250px]">
                    <CashFlowChart data={chartData} />
                 </div>
               </GlassCard>
            </div>
+
            <div className="space-y-4">
               <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">Asset Allocation</h3>
               <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center hover:bg-white/10 transition-colors">
@@ -283,6 +305,25 @@ export const Dashboard = () => {
                   </div>
                   <div className="font-mono font-bold text-white"><Naira/>{formatNumber(allocation.reserved)}</div>
               </div>
+              
+              {/* NEW: War Room / Goals */}
+              <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center hover:bg-white/10 transition-colors">
+                  <div className="flex items-center gap-3">
+                     <div className="p-2 bg-purple-500/20 text-purple-400 rounded-lg"><Target size={18}/></div>
+                     <div><div className="text-sm font-bold text-white">Missions</div><div className="text-[10px] text-gray-500">War Room Capital</div></div>
+                  </div>
+                  <div className="font-mono font-bold text-white"><Naira/>{formatNumber(allocation.goals)}</div>
+              </div>
+
+              {/* NEW: Holding / Idle Cash */}
+              <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center hover:bg-white/10 transition-colors">
+                  <div className="flex items-center gap-3">
+                     <div className="p-2 bg-yellow-500/20 text-yellow-400 rounded-lg"><Box size={18}/></div>
+                     <div><div className="text-sm font-bold text-white">Holding</div><div className="text-[10px] text-gray-500">Unallocated Funds</div></div>
+                  </div>
+                  <div className="font-mono font-bold text-white"><Naira/>{formatNumber(allocation.idle)}</div>
+              </div>
+
               <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center hover:bg-white/10 transition-colors">
                   <div className="flex items-center gap-3">
                      <div className="p-2 bg-pink-500/20 text-pink-400 rounded-lg"><Heart size={18}/></div>
@@ -290,12 +331,13 @@ export const Dashboard = () => {
                   </div>
                   <div className="font-mono font-bold text-white"><Naira/>{formatNumber(allocation.generosity)}</div>
               </div>
-              <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center hover:bg-white/10 transition-colors">
+              
+              <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center hover:bg-white/10 transition-colors opacity-70">
                   <div className="flex items-center gap-3">
-                     <div className="p-2 bg-yellow-500/20 text-yellow-400 rounded-lg"><Zap size={18}/></div>
-                     <div><div className="text-sm font-bold text-white">Signals</div><div className="text-[10px] text-gray-500">Total Generated</div></div>
+                     <div className="p-2 bg-gray-500/20 text-gray-400 rounded-lg"><Zap size={18}/></div>
+                     <div><div className="text-sm font-bold text-gray-300">Signals (Yield)</div><div className="text-[10px] text-gray-500">Total Generated</div></div>
                   </div>
-                  <div className="font-mono font-bold text-white"><Naira/>{formatNumber(allocation.signals)}</div>
+                  <div className="font-mono font-bold text-gray-300"><Naira/>{formatNumber(allocation.signals)}</div>
               </div>
            </div>
         </div>

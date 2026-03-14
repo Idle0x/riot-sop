@@ -177,7 +177,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     }
   });
 
-  // THE MASTER LOGGER
   const autoLog = async (type: LogType, title: string, desc?: string, amount?: number, signalId?: string, goalId?: string) => {
     await supabase.from('history').insert({
       user_id: userId,
@@ -562,40 +561,52 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const resetModuleMutation = useMutation({
     mutationFn: async (module: ResetModule) => {
-      if (module === 'dashboard' || module === 'all') {
-        await supabase.from('accounts').update({ balance: 0 }).eq('user_id', userId);
-        await autoLog('SYSTEM_RESET', 'Dashboard Balance Reset', 'All accounts set to 0');
-      }
-      if (module === 'generosity' || module === 'all') {
-        await supabase.from('accounts').update({ balance: 0 }).eq('user_id', userId).eq('type', 'generosity');
-        await autoLog('SYSTEM_RESET', 'Generosity Wallet Emptied', 'Funds cleared');
-      }
-      if (module === 'goals' || module === 'all') {
-        await supabase.from('goals').delete().eq('user_id', userId);
-        await autoLog('SYSTEM_RESET', 'Goals Database Wiped', 'All missions deleted');
-      }
+      // 1. Sever Foreign Key Links in History to bypass Postgres Constraint blocks
       if (module === 'signals' || module === 'all') {
+        await supabase.from('history').update({ linked_signal_id: null }).eq('user_id', userId);
         await supabase.from('signals').delete().eq('user_id', userId);
         await autoLog('SYSTEM_RESET', 'Signals Database Wiped', 'All deal flow deleted');
       }
+      
+      if (module === 'goals' || module === 'all') {
+        await supabase.from('history').update({ linked_goal_id: null }).eq('user_id', userId);
+        await supabase.from('goals').delete().eq('user_id', userId);
+        await autoLog('SYSTEM_RESET', 'Goals Database Wiped', 'All missions deleted');
+      }
+
+      // 2. Wipe standard data tables
       if (module === 'budgets' || module === 'all') {
         await supabase.from('budgets').delete().eq('user_id', userId);
         await autoLog('SYSTEM_RESET', 'Budgets Database Wiped', 'Recurring expenses cleared');
       }
+      
       if (module === 'journal' || module === 'all') {
         await supabase.from('journal').delete().eq('user_id', userId);
         await autoLog('SYSTEM_RESET', 'Journal Entries Wiped', 'Personal notes cleared');
       }
+      
       if (module === 'telemetry' || module === 'all') {
         await supabase.from('telemetry_raw').delete().eq('user_id', userId);
         await autoLog('SYSTEM_RESET', 'Data Lake Cleared', 'All raw telemetry data purged');
       }
+
+      // 3. Reset specific account balances to 0
+      if (module === 'dashboard' || module === 'all') {
+        await supabase.from('accounts').update({ balance: 0 }).eq('user_id', userId);
+        await autoLog('SYSTEM_RESET', 'Dashboard Balance Reset', 'All accounts set to 0');
+      }
+      
+      if (module === 'generosity' || module === 'all') {
+        await supabase.from('accounts').update({ balance: 0 }).eq('type', 'generosity').eq('user_id', userId);
+        await autoLog('SYSTEM_RESET', 'Generosity Wallet Emptied', 'Funds cleared');
+      }
+      
       if (module === 'all') {
         await autoLog('SYSTEM_RESET', 'FACTORY RESET EXECUTED', 'Complete system wipe initiated');
       }
     },
     onSuccess: () => queryClient.invalidateQueries(),
-    onError: (e: any) => alert(`Reset Failed: ${e.message}`)
+    onError: (e: any) => alert(`Reset Blocked by Database: ${e.message}`)
   });
 
   return (

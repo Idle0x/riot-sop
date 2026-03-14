@@ -55,7 +55,7 @@ export const ActionCenter = () => {
           if (isNaN(limit) || limit <= 0) return alert("Enter a valid budget limit.");
           addBudget({
               name: `${category} (Auto-Protocol)`,
-              amount: limit, spent: total, frequency: 'MONTHLY',
+              amount: limit, spent: total, frequency: 'monthly', // TypeScript Fix: Lowercase 'monthly'
               category: category, autoDeduct: false
           });
           commitAction({ type: 'ANOMALY_RESOLVED' as any, title: `BUDGETED: ${category}`, description: `Converted to ₦${formatNumber(limit)} Protocol.`, amount: 0 } as any);

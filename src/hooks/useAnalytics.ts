@@ -2,15 +2,20 @@ import { useMemo } from 'react';
 import { useLedger } from '../context/LedgerContext';
 
 export const useAnalytics = () => {
-  const { history, budgets, signals } = useLedger();
+  const { history, telemetry, budgets, signals } = useLedger();
+
+  // Helper to merge all relevant spend/income events from both databases
+  const combinedFinancialEvents = useMemo(() => {
+      const hEvents = history.map(h => ({ ...h, isTelemetry: false }));
+      const tEvents = telemetry.map(t => ({ ...t, isTelemetry: true, categoryGroup: t.categoryGroup }));
+      return [...hEvents, ...tEvents].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [history, telemetry]);
 
   // 1. BURN HISTORY
   const burnHistory = useMemo(() => {
     const data: Record<string, { date: string; burn: number; limit: number }> = {};
-    // Calculate Monthly Limit based on active monthly budgets
     const monthlyLimit = budgets.reduce((sum, b) => sum + (b.frequency === 'monthly' ? b.amount : 0), 0);
 
-    // Initialize last 6 months with 0 burn
     for (let i = 5; i >= 0; i--) {
       const d = new Date();
       d.setMonth(d.getMonth() - i);
@@ -18,31 +23,34 @@ export const useAnalytics = () => {
       data[key] = { date: key, burn: 0, limit: monthlyLimit };
     }
 
-    history.forEach(h => {
-      if (h.type === 'SPEND' || h.type === 'GENEROSITY') {
-        const d = new Date(h.date);
+    combinedFinancialEvents.forEach(e => {
+      if (e.type === 'SPEND' || e.type === 'GENEROSITY') {
+        const d = new Date(e.date);
         const key = d.toLocaleString('default', { month: 'short', year: '2-digit' });
         if (data[key]) {
-          data[key].burn += Math.abs(h.amount || 0);
+          data[key].burn += Math.abs(e.amount || 0);
         }
       }
     });
 
     return Object.values(data);
-  }, [history, budgets]);
+  }, [combinedFinancialEvents, budgets]);
 
-  // 2. CATEGORY SPEND
+  // 2. CATEGORY SPEND (Driven largely by Data Lake categorization)
   const categorySplit = useMemo(() => {
     const map: Record<string, number> = {};
-    history.filter(h => h.type === 'SPEND').forEach(h => {
-        const key = h.title || 'Uncategorized';
-        map[key] = (map[key] || 0) + Math.abs(h.amount || 0);
-      });
+    
+    combinedFinancialEvents.filter(e => e.type === 'SPEND').forEach(e => {
+        // Use Data Lake category if available, fallback to Ledger title
+        const key = e.categoryGroup || e.title || 'Uncategorized';
+        map[key] = (map[key] || 0) + Math.abs(e.amount || 0);
+    });
+      
     return Object.entries(map)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 8);
-  }, [history]);
+  }, [combinedFinancialEvents]);
 
   // 3. SIGNAL STATS
   const signalStats = useMemo(() => {
@@ -54,27 +62,27 @@ export const useAnalytics = () => {
         profit: s.totalGenerated,
         roi: s.hoursLogged > 0 ? (s.totalGenerated / s.hoursLogged) : 0
       })).sort((a, b) => b.roi - a.roi);
-    
+
     const totalProfit = data.reduce((sum, s) => sum + s.profit, 0);
     const totalEffort = data.reduce((sum, s) => sum + s.effort, 0);
     const globalYield = totalEffort > 0 ? totalProfit / totalEffort : 0;
-    
+
     return { scatter: data, leaderboard: data, globalYield };
   }, [signals]);
 
   // 4. MONTHLY STATEMENT
   const monthlyStatement = useMemo(() => {
     const map = new Map<string, { income: number; expense: number }>();
-    // Initialize last 6 months
+    
     for (let i = 0; i < 6; i++) {
       const d = new Date(); 
       d.setMonth(d.getMonth() - i);
-      const key = d.toISOString().slice(0, 7); // YYYY-MM
+      const key = d.toISOString().slice(0, 7); 
       map.set(key, { income: 0, expense: 0 });
     }
 
-    history.forEach(log => {
-      const key = log.date.slice(0, 7); // YYYY-MM
+    combinedFinancialEvents.forEach(log => {
+      const key = log.date.slice(0, 7); 
       if (map.has(key)) {
         const entry = map.get(key)!;
         if (log.type === 'DROP' || log.type === 'TRIAGE_SESSION') {
@@ -95,7 +103,7 @@ export const useAnalytics = () => {
           savingsRate: data.income > 0 ? (net / data.income) * 100 : 0 
       };
     }).sort((a, b) => b.month.localeCompare(a.month));
-  }, [history]);
+  }, [combinedFinancialEvents]);
 
   // 5. METRIC RIBBON
   const ribbon = useMemo(() => {
@@ -110,40 +118,35 @@ export const useAnalytics = () => {
     };
   }, [monthlyStatement, categorySplit, signalStats]);
 
-
-  // --- UPDATED: COMPARATOR ENGINE ---
+  // --- COMPARATOR ENGINE ---
   const getComparatorData = (keys: string[], mode: 'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED') => {
     return keys.map(key => {
         let total = 0;
-
-        // Determine the type of the key if in MIXED mode
         let effectiveMode = mode;
+        
         if (mode === 'MIXED') {
-            if (key.length === 4 && !isNaN(Number(key))) effectiveMode = 'ANNUAL';       // "2025"
-            else if (key.startsWith('Q')) effectiveMode = 'QUARTERLY';    // "Q1 2025"
-            else effectiveMode = 'MONTHLY';                               // "2025-01"
+            if (key.length === 4 && !isNaN(Number(key))) effectiveMode = 'ANNUAL';       
+            else if (key.startsWith('Q')) effectiveMode = 'QUARTERLY';    
+            else effectiveMode = 'MONTHLY';                               
         }
 
-        history.filter(h => h.type === 'SPEND' || h.type === 'GENEROSITY').forEach(log => {
-            const dateStr = log.date; // "2026-02-15..."
+        combinedFinancialEvents.filter(h => h.type === 'SPEND' || h.type === 'GENEROSITY').forEach(log => {
+            const dateStr = log.date; 
             const year = dateStr.slice(0, 4);
-            const month = parseInt(dateStr.slice(5, 7)); // 1-12
+            const month = parseInt(dateStr.slice(5, 7)); 
 
-            if (effectiveMode === 'ANNUAL') {
-                // Key = "2026"
-                if (dateStr.startsWith(key)) total += Math.abs(log.amount || 0);
+            if (effectiveMode === 'ANNUAL' && dateStr.startsWith(key)) {
+                total += Math.abs(log.amount || 0);
             } 
-            else if (effectiveMode === 'MONTHLY') {
-                // Key = "2026-02"
-                if (dateStr.startsWith(key)) total += Math.abs(log.amount || 0);
+            else if (effectiveMode === 'MONTHLY' && dateStr.startsWith(key)) {
+                total += Math.abs(log.amount || 0);
             }
             else if (effectiveMode === 'QUARTERLY') {
-                // Key = "Q1 2026"
                 const parts = key.split(' '); 
                 if (parts.length === 2) {
-                    const [q, y] = parts; // q="Q1", y="2026"
+                    const [q, y] = parts; 
                     if (year === y) {
-                        const qNum = parseInt(q.replace('Q', '')); // 1
+                        const qNum = parseInt(q.replace('Q', '')); 
                         const startMonth = (qNum - 1) * 3 + 1;
                         const endMonth = startMonth + 2;
                         if (month >= startMonth && month <= endMonth) {
@@ -158,19 +161,17 @@ export const useAnalytics = () => {
     });
   };
 
-  // Helper to get available options
   const availablePeriods = useMemo(() => {
       const years = new Set<string>();
       const months = new Set<string>();
       const quarters = new Set<string>();
 
-      history.forEach(h => {
+      combinedFinancialEvents.forEach(h => {
           const d = new Date(h.date);
           const y = d.getFullYear().toString();
           years.add(y);
-          months.add(h.date.slice(0, 7)); // YYYY-MM
+          months.add(h.date.slice(0, 7)); 
 
-          // Calculate Quarter
           const m = d.getMonth() + 1;
           const q = Math.ceil(m / 3);
           quarters.add(`Q${q} ${y}`);
@@ -181,7 +182,7 @@ export const useAnalytics = () => {
           quarters: Array.from(quarters).sort().reverse(), 
           months: Array.from(months).sort().reverse()
       };
-  }, [history]);
+  }, [combinedFinancialEvents]);
 
   return { 
     burnHistory, categorySplit, signalPerformance: signalStats.scatter, signalLeaderboard: signalStats.leaderboard,

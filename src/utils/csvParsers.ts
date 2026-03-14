@@ -1,7 +1,7 @@
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { differenceInHours } from 'date-fns';
-import { type HistoryLog } from '../types';
+import { type TelemetryRecord } from '../types';
 
 export type RawTransaction = {
   date: string;
@@ -11,11 +11,10 @@ export type RawTransaction = {
   reference: string;
 };
 
-// --- 1. CATEGORIZATION ENGINE (Refactored for Behaviors, not Nouns) ---
+// --- 1. CATEGORIZATION ENGINE ---
 export const categorizeTransaction = (description: string): string => {
   const desc = (description || '').toLowerCase();
   
-  // Match structural financial behaviors, completely ignoring specific merchant names
   if (desc.match(/\b(pos|atm|cash withdrawal|withdrawal)\b/)) return 'Cash/POS';
   if (desc.match(/\b(airtime|data|vtu|recharge|telecom)\b/)) return 'Telecom';
   if (desc.match(/\b(bet|betting|gaming|casino|sporty|1xbet|bet9ja)\b/)) return 'Betting'; 
@@ -31,10 +30,9 @@ const parseAmount = (val: any) => {
   if (val === undefined || val === null || val === '') return 0;
   if (typeof val === 'number') return val;
   
-  // Strip NGN symbols, commas, and whitespace
   const clean = String(val).replace(/,/g, '').replace(/N/g, '').replace(/₦/g, '').replace(/#/g, '').trim();
   const parsed = parseFloat(clean);
-  return isNaN(parsed) ? 0 : Math.abs(parsed); // Ensure absolute positive value
+  return isNaN(parsed) ? 0 : Math.abs(parsed); 
 };
 
 const parseDate = (dateStr: string) => {
@@ -48,13 +46,11 @@ const parseDate = (dateStr: string) => {
 };
 
 // --- 3. DYNAMIC HEADER HUNTER & EXTRACTOR ---
-// Scans past the bank metadata (Name, Period, etc) to find the actual table
 const extractFrom2DArray = (rows: any[][]): RawTransaction[] => {
   const transactions: RawTransaction[] = [];
   let headerRowIndex = -1;
   let colMap = { date: -1, desc: -1, debit: -1, credit: -1, amount: -1, ref: -1 };
 
-  // 1. Hunt for the true table headers (Scan first 50 rows)
   for (let i = 0; i < Math.min(rows.length, 50); i++) {
     if (!rows[i] || !Array.isArray(rows[i])) continue;
     
@@ -66,7 +62,6 @@ const extractFrom2DArray = (rows: any[][]): RawTransaction[] => {
     const hasCredit = rowStrings.findIndex(c => c.includes('credit') || c === 'money in' || c.includes('deposit'));
     const hasAmount = rowStrings.findIndex(c => c === 'amount');
     
-    // If we find a Date column AND a Money column, we found the start of the table.
     if (hasDate !== -1 && (hasDebit !== -1 || hasAmount !== -1 || hasCredit !== -1)) {
       headerRowIndex = i;
       colMap.date = hasDate;
@@ -79,14 +74,13 @@ const extractFrom2DArray = (rows: any[][]): RawTransaction[] => {
     }
   }
 
-  // 2. Extract the Data
   if (headerRowIndex !== -1) {
     for (let i = headerRowIndex + 1; i < rows.length; i++) {
       const row = rows[i];
       if (!row || !Array.isArray(row) || row.length === 0) continue;
 
       const dateVal = row[colMap.date];
-      if (!dateVal) continue; // Skip empty rows
+      if (!dateVal) continue; 
 
       let amount = 0;
       let isSpend = false;
@@ -99,7 +93,6 @@ const extractFrom2DArray = (rows: any[][]): RawTransaction[] => {
          amtVal = parseFloat(String(row[colMap.amount]).replace(/,/g, ''));
       }
 
-      // Determine flow direction
       if (debitVal > 0) {
         amount = debitVal;
         isSpend = true;
@@ -110,7 +103,7 @@ const extractFrom2DArray = (rows: any[][]): RawTransaction[] => {
         amount = Math.abs(amtVal);
         isSpend = amtVal < 0;
       } else {
-        continue; // No money moved on this row
+        continue; 
       }
 
       const desc = colMap.desc !== -1 && row[colMap.desc] ? String(row[colMap.desc]) : 'Bank Transaction';
@@ -129,17 +122,79 @@ const extractFrom2DArray = (rows: any[][]): RawTransaction[] => {
   return transactions;
 };
 
-// --- 4. THE VELOCITY ALGORITHM (Circuit Breaker) ---
-export const applyTelemetryFlags = (transactions: RawTransaction[]): Partial<HistoryLog>[] => {
+// --- 4. BRUTE FORCE SEQUENCE PARSER ---
+const parseMangledSequence = (data: any[][]): RawTransaction[] => {
+  const sequence: string[] = [];
+  data.forEach(row => {
+    if (Array.isArray(row)) {
+        row.forEach(cell => {
+        if (typeof cell === 'string' && cell.trim()) sequence.push(cell.trim());
+        });
+    }
+  });
+
+  const transactions: RawTransaction[] = [];
+  
+  for (let i = 0; i < sequence.length; i++) {
+    const token = sequence[i];
+    
+    const dateMatch = token.match(/^(\d{2}\s[a-zA-Z]{3}\s\d{4}\s\d{2}:\d{2}:\d{2})/);
+    if (dateMatch) {
+      const dateStr = dateMatch[1];
+      let desc = sequence[i + 1] || 'Unknown Transaction';
+      let amount = 0;
+      let isSpend = false;
+      let ref = `RECOVERY-${crypto.randomUUID().slice(0, 8)}`;
+
+      for (let j = 1; j <= 6; j++) {
+        const lookAhead = sequence[i + j];
+        if (!lookAhead) break;
+        
+        const opayFinMatch = lookAhead.match(/^(--|[\d,]+\.\d{2})(--|[\d,]+\.\d{2})([\d,]+\.\d{2})/);
+        if (opayFinMatch) {
+          const debitStr = opayFinMatch[1];
+          const creditStr = opayFinMatch[2];
+          
+          if (debitStr !== '--') {
+            amount = parseFloat(debitStr.replace(/,/g, ''));
+            isSpend = true;
+          } else if (creditStr !== '--') {
+            amount = parseFloat(creditStr.replace(/,/g, ''));
+            isSpend = false;
+          }
+          
+          ref = sequence[i + j + 1] || ref;
+          break;
+        }
+      }
+
+      if (amount > 0) {
+        if (desc.includes('OWealth') && sequence[i+2]?.includes('Transaction')) {
+            desc = desc + " " + sequence[i+2];
+        }
+        transactions.push({
+          date: new Date(dateStr).toISOString(),
+          description: desc,
+          amount,
+          type: isSpend ? 'SPEND' : 'DROP',
+          reference: ref.replace(/[^a-zA-Z0-9-]/g, '')
+        });
+      }
+    }
+  }
+  return transactions;
+};
+
+// --- 5. THE VELOCITY ALGORITHM ---
+export const applyTelemetryFlags = (transactions: RawTransaction[]): Partial<TelemetryRecord>[] => {
   const sorted = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  const flaggedData: Partial<HistoryLog>[] = [];
+  const flaggedData: Partial<TelemetryRecord>[] = [];
 
   for (let i = 0; i < sorted.length; i++) {
     const current = sorted[i];
     const category = categorizeTransaction(current.description);
     let isHighVelocity = false;
 
-    // Only flag high-velocity bleed for specific consumption categories
     if (current.type === 'SPEND' && ['Betting', 'Telecom', 'Cash/POS'].includes(category)) {
       let countInWindow = 1; 
 
@@ -160,22 +215,21 @@ export const applyTelemetryFlags = (transactions: RawTransaction[]): Partial<His
     flaggedData.push({
       date: current.date,
       type: current.type,
-      title: category === 'General' ? current.description.slice(0, 30) : category, // Fallback to raw desc if generic
+      title: category === 'General' ? current.description.slice(0, 30) : category,
       description: current.description,
       amount: current.amount,
       currency: 'NGN',
       transactionRef: current.reference,
       categoryGroup: category,
-      highVelocityFlag: isHighVelocity,
-      tags: ['imported_statement']
+      highVelocityFlag: isHighVelocity
     });
   }
 
   return flaggedData.reverse();
 };
 
-// --- 5. EXCEL PROCESSING ENGINE (With HTML Disguise Bypass) ---
-const processExcel = async (file: File): Promise<Partial<HistoryLog>[]> => {
+// --- 6. EXCEL PROCESSING ENGINE ---
+const processExcel = async (file: File): Promise<Partial<TelemetryRecord>[]> => {
   try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: 'array' });
@@ -191,7 +245,6 @@ const processExcel = async (file: File): Promise<Partial<HistoryLog>[]> => {
       
       throw new Error("Standard extraction failed.");
   } catch (err) {
-      // THE HTML BYPASS: If the bank provided an HTML file disguised as .xls
       const text = await file.text();
       if (text.toLowerCase().includes('<table') || text.toLowerCase().includes('<html')) {
           const parser = new DOMParser();
@@ -212,8 +265,8 @@ const processExcel = async (file: File): Promise<Partial<HistoryLog>[]> => {
   }
 };
 
-// --- 6. CSV PROCESSING ENGINE ---
-const processCSVFile = async (file: File): Promise<Partial<HistoryLog>[]> => {
+// --- 7. CSV PROCESSING ENGINE ---
+const processCSVFile = async (file: File): Promise<Partial<TelemetryRecord>[]> => {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       header: false, 
@@ -223,7 +276,11 @@ const processCSVFile = async (file: File): Promise<Partial<HistoryLog>[]> => {
           const rawData = results.data as any[][];
           if (!rawData || rawData.length === 0) throw new Error("The CSV file is empty.");
 
-          const transactions = extractFrom2DArray(rawData);
+          let transactions = extractFrom2DArray(rawData);
+
+          if (transactions.length === 0) {
+             transactions = parseMangledSequence(rawData);
+          }
 
           if (transactions.length === 0) {
              throw new Error("Parser failed to locate header columns (Date, Amount, etc).");
@@ -239,8 +296,8 @@ const processCSVFile = async (file: File): Promise<Partial<HistoryLog>[]> => {
   });
 };
 
-// --- 7. MASTER ROUTER ---
-export const processStatement = async (file: File): Promise<Partial<HistoryLog>[]> => {
+// --- 8. MASTER ROUTER ---
+export const processStatement = async (file: File): Promise<Partial<TelemetryRecord>[]> => {
   const fileName = file.name.toLowerCase();
   
   if (fileName.endsWith('.xls') || fileName.endsWith('.xlsx')) {

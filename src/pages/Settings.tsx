@@ -12,7 +12,7 @@ import { formatNumber } from '../utils/format';
 // ICONS
 import { 
   Settings as Gear, ShieldAlert, Landmark, Lock, 
-  Trash2, AlertTriangle, XCircle, RefreshCw, EyeOff, Eye, ShieldCheck
+  Trash2, AlertTriangle, RefreshCw, EyeOff, Eye, ShieldCheck
 } from 'lucide-react'; 
 
 export const Settings = () => {
@@ -79,7 +79,7 @@ export const Settings = () => {
     await updateProfile({ 
       annualRent: parsedRent, 
       inflationRate: parsedInf,
-      burnCap: parsedBurn // Direct update for V2 architecture
+      burnCap: parsedBurn 
     });
 
     setReason('');
@@ -175,20 +175,20 @@ export const Settings = () => {
                         label="Monthly Burn (₦)" 
                         type="number" 
                         value={newBurn} 
-                        onChange={(e) => setNewBurn(e.target.value)} 
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewBurn(e.target.value)} 
                     />
                     <GlassInput 
                         label="Inflation (%)" 
                         type="number"
                         value={newInflation} 
-                        onChange={(e) => setNewInflation(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewInflation(e.target.value)}
                     />
                 </div>
                 <GlassInput 
                     label="Reason for Change" 
                     placeholder="Audit trail requirement..." 
                     value={reason} 
-                    onChange={(e) => setReason(e.target.value)} 
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReason(e.target.value)} 
                 />
                 <GlassButton className="w-full" onClick={handleSaveParameters}>
                     Commit Macro Updates
@@ -207,7 +207,7 @@ export const Settings = () => {
                     label="Annual Rent (₦)" 
                     type="number" 
                     value={rent} 
-                    onChange={(e) => setRent(e.target.value)} 
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRent(e.target.value)} 
                 />
                 <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl flex justify-between items-center">
                     <div>
@@ -239,7 +239,7 @@ export const Settings = () => {
                     type="password" 
                     label="Establish Master Key" 
                     value={newMasterKey} 
-                    onChange={(e) => setNewMasterKey(e.target.value)} 
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewMasterKey(e.target.value)} 
                 />
                 <GlassButton variant="secondary" className="w-full" onClick={handleSetMasterKey}>
                     <Lock size={16} className="mr-2"/> Secure Access
@@ -315,7 +315,7 @@ export const Settings = () => {
                                     type="password" 
                                     placeholder="Enter Master Key" 
                                     value={masterPassInput} 
-                                    onChange={(e) => setMasterPassInput(e.target.value)} 
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMasterPassInput(e.target.value)} 
                                     className="text-center"
                                     autoFocus
                                 />

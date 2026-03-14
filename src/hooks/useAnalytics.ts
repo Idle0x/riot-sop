@@ -18,33 +18,25 @@ export const useAnalytics = () => {
 
   const burnHistory = useMemo(() => {
     if (combinedFinancialEvents.length === 0) return [];
-
     const dates = combinedFinancialEvents.map(e => new Date(e.date).getTime());
     const minD = new Date(Math.min(...dates));
     const maxD = new Date(Math.max(...dates));
-    
     const dataMap: Record<string, { date: string; burn: number }> = {};
-    
     let curr = new Date(minD.getFullYear(), minD.getMonth(), 1);
     const end = new Date(maxD.getFullYear(), maxD.getMonth(), 1);
-    
     while (curr <= end) {
       const displayKey = curr.toLocaleString('en-US', { month: 'short', year: '2-digit' }); 
       const sortKey = `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}`; 
       dataMap[sortKey] = { date: displayKey, burn: 0 };
       curr.setMonth(curr.getMonth() + 1);
     }
-
     combinedFinancialEvents.forEach(e => {
       if (e.type === 'SPEND' || e.type === 'GENEROSITY') {
         const d = new Date(e.date);
         const sortKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        if (dataMap[sortKey]) {
-          dataMap[sortKey].burn += Math.abs(e.amount || 0);
-        }
+        if (dataMap[sortKey]) dataMap[sortKey].burn += Math.abs(e.amount || 0);
       }
     });
-
     return Object.keys(dataMap).sort().map(k => dataMap[k]);
   }, [combinedFinancialEvents]);
 
@@ -54,10 +46,7 @@ export const useAnalytics = () => {
         const key = e.categoryGroup || 'Uncategorized';
         map[key] = (map[key] || 0) + Math.abs(e.amount || 0);
     });
-      
-    return Object.entries(map)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
+    return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [combinedFinancialEvents]);
 
   const topMerchants = useMemo(() => {
@@ -68,10 +57,7 @@ export const useAnalytics = () => {
        map[m].total += Math.abs(t.amount);
        map[m].count += 1;
     });
-
-    return Object.values(map)
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 15);
+    return Object.values(map).sort((a, b) => b.total - a.total).slice(0, 15);
   }, [telemetry]);
 
   const signalStats = useMemo(() => {
@@ -79,44 +65,34 @@ export const useAnalytics = () => {
         id: s.id, name: s.title, sector: s.sector, effort: s.hoursLogged, profit: s.totalGenerated,
         roi: s.hoursLogged > 0 ? (s.totalGenerated / s.hoursLogged) : 0
       })).sort((a, b) => b.roi - a.roi);
-
     const totalProfit = data.reduce((sum, s) => sum + s.profit, 0);
     const totalEffort = data.reduce((sum, s) => sum + s.effort, 0);
-    const globalYield = totalEffort > 0 ? totalProfit / totalEffort : 0;
-
-    return { scatter: data, leaderboard: data, globalYield };
+    return { scatter: data, leaderboard: data, globalYield: totalEffort > 0 ? totalProfit / totalEffort : 0 };
   }, [signals]);
 
   const monthlyStatement = useMemo(() => {
     const map = new Map<string, { income: number; expense: number }>();
-
     combinedFinancialEvents.forEach(log => {
       const key = log.date.slice(0, 7);
       if (!map.has(key)) map.set(key, { income: 0, expense: 0 });
-      
       const entry = map.get(key)!;
       if (log.type === 'DROP' || log.type === 'TRIAGE_SESSION') entry.income += (log.amount || 0);
       if (log.type === 'SPEND' || log.type === 'GENEROSITY') entry.expense += (log.amount || 0);
     });
-
     return Array.from(map.entries()).map(([month, data]) => {
       const net = data.income - data.expense;
-      return { 
-          month, ...data, net, 
-          savingsRate: data.income > 0 ? (net / data.income) * 100 : 0 
-      };
+      return { month, ...data, net, savingsRate: data.income > 0 ? (net / data.income) * 100 : 0 };
     }).sort((a, b) => b.month.localeCompare(a.month)); 
   }, [combinedFinancialEvents]);
 
   const ribbon = useMemo(() => {
     const lastMonth = monthlyStatement[0] || { savingsRate: 0 };
     const prevMonth = monthlyStatement[1] || { savingsRate: 0 };
-    const largestLeak = categorySplit[0] ? { name: categorySplit[0].name, amount: categorySplit[0].value } : null;
     return { 
         savingsRate: lastMonth.savingsRate, 
         savingsDelta: lastMonth.savingsRate - prevMonth.savingsRate, 
         alphaYield: signalStats.globalYield, 
-        largestLeak 
+        largestLeak: categorySplit[0] ? { name: categorySplit[0].name, amount: categorySplit[0].value } : null 
     };
   }, [monthlyStatement, categorySplit, signalStats]);
 
@@ -124,19 +100,13 @@ export const useAnalytics = () => {
     const currentMonthKey = new Date().toISOString().slice(0, 7);
     const bleeds = telemetry.filter(t => t.highVelocityFlag && t.date.startsWith(currentMonthKey));
     const map: Record<string, { desc: string; category: string; count: number; total: number; latestDate: string }> = {};
-
     bleeds.forEach(b => {
         const rawDesc = (b.description || b.title || 'Unknown Friction').split(' - ')[0].trim();
-        if (!map[rawDesc]) {
-            map[rawDesc] = { desc: rawDesc, category: b.categoryGroup || 'General', count: 0, total: 0, latestDate: b.date };
-        }
+        if (!map[rawDesc]) map[rawDesc] = { desc: rawDesc, category: b.categoryGroup || 'General', count: 0, total: 0, latestDate: b.date };
         map[rawDesc].count += 1;
         map[rawDesc].total += Math.abs(b.amount || 0);
-        if (new Date(b.date) > new Date(map[rawDesc].latestDate)) {
-            map[rawDesc].latestDate = b.date;
-        }
+        if (new Date(b.date) > new Date(map[rawDesc].latestDate)) map[rawDesc].latestDate = b.date;
     });
-
     return Object.values(map).sort((a, b) => b.total - a.total);
   }, [telemetry]);
 
@@ -145,7 +115,7 @@ export const useAnalytics = () => {
         let total = 0;
         let effectiveMode = mode;
         if (mode === 'MIXED') {
-            if (key.length === 4 && !isNaN(Number(key))) effectiveMode = 'ANNUAL';       
+            if (key.length === 4) effectiveMode = 'ANNUAL';       
             else if (key.startsWith('Q')) effectiveMode = 'QUARTERLY';    
             else effectiveMode = 'MONTHLY';                               
         }
@@ -167,14 +137,14 @@ export const useAnalytics = () => {
             }
         });
         
+        // FORMAT THE DISPLAY NAME FOR THE CHART AXIS
         let displayName = key;
-        if (effectiveMode === 'MONTHLY' && key.includes('-')) {
-           const [y, m] = key.split('-');
-           const d = new Date(parseInt(y), parseInt(m) - 1, 1);
-           displayName = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+        if (key.includes('-') && key.length === 7) {
+            const [y, m] = key.split('-');
+            displayName = new Date(parseInt(y), parseInt(m)-1).toLocaleString('en-US', { month: 'short', year: '2-digit' });
         }
 
-        return { name: displayName, rawKey: key, value: total };
+        return { name: displayName, value: total };
     });
   };
 
@@ -182,7 +152,6 @@ export const useAnalytics = () => {
       const years = new Set<string>();
       const months = new Set<string>();
       const quarters = new Set<string>();
-
       combinedFinancialEvents.forEach(h => {
           const d = new Date(h.date);
           const y = d.getFullYear().toString();
@@ -190,7 +159,6 @@ export const useAnalytics = () => {
           months.add(h.date.slice(0, 7)); 
           quarters.add(`Q${Math.ceil((d.getMonth() + 1) / 3)} ${y}`);
       });
-
       return {
           years: Array.from(years).sort().reverse(),
           quarters: Array.from(quarters).sort().reverse(), 

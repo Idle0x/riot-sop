@@ -175,20 +175,20 @@ export const Settings = () => {
                         label="Monthly Burn (₦)" 
                         type="number" 
                         value={newBurn} 
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewBurn(e.target.value)} 
+                        onChange={(e) => setNewBurn(e.target.value)} 
                     />
                     <GlassInput 
                         label="Inflation (%)" 
                         type="number"
                         value={newInflation} 
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewInflation(e.target.value)}
+                        onChange={(e) => setNewInflation(e.target.value)}
                     />
                 </div>
                 <GlassInput 
                     label="Reason for Change" 
                     placeholder="Audit trail requirement..." 
                     value={reason} 
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReason(e.target.value)} 
+                    onChange={(e) => setReason(e.target.value)} 
                 />
                 <GlassButton className="w-full" onClick={handleSaveParameters}>
                     Commit Macro Updates
@@ -207,7 +207,7 @@ export const Settings = () => {
                     label="Annual Rent (₦)" 
                     type="number" 
                     value={rent} 
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRent(e.target.value)} 
+                    onChange={(e) => setRent(e.target.value)} 
                 />
                 <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl flex justify-between items-center">
                     <div>
@@ -315,7 +315,7 @@ export const Settings = () => {
                                     type="password" 
                                     placeholder="Enter Master Key" 
                                     value={masterPassInput} 
-                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMasterPassInput(e.target.value)} 
+                                    onChange={(e) => setMasterPassInput(e.target.value)} 
                                     className="text-center"
                                     autoFocus
                                 />

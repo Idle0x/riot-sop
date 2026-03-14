@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { useLedger } from '../context/LedgerContext'; // Updated Hook
+import { useLedger } from '../context/LedgerContext'; 
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
-import { Hash, Calendar } from 'lucide-react';
+import { Hash, Calendar, ShieldAlert, User, Cpu } from 'lucide-react';
 
 const AVAILABLE_TAGS = ['Win', 'Fail', 'Lesson', 'Idea', 'Note', 'System'];
 
 export const Journal = () => {
-  const { commitAction, history } = useLedger(); // Updated Hook
+  const { commitAction, addJournalEntry, journals } = useLedger(); 
   const [content, setContent] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
@@ -20,11 +20,19 @@ export const Journal = () => {
   };
 
   const handleSave = () => {
+    // 1. Add to Journal Table (The readable text)
+    addJournalEntry({
+      date: new Date().toISOString(),
+      content: content,
+      tags: selectedTags
+    });
+
+    // 2. Ping Ledger (The chronological autobiography)
     commitAction({
       date: new Date().toISOString(),
       type: 'JOURNAL',
-      title: 'Captain\'s Log',
-      description: content,
+      title: 'Manual Operator Log',
+      description: content.slice(0, 50) + '...',
       tags: selectedTags
     });
 
@@ -32,12 +40,11 @@ export const Journal = () => {
     setSelectedTags([]);
   };
 
-  // Filter history for Journal entries
-  const journalEntries = history.filter(h => h.type === 'JOURNAL');
-
   return (
     <div className="max-w-3xl mx-auto p-4 md:p-8 space-y-8 pb-20 animate-fade-in">
-      <h1 className="text-3xl font-bold text-white">Captain's Log</h1>
+      <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+         Captain's Log
+      </h1>
 
       {/* WRITE AREA */}
       <GlassCard className="p-6">
@@ -75,30 +82,70 @@ export const Journal = () => {
 
       {/* READ TIMELINE */}
       <div className="space-y-8 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-white/10 before:to-transparent">
-        {journalEntries.map(entry => (
-          <div key={entry.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+        {journals.map(entry => {
+            // Determine if this is a System Intercept or a Manual Entry
+            const isSystemAudit = entry.tags?.includes('system_audit');
+            const parts = entry.content.split('Operator Response:');
+            
+            // Format the content
+            const systemSynthesis = isSystemAudit ? parts[0] : null;
+            const operatorResponse = isSystemAudit && parts.length > 1 ? parts[1].replace('>', '').trim() : entry.content;
 
-            {/* Dot */}
-            <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white/20 bg-black shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
-              <Hash size={16} className="text-gray-400"/>
-            </div>
+            return (
+              <div key={entry.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
 
-            {/* Card */}
-            <GlassCard className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-6">
-              <div className="flex justify-between items-start mb-2">
-                <time className="font-mono text-xs text-gray-500">{new Date(entry.date).toLocaleString()}</time>
-                <div className="flex gap-1">
-                  {entry.tags?.map(t => (
-                    <span key={t} className="text-[10px] bg-white/10 px-1.5 rounded text-gray-300">#{t}</span>
-                  ))}
+                {/* Center Node */}
+                <div className={`flex items-center justify-center w-10 h-10 rounded-full border shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 
+                   ${isSystemAudit ? 'bg-blue-950 border-blue-500/50' : 'bg-black border-white/20'}`
+                }>
+                  {isSystemAudit ? <Cpu size={16} className="text-blue-400"/> : <Hash size={16} className="text-gray-400"/>}
                 </div>
+
+                {/* Card */}
+                <GlassCard className={`w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-0 overflow-hidden ${isSystemAudit ? 'border-blue-500/30' : ''}`}>
+                  
+                  {isSystemAudit && (
+                     <div className="p-3 bg-blue-500/10 border-b border-blue-500/20 flex items-center gap-2 text-blue-400 text-xs font-bold uppercase tracking-widest">
+                        <ShieldAlert size={14}/> System Intercept Record
+                     </div>
+                  )}
+
+                  <div className="p-6">
+                      <div className="flex justify-between items-start mb-4">
+                        <time className="font-mono text-xs text-gray-500">{new Date(entry.date).toLocaleString()}</time>
+                        <div className="flex gap-1 flex-wrap justify-end">
+                          {entry.tags?.map(t => (
+                            <span key={t} className={`text-[10px] px-1.5 rounded uppercase font-bold tracking-widest ${t === 'system_audit' ? 'bg-blue-500/20 text-blue-300' : 'bg-white/10 text-gray-300'}`}>
+                                {t}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {isSystemAudit ? (
+                          <div className="space-y-4">
+                              <div className="font-mono text-xs text-gray-400 leading-relaxed border-l-2 border-blue-500/30 pl-3">
+                                  {systemSynthesis}
+                              </div>
+                              <div className="pt-4 border-t border-white/5">
+                                  <div className="text-[10px] text-gray-500 uppercase font-bold flex items-center gap-1 mb-2">
+                                      <User size={10}/> Operator Log
+                                  </div>
+                                  <p className="text-gray-200 text-sm whitespace-pre-wrap leading-relaxed">
+                                      {operatorResponse}
+                                  </p>
+                              </div>
+                          </div>
+                      ) : (
+                          <p className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed">
+                            {entry.content}
+                          </p>
+                      )}
+                  </div>
+                </GlassCard>
               </div>
-              <p className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed">
-                {entry.description}
-              </p>
-            </GlassCard>
-          </div>
-        ))}
+            );
+        })}
       </div>
     </div>
   );

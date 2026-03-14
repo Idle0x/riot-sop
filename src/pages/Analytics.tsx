@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAnalytics } from '../hooks/useAnalytics';
-import { useLedger } from '../context/LedgerContext';
 import { useUser } from '../context/UserContext';
 
 // UI COMPONENTS
@@ -16,20 +15,25 @@ import {
   Zap, AlertTriangle, ShieldCheck, Plus, X, BarChart2, Layers, Search, Briefcase
 } from 'lucide-react';
 
-// CHARTS (Removed unused Scatter/ZAxis imports)
+// CHARTS
 import { 
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   BarChart, Bar, Cell 
 } from 'recharts';
 
+// --- INTELLIGENT AXIS FORMATTER ---
+const formatAxisAmount = (val: number) => {
+  if (val === 0) return '0';
+  if (val >= 1000000) return `${(val / 1000000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
+  return val.toString();
+};
+
 export const Analytics = () => {
   const { user } = useUser();
-  const { history, budgets, telemetry } = useLedger(); 
   const location = useLocation();
   const bleedSectionRef = useRef<HTMLDivElement>(null);
 
-  // --- ANALYTICS ENGINE ---
-  // Removed unused signalPerformance
   const { 
     burnHistory, categorySplit,
     monthlyStatement, ribbon, signalLeaderboard,
@@ -37,7 +41,6 @@ export const Analytics = () => {
     getComparatorData, availablePeriods
   } = useAnalytics();
 
-  // --- DEEP LINK SCROLLING ---
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get('view') === 'leaks' && bleedSectionRef.current) {
@@ -47,25 +50,21 @@ export const Analytics = () => {
     }
   }, [location]);
 
-  // --- STATE: COMPARATOR ---
   const [compMode, setCompMode] = useState<'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED'>('ANNUAL');
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
   const [periodToAdd, setPeriodToAdd] = useState('');
 
   useEffect(() => {
-    if (selectedPeriods.length === 0) {
+    if (selectedPeriods.length === 0 && availablePeriods.years.length > 0) {
         const currentYear = new Date().getFullYear().toString();
-        const lastYear = (new Date().getFullYear() - 1).toString();
-        const defaults = [lastYear, currentYear].filter(y => availablePeriods.years.includes(y));
-        if (defaults.length > 0) {
-            setSelectedPeriods(defaults);
-        }
+        const defaults = [currentYear].filter(y => availablePeriods.years.includes(y));
+        if (defaults.length > 0) setSelectedPeriods(defaults);
     }
   }, [availablePeriods, selectedPeriods.length]);
 
   const comparisonData = getComparatorData(selectedPeriods, compMode);
 
-  const getPeriodOptions = () => {
+  const periodOptions = (() => {
     switch (compMode) {
         case 'ANNUAL': return availablePeriods.years;
         case 'QUARTERLY': return availablePeriods.quarters;
@@ -73,9 +72,7 @@ export const Analytics = () => {
         case 'MIXED': return [...availablePeriods.years, ...availablePeriods.quarters, ...availablePeriods.months];
         default: return [];
     }
-  };
-
-  const periodOptions = getPeriodOptions();
+  })();
 
   const addPeriod = () => {
       if (periodToAdd && !selectedPeriods.includes(periodToAdd)) {
@@ -83,11 +80,12 @@ export const Analytics = () => {
           setPeriodToAdd('');
       }
   };
+
   const removePeriod = (p: string) => setSelectedPeriods(selectedPeriods.filter(x => x !== p));
   const clearAll = () => setSelectedPeriods([]);
 
   const handleExport = () => {
-    const data = JSON.stringify({ user, history, telemetry, budgets }, null, 2);
+    const data = JSON.stringify({ user }, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -99,13 +97,11 @@ export const Analytics = () => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-black/90 border border-white/10 p-3 rounded-lg shadow-xl text-xs z-50">
-          <p className="font-bold text-white mb-1">{label}</p>
+          <p className="font-bold text-white mb-2">{label}</p>
           {payload.map((p: any, idx: number) => (
-            <p key={idx} style={{ color: p.color }} className="flex items-center gap-1">
+            <p key={idx} style={{ color: p.color || '#fff' }} className="flex items-center gap-1">
               {p.name === 'value' ? 'Amount' : p.name}: 
-              {typeof p.value === 'number' && p.name !== 'Effort' && p.name !== 'ROI' 
-                ? <><Naira/>{formatNumber(p.value)}</> 
-                : p.value}
+              {typeof p.value === 'number' ? <span className="font-mono"><Naira/>{formatNumber(p.value)}</span> : p.value}
             </p>
           ))}
         </div>
@@ -124,7 +120,7 @@ export const Analytics = () => {
            <p className="text-gray-400 text-sm">Deep forensic analysis of aggregated system & bank data.</p>
         </div>
         <GlassButton size="sm" onClick={handleExport}>
-          <Download size={16} className="mr-2"/> Export Full Data Lake (JSON)
+          <Download size={16} className="mr-2"/> Export Data Lake (JSON)
         </GlassButton>
       </div>
 
@@ -173,7 +169,6 @@ export const Analytics = () => {
 
       {/* --- TIER 2: BURN & COMPARATOR --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Burn Velocity (UNLOCKED ALL-TIME) */}
         <GlassCard className="p-6 h-[450px]">
           <div className="flex justify-between items-start mb-6">
               <div className="flex items-center gap-2">
@@ -190,14 +185,13 @@ export const Analytics = () => {
                 </linearGradient>
               </defs>
               <XAxis dataKey="date" stroke="#555" fontSize={10} tickLine={false} axisLine={false} minTickGap={30}/>
-              <YAxis stroke="#555" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `${val/1000}k`}/>
+              <YAxis stroke="#555" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `₦${formatAxisAmount(val)}`}/>
               <Tooltip content={<CustomTooltip />}/>
               <Area type="monotone" dataKey="burn" stroke="#ef4444" fillOpacity={1} fill="url(#colorBurn)" strokeWidth={2} name="Burn" />
             </AreaChart>
           </ResponsiveContainer>
         </GlassCard>
 
-        {/* Right: Dynamic Comparator */}
         <GlassCard className="p-6 h-[450px] flex flex-col">
           <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-4">
             <div className="flex items-center gap-2">
@@ -251,7 +245,7 @@ export const Analytics = () => {
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={comparisonData}>
                         <XAxis dataKey="name" stroke="#555" fontSize={10} />
-                        <YAxis stroke="#555" fontSize={10} tickFormatter={(val) => `${val/1000}k`} />
+                        <YAxis stroke="#555" fontSize={10} tickFormatter={(val) => `₦${formatAxisAmount(val)}`} />
                         <Tooltip content={<CustomTooltip />}/>
                         <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={40}>
                             {comparisonData.map((_entry, index) => (
@@ -272,8 +266,6 @@ export const Analytics = () => {
 
       {/* --- TIER 3: FORENSIC TABLES --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-         
-         {/* UNLOCKED: ALL-TIME MONTHLY STATEMENT */}
          <GlassCard className="p-6">
             <div className="flex items-center gap-2 mb-4">
               <ShieldCheck className="text-blue-400" size={20}/>
@@ -347,7 +339,7 @@ export const Analytics = () => {
       {/* --- TIER 4: MACRO SPEND ANALYTICS --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* The Clean Category Pie */}
+        {/* The Clean Category Vertical Bar */}
         <GlassCard className="p-6 h-[400px]">
           <div className="flex items-center gap-2 mb-6">
             <PieIcon className="text-purple-400" size={20}/>
@@ -355,7 +347,7 @@ export const Analytics = () => {
           </div>
           <ResponsiveContainer width="100%" height="85%">
             <BarChart data={categorySplit} layout="vertical" margin={{ left: 10 }}>
-              <XAxis type="number" stroke="#555" fontSize={10} tickFormatter={(val) => `${val/1000}k`}/>
+              <XAxis type="number" stroke="#555" fontSize={10} tickFormatter={(val) => `₦${formatAxisAmount(val)}`}/>
               <YAxis dataKey="name" type="category" stroke="#fff" fontSize={10} width={100}/>
               <Tooltip content={<CustomTooltip />}/>
               <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} name="Spent" barSize={20}>
@@ -371,9 +363,9 @@ export const Analytics = () => {
         <GlassCard className="p-6 h-[400px] flex flex-col">
             <div className="flex items-center gap-2 mb-4">
               <Briefcase className="text-cyan-400" size={20}/>
-              <h3 className="font-bold text-white">Top 15 Merchants (All-Time)</h3>
+              <h3 className="font-bold text-white">Top Merchants (All-Time)</h3>
             </div>
-            <div className="overflow-x-auto flex-1 pr-2">
+            <div className="overflow-x-auto max-h-[300px] overflow-y-auto flex-1 pr-2 relative">
               <table className="w-full text-xs text-left text-gray-400">
                 <thead className="text-gray-500 border-b border-white/10 uppercase sticky top-0 bg-[#0a0a0a] z-10">
                   <tr>
@@ -427,9 +419,9 @@ export const Analytics = () => {
                 NO HIGH-VELOCITY LEAKS DETECTED THIS CYCLE.
              </div>
           ) : (
-             <div className="overflow-x-auto">
+             <div className="overflow-x-auto max-h-[400px] overflow-y-auto pr-2 relative">
                 <table className="w-full text-sm text-left">
-                   <thead className="text-xs text-gray-500 border-b border-red-500/20 uppercase tracking-wider">
+                   <thead className="text-xs text-gray-500 border-b border-red-500/20 uppercase tracking-wider sticky top-0 bg-[#290808] z-10">
                       <tr>
                          <th className="py-3 font-bold">Culprit / Merchant</th>
                          <th className="py-3 font-bold text-center">Frequency</th>

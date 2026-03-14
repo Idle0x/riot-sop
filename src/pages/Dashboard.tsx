@@ -44,7 +44,7 @@ export const Dashboard = () => {
       <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">
-            Welcome back, {user?.name?.split(' ')[0] || 'Operator'}
+            Welcome back, {(user as any)?.name?.split(' ')[0] || 'Operator'}
           </h1>
           <p className="text-sm text-gray-400 mt-1">
             System status: <span className="text-green-400 font-mono">NOMINAL</span>

@@ -12,7 +12,7 @@ import { Trash2, RefreshCcw, Plus, X, Zap } from 'lucide-react';
 export const Budget = () => {
   const { 
     budgets, telemetry, addBudget, updateAccount, updateBudgetSpent, 
-    commitAction, deleteBudget 
+    commitAction, deleteBudget, triggerJournalPrompt // NEW EXTRACT
   } = useLedger();
 
   const { leakOutflow } = useFinancialStats();
@@ -33,7 +33,7 @@ export const Budget = () => {
       amount: parseFloat(amount),
       spent: 0,
       frequency: freq,
-      category: name, // Default category to name for easier fuzzy matching
+      category: name, 
       autoDeduct: true,
       subscriptionDay: subDay ? parseInt(subDay) : undefined 
     });
@@ -43,20 +43,34 @@ export const Budget = () => {
   const handleSpend = () => {
     const val = parseFloat(spendAmount);
     if (!val) return;
+    
     updateAccount('payroll', -val);
     if (selectedBudgetId) updateBudgetSpent(selectedBudgetId, val);
 
-    const budgetName = selectedBudgetId 
-        ? budgets.find(b => b.id === selectedBudgetId)?.name 
-        : 'Uncategorized';
+    const targetBudget = budgets.find(b => b.id === selectedBudgetId);
+    const budgetName = targetBudget?.name || 'Uncategorized';
 
+    // 1. Commit to the immutable Ledger
     commitAction({
         date: new Date().toISOString(),
         type: 'SPEND',
-        title: budgetName || 'Expense',
+        title: budgetName,
         amount: val,
         description: spendNote
     });
+
+    // 2. Trigger the Context Engine!
+    if (targetBudget) {
+        triggerJournalPrompt({
+           type: 'BUDGET_SPEND',
+           data: {
+              amount: val,
+              budgetName: targetBudget.name,
+              limit: targetBudget.amount,
+              spentBefore: targetBudget.spent || 0
+           }
+        });
+    }
 
     setIsSpendModalOpen(false);
     setSpendAmount('');
@@ -68,17 +82,14 @@ export const Budget = () => {
     alert("In Cloud V2, Budget Cycles reset automatically via the Monthly Checkpoint!");
   };
 
-  // --- AUTOMATED BUDGET TRACKING (Data Lake Integration) ---
   const currentMonthKey = new Date().toISOString().slice(0, 7);
   const telemetryThisMonth = telemetry.filter(t => t.date.startsWith(currentMonthKey) && t.type === 'SPEND');
 
   const activeBudgetsWithTelemetry = budgets.map(b => {
-      // Find all raw bank transactions that fuzzy-match this budget's name or category
       const autoSpent = telemetryThisMonth
          .filter(t => t.categoryGroup.toLowerCase().includes(b.category.toLowerCase()) || t.categoryGroup.toLowerCase().includes(b.name.toLowerCase()))
          .reduce((sum, t) => sum + t.amount, 0);
 
-      // The total is what you manually logged + what the bank proved you spent
       return { ...b, totalSpent: (b.spent || 0) + autoSpent };
   });
 
@@ -112,7 +123,7 @@ export const Budget = () => {
         </div>
       )}
 
-      {/* HEADER WITH TELEMETRY INJECTION */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
         <div className="flex-1">
           <h1 className="text-3xl font-bold text-white">OpEx Monitor</h1>
@@ -138,7 +149,6 @@ export const Budget = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* ADD PROTOCOL */}
         <GlassCard className="p-6 h-fit">
           <h3 className="font-bold text-white mb-4">Add Spending Protocol</h3>
           <div className="space-y-4">
@@ -160,26 +170,10 @@ export const Budget = () => {
               </button>
             </div>
 
-            {freq === 'monthly' && (
-              <div className="p-3 bg-white/5 rounded-xl border border-white/10">
-                <GlassInput 
-                  label="Subscription Day (Optional)" 
-                  type="number" 
-                  placeholder="e.g. 15 (for 15th of month)" 
-                  value={subDay} 
-                  onChange={(e) => setSubDay(e.target.value)} 
-                />
-                <p className="text-[10px] text-gray-500 mt-2">
-                  System will track this as a fixed bill on this date.
-                </p>
-              </div>
-            )}
-
             <GlassButton className="w-full" onClick={handleAdd} disabled={!name || !amount}>Add to Burn</GlassButton>
           </div>
         </GlassCard>
 
-        {/* ACTIVE BUDGETS */}
         <div className="space-y-3">
           {activeBudgetsWithTelemetry.map(b => (
             <GlassCard key={b.id} className="p-4" hoverEffect>
@@ -187,8 +181,6 @@ export const Budget = () => {
                 <div>
                   <div className="font-bold text-white flex items-center gap-2">
                     {b.name}
-                    {b.frequency === 'one-time' && <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 rounded">1x</span>}
-                    {b.subscriptionDay && <span className="text-[10px] bg-purple-500/20 text-purple-400 px-1.5 rounded border border-purple-500/30">Day {b.subscriptionDay}</span>}
                   </div>
                   <div className="text-xs text-gray-500 flex items-center gap-1">
                      <span className="text-white flex items-center"><Naira/>{formatNumber(b.totalSpent)}</span> / <span className="flex items-center"><Naira/>{formatNumber(b.amount)}</span>
@@ -209,23 +201,6 @@ export const Budget = () => {
               />
             </GlassCard>
           ))}
-
-          {/* DYNAMIC LEAKAGE CARD */}
-          {leakOutflow > 0 && (
-             <GlassCard className="p-4 border-red-500/30 bg-red-950/10">
-                <div className="flex justify-between items-center mb-2">
-                  <div>
-                    <div className="font-bold text-red-400 flex items-center gap-2">
-                      <Zap size={14}/> Unbudgeted System Leakage
-                    </div>
-                    <div className="text-[10px] text-gray-500 mt-0.5">High-frequency friction bleed.</div>
-                  </div>
-                  <div className="font-mono font-bold text-red-400 flex items-center gap-1">
-                     <Naira/>{formatNumber(leakOutflow)}
-                  </div>
-                </div>
-             </GlassCard>
-          )}
         </div>
       </div>
     </div>

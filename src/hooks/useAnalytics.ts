@@ -2,27 +2,16 @@ import { useMemo } from 'react';
 import { useLedger } from '../context/LedgerContext';
 
 export const useAnalytics = () => {
-  // Removed unused 'budgets'
   const { history, telemetry, signals } = useLedger();
 
   const combinedFinancialEvents = useMemo(() => {
       const hEvents = history.map(h => ({ 
-          id: h.id,
-          date: h.date,
-          type: h.type,
-          amount: h.amount,
-          title: h.title,
-          isTelemetry: false, 
-          categoryGroup: undefined 
+          id: h.id, date: h.date, type: h.type, amount: h.amount, title: h.title,
+          isTelemetry: false, categoryGroup: undefined 
       }));
       const tEvents = telemetry.map(t => ({ 
-          id: t.id,
-          date: t.date,
-          type: t.type,
-          amount: t.amount,
-          title: t.title,
-          isTelemetry: true, 
-          categoryGroup: t.categoryGroup 
+          id: t.id, date: t.date, type: t.type, amount: t.amount, title: t.title,
+          isTelemetry: true, categoryGroup: t.categoryGroup 
       }));
       return [...hEvents, ...tEvents].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [history, telemetry]);
@@ -40,41 +29,40 @@ export const useAnalytics = () => {
     const end = new Date(maxD.getFullYear(), maxD.getMonth(), 1);
     
     while (curr <= end) {
-      const key = curr.toLocaleString('default', { month: 'short', year: '2-digit' });
-      dataMap[key] = { date: key, burn: 0 };
+      const displayKey = curr.toLocaleString('default', { month: 'short', year: '2-digit' }); // e.g. "Jan 21"
+      const sortKey = `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}`; // e.g. "2021-01"
+      dataMap[sortKey] = { date: displayKey, burn: 0 };
       curr.setMonth(curr.getMonth() + 1);
     }
 
     combinedFinancialEvents.forEach(e => {
       if (e.type === 'SPEND' || e.type === 'GENEROSITY') {
         const d = new Date(e.date);
-        const key = d.toLocaleString('default', { month: 'short', year: '2-digit' });
-        if (dataMap[key]) {
-          dataMap[key].burn += Math.abs(e.amount || 0);
+        const sortKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        if (dataMap[sortKey]) {
+          dataMap[sortKey].burn += Math.abs(e.amount || 0);
         }
       }
     });
 
-    return Object.values(dataMap);
+    // Object keys (YYYY-MM) sort naturally
+    return Object.keys(dataMap).sort().map(k => dataMap[k]);
   }, [combinedFinancialEvents]);
 
   const categorySplit = useMemo(() => {
     const map: Record<string, number> = {};
-    
     combinedFinancialEvents.filter(e => e.type === 'SPEND').forEach(e => {
-        const key = e.categoryGroup || e.title || 'Uncategorized';
+        const key = e.categoryGroup || 'Uncategorized';
         map[key] = (map[key] || 0) + Math.abs(e.amount || 0);
     });
       
     return Object.entries(map)
       .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
+      .sort((a, b) => b.value - a.value);
   }, [combinedFinancialEvents]);
 
   const topMerchants = useMemo(() => {
     const map: Record<string, { merchant: string; total: number; count: number; category: string }> = {};
-    
     telemetry.filter(t => t.type === 'SPEND').forEach(t => {
        const m = t.title || 'Unknown Merchant';
        if (!map[m]) map[m] = { merchant: m, total: 0, count: 0, category: t.categoryGroup || 'General' };
@@ -89,11 +77,7 @@ export const useAnalytics = () => {
 
   const signalStats = useMemo(() => {
     const data = signals.filter(s => s.totalGenerated > 0 || s.hoursLogged > 0).map(s => ({
-        id: s.id, 
-        name: s.title, 
-        sector: s.sector, 
-        effort: s.hoursLogged, 
-        profit: s.totalGenerated,
+        id: s.id, name: s.title, sector: s.sector, effort: s.hoursLogged, profit: s.totalGenerated,
         roi: s.hoursLogged > 0 ? (s.totalGenerated / s.hoursLogged) : 0
       })).sort((a, b) => b.roi - a.roi);
 
@@ -109,24 +93,17 @@ export const useAnalytics = () => {
 
     combinedFinancialEvents.forEach(log => {
       const key = log.date.slice(0, 7);
-      if (!map.has(key)) {
-        map.set(key, { income: 0, expense: 0 });
-      }
+      if (!map.has(key)) map.set(key, { income: 0, expense: 0 });
+      
       const entry = map.get(key)!;
-      if (log.type === 'DROP' || log.type === 'TRIAGE_SESSION') {
-          entry.income += (log.amount || 0);
-      }
-      if (log.type === 'SPEND' || log.type === 'GENEROSITY') {
-          entry.expense += (log.amount || 0);
-      }
+      if (log.type === 'DROP' || log.type === 'TRIAGE_SESSION') entry.income += (log.amount || 0);
+      if (log.type === 'SPEND' || log.type === 'GENEROSITY') entry.expense += (log.amount || 0);
     });
 
     return Array.from(map.entries()).map(([month, data]) => {
       const net = data.income - data.expense;
       return { 
-          month, 
-          ...data, 
-          net, 
+          month, ...data, net, 
           savingsRate: data.income > 0 ? (net / data.income) * 100 : 0 
       };
     }).sort((a, b) => b.month.localeCompare(a.month)); 
@@ -168,7 +145,6 @@ export const useAnalytics = () => {
     return keys.map(key => {
         let total = 0;
         let effectiveMode = mode;
-        
         if (mode === 'MIXED') {
             if (key.length === 4 && !isNaN(Number(key))) effectiveMode = 'ANNUAL';       
             else if (key.startsWith('Q')) effectiveMode = 'QUARTERLY';    
@@ -180,28 +156,17 @@ export const useAnalytics = () => {
             const year = dateStr.slice(0, 4);
             const month = parseInt(dateStr.slice(5, 7)); 
 
-            if (effectiveMode === 'ANNUAL' && dateStr.startsWith(key)) {
-                total += Math.abs(log.amount || 0);
-            } 
-            else if (effectiveMode === 'MONTHLY' && dateStr.startsWith(key)) {
-                total += Math.abs(log.amount || 0);
-            }
+            if (effectiveMode === 'ANNUAL' && dateStr.startsWith(key)) total += Math.abs(log.amount || 0);
+            else if (effectiveMode === 'MONTHLY' && dateStr.startsWith(key)) total += Math.abs(log.amount || 0);
             else if (effectiveMode === 'QUARTERLY') {
                 const parts = key.split(' '); 
-                if (parts.length === 2) {
-                    const [q, y] = parts; 
-                    if (year === y) {
-                        const qNum = parseInt(q.replace('Q', '')); 
-                        const startMonth = (qNum - 1) * 3 + 1;
-                        const endMonth = startMonth + 2;
-                        if (month >= startMonth && month <= endMonth) {
-                            total += Math.abs(log.amount || 0);
-                        }
-                    }
+                if (parts.length === 2 && year === parts[1]) {
+                    const qNum = parseInt(parts[0].replace('Q', '')); 
+                    const startMonth = (qNum - 1) * 3 + 1;
+                    if (month >= startMonth && month <= startMonth + 2) total += Math.abs(log.amount || 0);
                 }
             }
         });
-
         return { name: key, value: total };
     });
   };
@@ -216,10 +181,7 @@ export const useAnalytics = () => {
           const y = d.getFullYear().toString();
           years.add(y);
           months.add(h.date.slice(0, 7)); 
-
-          const m = d.getMonth() + 1;
-          const q = Math.ceil(m / 3);
-          quarters.add(`Q${q} ${y}`);
+          quarters.add(`Q${Math.ceil((d.getMonth() + 1) / 3)} ${y}`);
       });
 
       return {
@@ -230,7 +192,7 @@ export const useAnalytics = () => {
   }, [combinedFinancialEvents]);
 
   return { 
-    burnHistory, categorySplit, signalPerformance: signalStats.scatter, signalLeaderboard: signalStats.leaderboard,
+    burnHistory, categorySplit, signalLeaderboard: signalStats.leaderboard,
     monthlyStatement, ribbon, bleedForensics, topMerchants,
     getComparatorData, availablePeriods 
   };

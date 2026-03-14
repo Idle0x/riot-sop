@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAnalytics } from '../hooks/useAnalytics';
 import { useLedger } from '../context/LedgerContext';
 import { useUser } from '../context/UserContext';
@@ -7,14 +8,12 @@ import { useUser } from '../context/UserContext';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
 import { Naira } from '../components/ui/Naira';
-
-// UTILS
 import { formatNumber } from '../utils/format';
 
 // ICONS
 import { 
   Download, TrendingUp, PieChart as PieIcon, Target, Calendar, 
-  Zap, AlertTriangle, ShieldCheck, Plus, X, BarChart2, Layers 
+  Zap, AlertTriangle, ShieldCheck, Plus, X, BarChart2, Layers, Search 
 } from 'lucide-react';
 
 // CHARTS
@@ -25,26 +24,37 @@ import {
 
 export const Analytics = () => {
   const { user } = useUser();
-  const { history, budgets, telemetry } = useLedger(); // STRATEGIC UPDATE: Added telemetry for backups
+  const { history, budgets, telemetry } = useLedger(); 
+  const location = useLocation();
+  const bleedSectionRef = useRef<HTMLDivElement>(null);
 
   // --- ANALYTICS ENGINE ---
   const { 
     burnHistory, categorySplit, signalPerformance,
     monthlyStatement, ribbon, signalLeaderboard,
+    bleedForensics, // NEW
     getComparatorData, availablePeriods
   } = useAnalytics();
 
-  // --- STATE: COMPARATOR (Now supports 'MIXED') ---
+  // --- DEEP LINK SCROLLING ---
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('view') === 'leaks' && bleedSectionRef.current) {
+        setTimeout(() => {
+            bleedSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 500); // Slight delay ensures rendering is complete
+    }
+  }, [location]);
+
+  // --- STATE: COMPARATOR ---
   const [compMode, setCompMode] = useState<'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED'>('ANNUAL');
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
   const [periodToAdd, setPeriodToAdd] = useState('');
 
-  // 1. Auto-Initialize Comparator (Default to Last 2 Years)
   useEffect(() => {
     if (selectedPeriods.length === 0) {
         const currentYear = new Date().getFullYear().toString();
         const lastYear = (new Date().getFullYear() - 1).toString();
-        // Only add if they exist in the data
         const defaults = [lastYear, currentYear].filter(y => availablePeriods.years.includes(y));
         if (defaults.length > 0) {
             setSelectedPeriods(defaults);
@@ -52,10 +62,8 @@ export const Analytics = () => {
     }
   }, [availablePeriods, selectedPeriods.length]);
 
-  // 2. Generate Data based on selection
   const comparisonData = getComparatorData(selectedPeriods, compMode);
 
-  // 3. Dynamic Options Logic (The "Crazy" Mode)
   const getPeriodOptions = () => {
     switch (compMode) {
         case 'ANNUAL': return availablePeriods.years;
@@ -73,7 +81,6 @@ export const Analytics = () => {
 
   const periodOptions = getPeriodOptions();
 
-  // --- ACTIONS ---
   const addPeriod = () => {
       if (periodToAdd && !selectedPeriods.includes(periodToAdd)) {
           setSelectedPeriods([...selectedPeriods, periodToAdd]);
@@ -84,7 +91,6 @@ export const Analytics = () => {
   const clearAll = () => setSelectedPeriods([]);
 
   const handleExport = () => {
-    // STRATEGIC UPDATE: The export now securely backs up the Data Lake (telemetry) alongside everything else
     const data = JSON.stringify({ user, history, telemetry, budgets }, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const a = document.createElement('a');
@@ -93,7 +99,6 @@ export const Analytics = () => {
     a.click();
   };
 
-  // --- CUSTOM TOOLTIP ---
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -149,7 +154,6 @@ export const Analytics = () => {
            <div className="text-[10px] text-gray-500 mt-1">Total Signal ROI</div>
         </GlassCard>
 
-        {/* STRATEGIC UPDATE: Enhanced visual danger for largest system leak */}
         <GlassCard className="p-4 relative overflow-hidden border-red-500/20 bg-red-950/10">
            <div className="flex items-center gap-2 mb-2 text-red-400">
              <AlertTriangle size={16}/> <span className="text-xs font-bold uppercase">Largest System Leak</span>
@@ -173,7 +177,6 @@ export const Analytics = () => {
 
       {/* --- TIER 2: BURN & COMPARATOR --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
         {/* Left: Burn Velocity */}
         <GlassCard className="p-6 h-[450px]">
           <div className="flex justify-between items-start mb-6">
@@ -205,8 +208,6 @@ export const Analytics = () => {
                <Calendar className="text-blue-400" size={20}/>
                <h3 className="font-bold text-white">Comparator</h3>
             </div>
-
-            {/* Mode Switcher */}
             <div className="flex gap-2">
                {['ANNUAL', 'QUARTERLY', 'MONTHLY'].map((m) => (
                    <button 
@@ -225,8 +226,6 @@ export const Analytics = () => {
                </button>
             </div>
           </div>
-
-          {/* Controls */}
           <div className="flex gap-2 mb-4">
              <select 
                className="bg-black/40 border border-white/10 text-white text-xs rounded px-2 py-1.5 flex-1 focus:border-white/30 outline-none"
@@ -242,8 +241,6 @@ export const Analytics = () => {
              </select>
              <button onClick={addPeriod} disabled={!periodToAdd} className="bg-white/10 hover:bg-white/20 text-white p-1.5 rounded disabled:opacity-50"><Plus size={16}/></button>
           </div>
-
-          {/* Active Tags */}
           <div className="flex flex-wrap gap-2 mb-4 min-h-[24px]">
              {selectedPeriods.length === 0 && <span className="text-xs text-gray-600 italic">Select periods to compare...</span>}
              {selectedPeriods.map(p => (
@@ -253,8 +250,6 @@ export const Analytics = () => {
              ))}
              {selectedPeriods.length > 0 && <button onClick={clearAll} className="text-[10px] text-gray-500 underline ml-auto hover:text-white">Clear</button>}
           </div>
-
-          {/* Chart */}
           <div className="flex-1 min-h-0">
             {comparisonData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -281,7 +276,6 @@ export const Analytics = () => {
 
       {/* --- TIER 3: FORENSIC TABLES --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-         {/* Monthly Statement */}
          <GlassCard className="p-6">
             <div className="flex items-center gap-2 mb-4">
               <ShieldCheck className="text-blue-400" size={20}/>
@@ -315,7 +309,6 @@ export const Analytics = () => {
             </div>
          </GlassCard>
 
-         {/* Alpha Leaderboard */}
          <GlassCard className="p-6">
             <div className="flex items-center gap-2 mb-4">
               <Zap className="text-yellow-400" size={20}/>
@@ -353,7 +346,6 @@ export const Analytics = () => {
 
       {/* --- TIER 4: VISUAL MATRIX --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Categories */}
         <GlassCard className="p-6 h-[400px]">
           <div className="flex items-center gap-2 mb-6">
             <PieIcon className="text-purple-400" size={20}/>
@@ -373,7 +365,6 @@ export const Analytics = () => {
           </ResponsiveContainer>
         </GlassCard>
 
-        {/* Signal Scatter Plot */}
         <GlassCard className="p-6 h-[400px]">
           <div className="flex items-center gap-2 mb-6">
             <Target className="text-accent-success" size={20}/>
@@ -388,6 +379,72 @@ export const Analytics = () => {
               <Scatter name="Signals" data={signalPerformance} fill="#10b981" />
             </ScatterChart>
           </ResponsiveContainer>
+        </GlassCard>
+      </div>
+
+      {/* --- TIER 5: THE DRILL-DOWN (BLEED FORENSICS) --- */}
+      <div ref={bleedSectionRef} id="bleed-forensics" className="pt-8">
+        <GlassCard className="p-6 border-red-500/30 bg-red-950/10">
+          <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-6 border-b border-red-500/20 pb-4">
+             <div>
+                <h3 className="font-bold text-red-500 flex items-center gap-2 text-xl">
+                  <Search size={20}/> Systemic Friction & Bleed Forensics
+                </h3>
+                <p className="text-xs text-red-400 mt-1">
+                  Drill-down of current month Data Lake records flagged by the high-velocity circuit breaker.
+                </p>
+             </div>
+             <div className="text-right">
+                <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Total Damage (Mo)</div>
+                <div className="text-2xl font-mono font-bold text-red-500 flex items-center justify-end gap-1">
+                   <Naira/>{formatNumber(bleedForensics.reduce((sum, item) => sum + item.total, 0))}
+                </div>
+             </div>
+          </div>
+
+          {bleedForensics.length === 0 ? (
+             <div className="text-center py-12 text-green-500/80 font-mono text-sm">
+                NO HIGH-VELOCITY LEAKS DETECTED THIS CYCLE.
+             </div>
+          ) : (
+             <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                   <thead className="text-xs text-gray-500 border-b border-red-500/20 uppercase tracking-wider">
+                      <tr>
+                         <th className="py-3 font-bold">Culprit / Merchant</th>
+                         <th className="py-3 font-bold text-center">Frequency</th>
+                         <th className="py-3 font-bold text-right">Avg Impact</th>
+                         <th className="py-3 font-bold text-right text-red-500">Total Damage</th>
+                         <th className="py-3 font-bold text-right">Last Occurrence</th>
+                      </tr>
+                   </thead>
+                   <tbody>
+                      {bleedForensics.map((bleed, idx) => (
+                         <tr key={idx} className="border-b border-red-500/10 hover:bg-red-500/5 transition-colors group">
+                            <td className="py-4">
+                               <div className="font-bold text-gray-200 group-hover:text-white transition-colors">{bleed.desc}</div>
+                               <div className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded w-fit mt-1 border border-red-500/20 uppercase">
+                                  {bleed.category}
+                               </div>
+                            </td>
+                            <td className="py-4 text-center font-mono">
+                               <span className="bg-white/5 px-2 py-1 rounded text-gray-300 border border-white/5">{bleed.count}x</span>
+                            </td>
+                            <td className="py-4 text-right text-gray-400 font-mono">
+                               ~<Naira/>{formatNumber(Math.round(bleed.total / bleed.count))}
+                            </td>
+                            <td className="py-4 text-right font-bold text-red-400 font-mono">
+                               <Naira/>{formatNumber(bleed.total)}
+                            </td>
+                            <td className="py-4 text-right text-xs text-gray-500">
+                               {new Date(bleed.latestDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </td>
+                         </tr>
+                      ))}
+                   </tbody>
+                </table>
+             </div>
+          )}
         </GlassCard>
       </div>
 

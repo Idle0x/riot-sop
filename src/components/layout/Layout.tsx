@@ -1,32 +1,18 @@
 import { useState } from 'react';
 import { Outlet, useLocation, Link } from 'react-router-dom';
 import { 
-  LayoutDashboard, 
-  Wallet, 
-  Target, 
-  Radio, 
-  BookOpen, 
-  Settings, 
-  LogOut,
-  Menu,
-  Bell,
-  X,
-  Shield,
-  PieChart,
-  History,
-  TrendingUp,
-  Heart,
-  Database // NEW IMPORT
+  LayoutDashboard, Wallet, Target, Radio, BookOpen, Settings, LogOut,
+  Menu, Bell, X, Shield, PieChart, History, TrendingUp, Heart, Database 
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
+import { AutoJournalModal } from '../journal/AutoJournalModal'; // NEW IMPORT
 
-// Navigation Items
 const NAV_ITEMS = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { icon: Wallet, label: 'Triage', path: '/triage' },
   { icon: Target, label: 'Roadmap', path: '/roadmap' },
   { icon: PieChart, label: 'Budget', path: '/budget' },
-  { icon: Database, label: 'Ingestion', path: '/ingestion' }, // NEW MODULE
+  { icon: Database, label: 'Ingestion', path: '/ingestion' }, 
   { icon: History, label: 'Ledger', path: '/ledger' },
   { icon: TrendingUp, label: 'Analytics', path: '/analytics' },
   { icon: Heart, label: 'Generosity', path: '/generosity' },
@@ -44,11 +30,13 @@ export const Layout = ({ onLogout }: LayoutProps) => {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Auto-close menu on mobile when a link is clicked
   const handleNavClick = () => setIsMobileMenuOpen(false);
 
   return (
-    <div className="flex min-h-screen bg-black font-sans text-white selection:bg-accent-success/30">
+    <div className="flex min-h-screen bg-black font-sans text-white selection:bg-accent-success/30 relative">
+      
+      {/* GLOBAL INTERCEPTOR MODAL */}
+      <AutoJournalModal />
 
       {/* MOBILE OVERLAY */}
       {isMobileMenuOpen && (
@@ -63,7 +51,6 @@ export const Layout = ({ onLogout }: LayoutProps) => {
         "fixed inset-y-0 left-0 z-50 w-64 flex-col border-r border-white/10 bg-black/90 backdrop-blur-xl transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:bg-transparent",
         isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        {/* Logo Area */}
         <div className="flex h-20 items-center justify-between px-8 border-b border-white/5">
           <div className="text-xl font-bold tracking-wider text-white">
             THE <span className="text-accent-success">riot'</span> SOP
@@ -73,7 +60,6 @@ export const Layout = ({ onLogout }: LayoutProps) => {
           </button>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 space-y-1 px-4 py-6 overflow-y-auto">
           {NAV_ITEMS.map((item) => {
             const isActive = location.pathname === item.path;
@@ -96,7 +82,6 @@ export const Layout = ({ onLogout }: LayoutProps) => {
           })}
         </nav>
 
-        {/* User / Logout */}
         <div className="border-t border-white/10 p-4">
           <button 
             onClick={onLogout}

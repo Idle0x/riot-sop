@@ -177,6 +177,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     }
   });
 
+  // THE MASTER LOGGER
   const autoLog = async (type: LogType, title: string, desc?: string, amount?: number, signalId?: string, goalId?: string) => {
     await supabase.from('history').insert({
       user_id: userId,
@@ -223,7 +224,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const closeJournalPrompt = () => setActiveJournalPrompt(null);
 
-  // --- MUTATIONS ---
+  // --- MUTATIONS WITH STATE DIFFING ENGINE ---
   const updateAccountMutation = useMutation({
     mutationFn: async ({ id, amount }: { id: AccountType; amount: number }) => {
       const { data: current } = await supabase.from('accounts').select('balance').eq('type', id).eq('user_id', userId).single();
@@ -247,18 +248,30 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
        };
        const { data, error } = await supabase.from('goals').insert(dbGoal).select('id').single();
        if (error) throw error;
-       if (data) autoLog('GOAL_CREATE', `New Mission: ${goal.title}`, `Target: ${goal.targetAmount}`, goal.targetAmount, undefined, data.id);
+       if (data) autoLog('GOAL_CREATE', `New Target Locked: ${goal.title}`, `Requires ₦${formatNumber(goal.targetAmount)}`, goal.targetAmount, undefined, data.id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['goals'] })
   });
 
   const updateGoalMutation = useMutation({
     mutationFn: async (goal: Goal) => {
+       // Diff Engine: Check if goal just hit 100% or target changed
+       const oldGoal = goals.find(g => g.id === goal.id);
+       
        const { error } = await supabase.from('goals').update({
+         target_amount: goal.targetAmount,
          current_amount: goal.currentAmount,
          is_completed: goal.isCompleted
        }).eq('id', goal.id);
        if (error) throw error;
+
+       if (oldGoal) {
+          if (!oldGoal.isCompleted && goal.isCompleted) {
+              autoLog('GOAL_ACHIEVED', `Target Eliminated: ${goal.title}`, `Capital deployed successfully.`, goal.targetAmount, undefined, goal.id);
+          } else if (oldGoal.targetAmount !== goal.targetAmount) {
+              autoLog('GOAL_UPDATE', `Target Adjusted: ${goal.title}`, `Shifted from ₦${formatNumber(oldGoal.targetAmount)} to ₦${formatNumber(goal.targetAmount)}`, goal.targetAmount, undefined, goal.id);
+          }
+       }
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['goals'] })
   });
@@ -282,10 +295,10 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
          const { data: current } = await supabase.from('accounts').select('balance').eq('type', 'holding').eq('user_id', userId).single();
          if (current) {
              await supabase.from('accounts').update({ balance: current.balance + goal.currentAmount }).eq('type', 'holding').eq('user_id', userId);
-             autoLog('GOAL_DELETE', `Reclaimed Funds: ${goal.title}`, 'Moved funds back to Holding', goal.currentAmount);
+             autoLog('GOAL_DELETE', `Reclaimed Capital: ${goal.title}`, `₦${formatNumber(goal.currentAmount)} routed back to Holding.`, goal.currentAmount);
          }
       } else {
-        autoLog('GOAL_DELETE', `Deleted Goal: ${goal.title}`, 'No funds reclaimed');
+        autoLog('GOAL_DELETE', `Abandoned Target: ${goal.title}`, 'No funds reclaimed.');
       }
       await supabase.from('goals').delete().eq('id', id);
     },
@@ -325,7 +338,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         subscription_day: budget.subscriptionDay
       };
       await supabase.from('budgets').insert(dbBudget);
-      autoLog('BUDGET_CREATE', `Budget: ${budget.name}`, `Cap: ${budget.amount} | Freq: ${budget.frequency}`, budget.amount);
+      autoLog('BUDGET_CREATE', `Cap Established: ${budget.name}`, `Limit: ₦${formatNumber(budget.amount)} | Freq: ${budget.frequency}`, budget.amount);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budgets'] })
   });
@@ -334,7 +347,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     mutationFn: async (id: string) => {
       const budget = budgets.find(b => b.id === id);
       await supabase.from('budgets').delete().eq('id', id);
-      if (budget) autoLog('BUDGET_DELETE', `Deleted Budget: ${budget.name}`);
+      if (budget) autoLog('BUDGET_DELETE', `Cap Removed: ${budget.name}`, 'Liability eliminated.');
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budgets'] })
   });
@@ -357,6 +370,9 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const updateSignalMutation = useMutation({
     mutationFn: async (signal: Signal) => {
+      // Diff Engine: Catch phase transitions (Kanban drag-and-drop)
+      const oldSignal = signals.find(s => s.id === signal.id);
+
       const { id, ...rest } = signal;
       const dbSignal = {
         title: rest.title,
@@ -378,6 +394,25 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         last_session_at: rest.lastSessionAt
       };
       await supabase.from('signals').update(dbSignal).eq('id', id);
+
+      if (oldSignal && oldSignal.phase !== signal.phase) {
+          let type: LogType = 'SIGNAL_ADVANCE';
+          let title = `Signal Advanced: ${signal.title}`;
+          let desc = `Shifted from ${oldSignal.phase.toUpperCase()} to ${signal.phase.toUpperCase()}`;
+
+          if (signal.phase === 'graveyard') {
+              type = 'SIGNAL_KILL';
+              title = `Signal Terminated: ${signal.title}`;
+          } else if (signal.phase === 'harvested') {
+              type = 'SIGNAL_HARVEST';
+              title = `Alpha Harvested: ${signal.title}`;
+          } else if (oldSignal.phase === 'graveyard' && signal.phase !== 'graveyard') {
+              type = 'SIGNAL_REVIVE';
+              title = `Signal Revived: ${signal.title}`;
+          }
+          
+          autoLog(type, title, desc, undefined, signal.id);
+      }
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['signals'] })
   });
@@ -406,7 +441,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         last_session_at: signal.lastSessionAt
       };
       const { data } = await supabase.from('signals').insert(dbSignal).select('id').single();
-      if (data) autoLog('SIGNAL_CREATE', `New Signal: ${signal.title}`, `Sector: ${signal.sector}`, 0, data.id);
+      if (data) autoLog('SIGNAL_CREATE', `New Deal Sourced: ${signal.title}`, `Sector: ${signal.sector}`, undefined, data.id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['signals'] })
   });
@@ -468,15 +503,22 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const addJournalEntryMutation = useMutation({
     mutationFn: async (entry: Omit<JournalEntry, 'id'>) => {
-        const { error } = await supabase.from('journal').insert({
+        const { data, error } = await supabase.from('journal').insert({
             user_id: userId,
             date: entry.date,
             content: entry.content,
             tags: entry.tags,
             linked_log_id: entry.linkedLogId,
             audit_batch_id: entry.auditBatchId
-        });
+        }).select('id').single();
+        
         if (error) throw error;
+
+        // The Ledger records the ACT of journaling
+        if (data) {
+            const isAudit = entry.tags?.includes('system_audit');
+            autoLog('JOURNAL_LOGGED', isAudit ? 'Audit Reviewed & Signed' : 'Operator Log Committed', undefined, undefined, undefined, undefined);
+        }
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['journals'] })
   });
@@ -522,34 +564,34 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     mutationFn: async (module: ResetModule) => {
       if (module === 'dashboard' || module === 'all') {
         await supabase.from('accounts').update({ balance: 0 }).eq('user_id', userId);
-        await autoLog('SYSTEM_EVENT', 'Dashboard Balance Reset', 'All accounts set to 0');
+        await autoLog('SYSTEM_RESET', 'Dashboard Balance Reset', 'All accounts set to 0');
       }
       if (module === 'generosity' || module === 'all') {
         await supabase.from('accounts').update({ balance: 0 }).eq('user_id', userId).eq('type', 'generosity');
-        await autoLog('SYSTEM_EVENT', 'Generosity Wallet Emptied', 'Funds cleared');
+        await autoLog('SYSTEM_RESET', 'Generosity Wallet Emptied', 'Funds cleared');
       }
       if (module === 'goals' || module === 'all') {
         await supabase.from('goals').delete().eq('user_id', userId);
-        await autoLog('SYSTEM_EVENT', 'Goals Database Wiped', 'All missions deleted');
+        await autoLog('SYSTEM_RESET', 'Goals Database Wiped', 'All missions deleted');
       }
       if (module === 'signals' || module === 'all') {
         await supabase.from('signals').delete().eq('user_id', userId);
-        await autoLog('SYSTEM_EVENT', 'Signals Database Wiped', 'All deal flow deleted');
+        await autoLog('SYSTEM_RESET', 'Signals Database Wiped', 'All deal flow deleted');
       }
       if (module === 'budgets' || module === 'all') {
         await supabase.from('budgets').delete().eq('user_id', userId);
-        await autoLog('SYSTEM_EVENT', 'Budgets Database Wiped', 'Recurring expenses cleared');
+        await autoLog('SYSTEM_RESET', 'Budgets Database Wiped', 'Recurring expenses cleared');
       }
       if (module === 'journal' || module === 'all') {
         await supabase.from('journal').delete().eq('user_id', userId);
-        await autoLog('SYSTEM_EVENT', 'Journal Entries Wiped', 'Personal notes cleared');
+        await autoLog('SYSTEM_RESET', 'Journal Entries Wiped', 'Personal notes cleared');
       }
       if (module === 'telemetry' || module === 'all') {
         await supabase.from('telemetry_raw').delete().eq('user_id', userId);
-        await autoLog('SYSTEM_EVENT', 'Data Lake Cleared', 'All raw telemetry data purged');
+        await autoLog('SYSTEM_RESET', 'Data Lake Cleared', 'All raw telemetry data purged');
       }
       if (module === 'all') {
-        await autoLog('SYSTEM_EVENT', 'FACTORY RESET EXECUTED', 'Complete system wipe initiated');
+        await autoLog('SYSTEM_RESET', 'FACTORY RESET EXECUTED', 'Complete system wipe initiated');
       }
     },
     onSuccess: () => queryClient.invalidateQueries(),

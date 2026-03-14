@@ -26,34 +26,44 @@ export const useAnalytics = () => {
       return [...hEvents, ...tEvents].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [history, telemetry]);
 
+  // --- UNLOCKED: CONTINUOUS BURN HISTORY ---
   const burnHistory = useMemo(() => {
-    const data: Record<string, { date: string; burn: number; limit: number }> = {};
-    const monthlyLimit = budgets.reduce((sum, b) => sum + (b.frequency === 'monthly' ? b.amount : 0), 0);
+    if (combinedFinancialEvents.length === 0) return [];
 
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date();
-      d.setMonth(d.getMonth() - i);
-      const key = d.toLocaleString('default', { month: 'short', year: '2-digit' });
-      data[key] = { date: key, burn: 0, limit: monthlyLimit };
+    const dates = combinedFinancialEvents.map(e => new Date(e.date).getTime());
+    const minD = new Date(Math.min(...dates));
+    const maxD = new Date(Math.max(...dates));
+    
+    const dataMap: Record<string, { date: string; burn: number }> = {};
+    
+    // Generate a continuous timeline from the oldest record to the newest
+    let curr = new Date(minD.getFullYear(), minD.getMonth(), 1);
+    const end = new Date(maxD.getFullYear(), maxD.getMonth(), 1);
+    
+    while (curr <= end) {
+      const key = curr.toLocaleString('default', { month: 'short', year: '2-digit' });
+      dataMap[key] = { date: key, burn: 0 };
+      curr.setMonth(curr.getMonth() + 1);
     }
 
     combinedFinancialEvents.forEach(e => {
       if (e.type === 'SPEND' || e.type === 'GENEROSITY') {
         const d = new Date(e.date);
         const key = d.toLocaleString('default', { month: 'short', year: '2-digit' });
-        if (data[key]) {
-          data[key].burn += Math.abs(e.amount || 0);
+        if (dataMap[key]) {
+          dataMap[key].burn += Math.abs(e.amount || 0);
         }
       }
     });
 
-    return Object.values(data);
-  }, [combinedFinancialEvents, budgets]);
+    return Object.values(dataMap);
+  }, [combinedFinancialEvents]);
 
   const categorySplit = useMemo(() => {
     const map: Record<string, number> = {};
     
     combinedFinancialEvents.filter(e => e.type === 'SPEND').forEach(e => {
+        // Use the scrubbed category from the CSV parser if it exists, otherwise fallback
         const key = e.categoryGroup || e.title || 'Uncategorized';
         map[key] = (map[key] || 0) + Math.abs(e.amount || 0);
     });
@@ -61,8 +71,24 @@ export const useAnalytics = () => {
     return Object.entries(map)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
-      .slice(0, 8);
+      .slice(0, 10);
   }, [combinedFinancialEvents]);
+
+  // --- NEW: TOP MERCHANTS LEADERBOARD ---
+  const topMerchants = useMemo(() => {
+    const map: Record<string, { merchant: string; total: number; count: number; category: string }> = {};
+    
+    telemetry.filter(t => t.type === 'SPEND').forEach(t => {
+       const m = t.title || 'Unknown Merchant';
+       if (!map[m]) map[m] = { merchant: m, total: 0, count: 0, category: t.categoryGroup || 'General' };
+       map[m].total += Math.abs(t.amount);
+       map[m].count += 1;
+    });
+
+    return Object.values(map)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 15); // Top 15 All-Time Merchants
+  }, [telemetry]);
 
   const signalStats = useMemo(() => {
     const data = signals.filter(s => s.totalGenerated > 0 || s.hoursLogged > 0).map(s => ({
@@ -81,26 +107,21 @@ export const useAnalytics = () => {
     return { scatter: data, leaderboard: data, globalYield };
   }, [signals]);
 
+  // --- UNLOCKED: ALL-TIME MONTHLY STATEMENT ---
   const monthlyStatement = useMemo(() => {
     const map = new Map<string, { income: number; expense: number }>();
-    
-    for (let i = 0; i < 6; i++) {
-      const d = new Date(); 
-      d.setMonth(d.getMonth() - i);
-      const key = d.toISOString().slice(0, 7); 
-      map.set(key, { income: 0, expense: 0 });
-    }
 
     combinedFinancialEvents.forEach(log => {
-      const key = log.date.slice(0, 7); 
-      if (map.has(key)) {
-        const entry = map.get(key)!;
-        if (log.type === 'DROP' || log.type === 'TRIAGE_SESSION') {
-            entry.income += (log.amount || 0);
-        }
-        if (log.type === 'SPEND' || log.type === 'GENEROSITY') {
-            entry.expense += (log.amount || 0);
-        }
+      const key = log.date.slice(0, 7); // YYYY-MM
+      if (!map.has(key)) {
+        map.set(key, { income: 0, expense: 0 });
+      }
+      const entry = map.get(key)!;
+      if (log.type === 'DROP' || log.type === 'TRIAGE_SESSION') {
+          entry.income += (log.amount || 0);
+      }
+      if (log.type === 'SPEND' || log.type === 'GENEROSITY') {
+          entry.expense += (log.amount || 0);
       }
     });
 
@@ -112,7 +133,7 @@ export const useAnalytics = () => {
           net, 
           savingsRate: data.income > 0 ? (net / data.income) * 100 : 0 
       };
-    }).sort((a, b) => b.month.localeCompare(a.month));
+    }).sort((a, b) => b.month.localeCompare(a.month)); // Sort Newest to Oldest
   }, [combinedFinancialEvents]);
 
   const ribbon = useMemo(() => {
@@ -127,24 +148,16 @@ export const useAnalytics = () => {
     };
   }, [monthlyStatement, categorySplit, signalStats]);
 
-  // --- NEW: BLEED FORENSICS ENGINE ---
   const bleedForensics = useMemo(() => {
     const currentMonthKey = new Date().toISOString().slice(0, 7);
-    
-    // 1. Isolate the bleeding
     const bleeds = telemetry.filter(t => t.highVelocityFlag && t.date.startsWith(currentMonthKey));
-
-    // 2. Group by exact raw description
     const map: Record<string, { desc: string; category: string; count: number; total: number; latestDate: string }> = {};
 
     bleeds.forEach(b => {
-        // We clean the raw string slightly to catch near-matches (e.g. removing reference IDs at the end)
         const rawDesc = (b.description || b.title || 'Unknown Friction').split(' - ')[0].trim();
-        
         if (!map[rawDesc]) {
             map[rawDesc] = { desc: rawDesc, category: b.categoryGroup || 'General', count: 0, total: 0, latestDate: b.date };
         }
-        
         map[rawDesc].count += 1;
         map[rawDesc].total += Math.abs(b.amount || 0);
         if (new Date(b.date) > new Date(map[rawDesc].latestDate)) {
@@ -152,7 +165,6 @@ export const useAnalytics = () => {
         }
     });
 
-    // 3. Return sorted by highest total damage
     return Object.values(map).sort((a, b) => b.total - a.total);
   }, [telemetry]);
 
@@ -223,7 +235,7 @@ export const useAnalytics = () => {
 
   return { 
     burnHistory, categorySplit, signalPerformance: signalStats.scatter, signalLeaderboard: signalStats.leaderboard,
-    monthlyStatement, ribbon, bleedForensics, // Exported forensics
+    monthlyStatement, ribbon, bleedForensics, topMerchants,
     getComparatorData, availablePeriods 
   };
 };

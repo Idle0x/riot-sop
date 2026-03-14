@@ -16,10 +16,10 @@ import {
   Zap, AlertTriangle, ShieldCheck, Plus, X, BarChart2, Layers, Search, Briefcase
 } from 'lucide-react';
 
-// CHARTS
+// CHARTS (Removed unused Scatter/ZAxis imports)
 import { 
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, 
-  BarChart, Bar, Cell, ScatterChart, Scatter, ZAxis 
+  BarChart, Bar, Cell 
 } from 'recharts';
 
 export const Analytics = () => {
@@ -29,10 +29,11 @@ export const Analytics = () => {
   const bleedSectionRef = useRef<HTMLDivElement>(null);
 
   // --- ANALYTICS ENGINE ---
+  // Removed unused signalPerformance
   const { 
-    burnHistory, categorySplit, signalPerformance,
+    burnHistory, categorySplit,
     monthlyStatement, ribbon, signalLeaderboard,
-    bleedForensics, topMerchants, // <--- NEW DATA
+    bleedForensics, topMerchants,
     getComparatorData, availablePeriods
   } = useAnalytics();
 
@@ -278,7 +279,6 @@ export const Analytics = () => {
               <ShieldCheck className="text-blue-400" size={20}/>
               <h3 className="font-bold text-white">Aggregated Monthly Statement</h3>
             </div>
-            {/* Added max-height and overflow to allow infinite scrolling of history */}
             <div className="overflow-x-auto max-h-[300px] overflow-y-auto pr-2">
               <table className="w-full text-xs text-left text-gray-400 relative">
                 <thead className="text-gray-500 border-b border-white/10 uppercase sticky top-0 bg-[#0a0a0a] z-10">
@@ -291,7 +291,6 @@ export const Analytics = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {/* Removed .slice(0, 6) -> Shows everything back to 2019 */}
                   {monthlyStatement.map((m) => (
                     <tr key={m.month} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                       <td className="py-3 font-mono text-white">{m.month}</td>
@@ -345,7 +344,7 @@ export const Analytics = () => {
          </GlassCard>
       </div>
 
-      {/* --- TIER 4: MACRO SPEND ANALYTICS (NEW) --- */}
+      {/* --- TIER 4: MACRO SPEND ANALYTICS --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* The Clean Category Pie */}
@@ -368,7 +367,7 @@ export const Analytics = () => {
           </ResponsiveContainer>
         </GlassCard>
 
-        {/* TOP MERCHANTS LEADERBOARD (NEW) */}
+        {/* TOP MERCHANTS LEADERBOARD */}
         <GlassCard className="p-6 h-[400px] flex flex-col">
             <div className="flex items-center gap-2 mb-4">
               <Briefcase className="text-cyan-400" size={20}/>

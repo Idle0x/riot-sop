@@ -21,7 +21,6 @@ import {
   BarChart, Bar, Cell 
 } from 'recharts';
 
-// --- INTELLIGENT AXIS FORMATTER ---
 const formatAxisAmount = (val: number) => {
   if (val === 0) return '0';
   if (val >= 1000000) return `${(val / 1000000).toFixed(1).replace(/\.0$/, '')}M`;
@@ -29,10 +28,20 @@ const formatAxisAmount = (val: number) => {
   return val.toString();
 };
 
+const formatPeriodLabel = (p: string) => {
+  if (p.includes('-') && p.length === 7) {
+      const [y, m] = p.split('-');
+      const d = new Date(parseInt(y), parseInt(m) - 1, 1);
+      return d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+  }
+  return p;
+};
+
 export const Analytics = () => {
   const { user } = useUser();
   const location = useLocation();
   const bleedSectionRef = useRef<HTMLDivElement>(null);
+  const hasInitializedDefaults = useRef(false);
 
   const { 
     burnHistory, categorySplit,
@@ -54,13 +63,17 @@ export const Analytics = () => {
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
   const [periodToAdd, setPeriodToAdd] = useState('');
 
+  // Initial Data Load (Runs once when data drops in)
   useEffect(() => {
-    if (selectedPeriods.length === 0 && availablePeriods.years.length > 0) {
+    if (!hasInitializedDefaults.current && availablePeriods.years.length > 0) {
+        hasInitializedDefaults.current = true;
         const currentYear = new Date().getFullYear().toString();
-        const defaults = [currentYear].filter(y => availablePeriods.years.includes(y));
+        const prevYear = (new Date().getFullYear() - 1).toString();
+        const defaults = [prevYear, currentYear].filter(y => availablePeriods.years.includes(y));
         if (defaults.length > 0) setSelectedPeriods(defaults);
+        else setSelectedPeriods([availablePeriods.years[0]]);
     }
-  }, [availablePeriods, selectedPeriods.length]);
+  }, [availablePeriods]);
 
   const comparisonData = getComparatorData(selectedPeriods, compMode);
 
@@ -73,6 +86,34 @@ export const Analytics = () => {
         default: return [];
     }
   })();
+
+  const handleModeSwitch = (newMode: 'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED') => {
+      setCompMode(newMode);
+      setSelectedPeriods([]); 
+
+      const d = new Date();
+      const y = d.getFullYear().toString();
+      const m = `${y}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const q = `Q${Math.ceil((d.getMonth() + 1) / 3)} ${y}`;
+
+      let validDefaults: string[] = [];
+
+      if (newMode === 'ANNUAL') {
+          const prevY = (d.getFullYear() - 1).toString();
+          validDefaults = [prevY, y].filter(v => availablePeriods.years.includes(v));
+          if (validDefaults.length === 0 && availablePeriods.years.length > 0) validDefaults = [availablePeriods.years[0]];
+      } else if (newMode === 'MONTHLY') {
+          validDefaults = [m].filter(v => availablePeriods.months.includes(v));
+          if (validDefaults.length === 0 && availablePeriods.months.length > 0) validDefaults = [availablePeriods.months[0]];
+      } else if (newMode === 'QUARTERLY') {
+          validDefaults = [q].filter(v => availablePeriods.quarters.includes(v));
+          if (validDefaults.length === 0 && availablePeriods.quarters.length > 0) validDefaults = [availablePeriods.quarters[0]];
+      }
+
+      if (validDefaults.length > 0) {
+          setSelectedPeriods(validDefaults);
+      }
+  };
 
   const addPeriod = () => {
       if (periodToAdd && !selectedPeriods.includes(periodToAdd)) {
@@ -202,14 +243,14 @@ export const Analytics = () => {
                {['ANNUAL', 'QUARTERLY', 'MONTHLY'].map((m) => (
                    <button 
                      key={m} 
-                     onClick={() => { setCompMode(m as any); setSelectedPeriods([]); }} 
+                     onClick={() => handleModeSwitch(m as any)} 
                      className={`text-[10px] px-2 py-1 rounded border transition-colors ${compMode === m ? 'bg-blue-500 text-white border-blue-500' : 'text-gray-500 border-white/10 hover:border-white/30'}`}
                    >
                        {m.charAt(0) + m.slice(1, 3).toLowerCase()}
                    </button>
                ))}
                <button 
-                 onClick={() => { setCompMode('MIXED'); setSelectedPeriods([]); }} 
+                 onClick={() => handleModeSwitch('MIXED')} 
                  className={`text-[10px] px-2 py-1 rounded border transition-colors flex items-center gap-1 ${compMode === 'MIXED' ? 'bg-purple-500 text-white border-purple-500' : 'text-gray-500 border-white/10 hover:border-white/30'}`}
                >
                    <Layers size={10}/> Universal
@@ -226,7 +267,7 @@ export const Analytics = () => {
                     {compMode === 'MIXED' ? 'Select anything (Year, Quarter, Month)...' : `Add ${compMode.toLowerCase().slice(0, -2)}...`}
                 </option>
                 {periodOptions.map(p => (
-                    <option key={p} value={p}>{p}</option>
+                    <option key={p} value={p}>{formatPeriodLabel(p)}</option>
                 ))}
              </select>
              <button onClick={addPeriod} disabled={!periodToAdd} className="bg-white/10 hover:bg-white/20 text-white p-1.5 rounded disabled:opacity-50"><Plus size={16}/></button>
@@ -235,7 +276,7 @@ export const Analytics = () => {
              {selectedPeriods.length === 0 && <span className="text-xs text-gray-600 italic">Select periods to compare...</span>}
              {selectedPeriods.map(p => (
                  <div key={p} className="flex items-center gap-1 bg-blue-500/20 border border-blue-500/50 text-blue-300 text-[10px] px-2 py-0.5 rounded-full">
-                    {p} <button onClick={() => removePeriod(p)} className="hover:text-white"><X size={10}/></button>
+                    {formatPeriodLabel(p)} <button onClick={() => removePeriod(p)} className="hover:text-white ml-1"><X size={10}/></button>
                  </div>
              ))}
              {selectedPeriods.length > 0 && <button onClick={clearAll} className="text-[10px] text-gray-500 underline ml-auto hover:text-white">Clear</button>}
@@ -449,7 +490,7 @@ export const Analytics = () => {
                                <Naira/>{formatNumber(bleed.total)}
                             </td>
                             <td className="py-4 text-right text-xs text-gray-500">
-                               {new Date(bleed.latestDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                               {new Date(bleed.latestDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </td>
                          </tr>
                       ))}

@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { useLedger } from '../context/LedgerContext';
 import { GlassCard } from '../components/ui/GlassCard';
+import { GlassButton } from '../components/ui/GlassButton';
 import { 
   Shield, Book, Zap, ChevronDown, ChevronUp, Lock, 
-  Anchor, Activity, Skull, AlertTriangle, Eye 
+  Anchor, Activity, Skull, AlertTriangle, Eye, CheckCircle2 
 } from 'lucide-react';
 
 export const Constitution = () => {
@@ -10,31 +12,31 @@ export const Constitution = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-8 pb-24 space-y-8 animate-fade-in">
-      
+
       {/* HEADER */}
       <div className="text-center space-y-2 mb-8">
         <Shield size={48} className="mx-auto text-white mb-4 opacity-80" />
         <h1 className="text-4xl font-bold text-white tracking-tight">System Core</h1>
-        <p className="text-gray-400">Operating Principles & Technical Manual v1.6</p>
+        <p className="text-gray-400">Operating Principles & Technical Manual v2.0</p>
       </div>
 
       {/* NAVIGATION TABS */}
       <div className="flex p-1 bg-white/5 rounded-xl border border-white/10">
         <button 
           onClick={() => setActiveTab('CONSTITUTION')}
-          className={`flex-1 py-3 text-xs md:text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${activeTab === 'CONSTITUTION' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
+          className={`flex-1 py-3 text-xs md:text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${activeTab === 'CONSTITUTION' ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.1)]' : 'text-gray-400 hover:text-white'}`}
         >
           <Anchor size={16}/> The Constitution
         </button>
         <button 
           onClick={() => setActiveTab('PLAYBOOK')}
-          className={`flex-1 py-3 text-xs md:text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${activeTab === 'PLAYBOOK' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
+          className={`flex-1 py-3 text-xs md:text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${activeTab === 'PLAYBOOK' ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.1)]' : 'text-gray-400 hover:text-white'}`}
         >
           <Zap size={16}/> The Playbook
         </button>
         <button 
           onClick={() => setActiveTab('MANUAL')}
-          className={`flex-1 py-3 text-xs md:text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${activeTab === 'MANUAL' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
+          className={`flex-1 py-3 text-xs md:text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${activeTab === 'MANUAL' ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.1)]' : 'text-gray-400 hover:text-white'}`}
         >
           <Book size={16}/> System Manual
         </button>
@@ -52,95 +54,120 @@ export const Constitution = () => {
 };
 
 // --- TAB 1: THE CONSTITUTION ---
-const ConstitutionTab = () => (
-  <div className="space-y-6 animate-fade-in">
-    {/* MISSION STATEMENT */}
-    <GlassCard className="p-8 border-l-4 border-green-500">
-      <h2 className="text-2xl font-bold text-white mb-4">The Mission</h2>
-      <div className="space-y-4 text-gray-300 leading-relaxed text-sm md:text-base">
-        <p className="font-mono text-green-400 mb-4">"My income is not a windfall. It is capital. This system is how I deploy it."</p>
-        <ul className="space-y-3">
-          <li className="flex gap-3">
-            <span className="text-green-500 font-bold">01.</span>
-            <span>I am building this to never go broke and wonder "what happened" again.</span>
-          </li>
-          <li className="flex gap-3">
-            <span className="text-green-500 font-bold">02.</span>
-            <span>To secure my future, not prove anything to others.</span>
-          </li>
-          <li className="flex gap-3">
-            <span className="text-green-500 font-bold">03.</span>
-            <span>To buy <strong className="text-white">time, freedom, and options</strong> — not things, status, or validation.</span>
-          </li>
-        </ul>
-      </div>
-    </GlassCard>
+const ConstitutionTab = () => {
+  const { commitAction } = useLedger();
+  const [isRatified, setIsRatified] = useState(false);
 
-    {/* CORE PRINCIPLES GRID */}
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <GlassCard className="p-6">
-        <div className="flex items-center gap-3 mb-3 text-blue-400">
-          <Shield size={20} />
-          <h3 className="font-bold text-white">Security First</h3>
-        </div>
-        <p className="text-xs text-gray-400 leading-relaxed">
-          Pay Future Self first, Present Self second. The Buffer (10%) is sacred. My system protects me from others AND from myself.
-        </p>
-      </GlassCard>
+  const handleRatify = () => {
+    commitAction({
+      date: new Date().toISOString(),
+      type: 'CONSTITUTION_AMENDMENT',
+      title: 'Constitution Ratified',
+      description: 'Operator digitally signed and reaffirmed the core operating principles.',
+      tags: ['governance', 'mindset']
+    });
+    setIsRatified(true);
+    setTimeout(() => setIsRatified(false), 3000);
+  };
 
-      <GlassCard className="p-6">
-        <div className="flex items-center gap-3 mb-3 text-yellow-400">
-          <Eye size={20} />
-          <h3 className="font-bold text-white">Stealth Wealth</h3>
+  return (
+    <div className="space-y-6 animate-fade-in">
+        {/* MISSION STATEMENT */}
+        <GlassCard className="p-8 border-l-4 border-green-500">
+        <h2 className="text-2xl font-bold text-white mb-4">The Mission</h2>
+        <div className="space-y-4 text-gray-300 leading-relaxed text-sm md:text-base">
+            <p className="font-mono text-green-400 mb-4">"My income is not a windfall. It is capital. This system is how I deploy it."</p>
+            <ul className="space-y-3">
+            <li className="flex gap-3">
+                <span className="text-green-500 font-bold">01.</span>
+                <span>I am building this to never go broke and wonder "what happened" again.</span>
+            </li>
+            <li className="flex gap-3">
+                <span className="text-green-500 font-bold">02.</span>
+                <span>To secure my future, not prove anything to others.</span>
+            </li>
+            <li className="flex gap-3">
+                <span className="text-green-500 font-bold">03.</span>
+                <span>To buy <strong className="text-white">time, freedom, and options</strong> — not things, status, or validation.</span>
+            </li>
+            </ul>
         </div>
-        <p className="text-xs text-gray-400 leading-relaxed">
-          Live invisibly secure, not visibly rich. Money in the Treasury does not exist for spending. Silence is my best defense.
-        </p>
-      </GlassCard>
+        </GlassCard>
+
+        {/* CORE PRINCIPLES GRID */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <GlassCard className="p-6">
+            <div className="flex items-center gap-3 mb-3 text-blue-400">
+            <Shield size={20} />
+            <h3 className="font-bold text-white">Security First</h3>
+            </div>
+            <p className="text-xs text-gray-400 leading-relaxed">
+            Pay Future Self first, Present Self second. The Buffer (10%) is sacred. My system protects me from others AND from myself.
+            </p>
+        </GlassCard>
+
+        <GlassCard className="p-6">
+            <div className="flex items-center gap-3 mb-3 text-yellow-400">
+            <Eye size={20} />
+            <h3 className="font-bold text-white">Stealth Wealth</h3>
+            </div>
+            <p className="text-xs text-gray-400 leading-relaxed">
+            Live invisibly secure, not visibly rich. Money in the Treasury does not exist for spending. Silence is my best defense.
+            </p>
+        </GlassCard>
+        </div>
+
+        {/* THE ACCOUNT MAP */}
+        <GlassCard className="p-6">
+        <h3 className="font-bold text-white mb-6 flex items-center gap-2">
+            <Activity size={18}/> The Flow of Capital
+        </h3>
+        <div className="space-y-4 relative">
+            <div className="absolute left-[19px] top-4 bottom-4 w-0.5 bg-white/10" />
+
+            {/* HOLDING */}
+            <div className="relative flex items-start gap-4">
+            <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center shrink-0 z-10 text-white font-bold">1</div>
+            <div>
+                <h4 className="text-white font-bold text-sm">Holding Pen (USD/NGN)</h4>
+                <p className="text-xs text-gray-500 mt-1">The Quarantine Zone. Receives 100% of drops. Money sits here for 24h+ before Triage.</p>
+            </div>
+            </div>
+
+            {/* TREASURY */}
+            <div className="relative flex items-start gap-4">
+            <div className="w-10 h-10 rounded-full bg-blue-500/20 border border-blue-500/50 flex items-center justify-center shrink-0 z-10 text-blue-400 font-bold">2</div>
+            <div>
+                <h4 className="text-blue-400 font-bold text-sm">The Treasury (USD)</h4>
+                <p className="text-xs text-gray-500 mt-1">The Runway. Money here is strictly for future salary payments. NEVER accessed directly.</p>
+            </div>
+            </div>
+
+            {/* PAYROLL */}
+            <div className="relative flex items-start gap-4">
+            <div className="w-10 h-10 rounded-full bg-green-500/20 border border-green-500/50 flex items-center justify-center shrink-0 z-10 text-green-400 font-bold">3</div>
+            <div>
+                <h4 className="text-green-400 font-bold text-sm">Payroll (NGN)</h4>
+                <p className="text-xs text-gray-500 mt-1">The Life. Funded monthly via Triage. This is the only money that exists for daily life.</p>
+            </div>
+            </div>
+        </div>
+        </GlassCard>
+
+        {/* DIGITAL SIGNATURE / RATIFICATION */}
+        <div className="pt-6 border-t border-white/10 text-center">
+            <p className="text-xs text-gray-500 mb-4 font-mono">By ratifying this document, you reaffirm your commitment to the Sovereign System.</p>
+            <GlassButton 
+                onClick={handleRatify} 
+                disabled={isRatified}
+                className={isRatified ? 'bg-green-500/20 text-green-400 border-green-500/50' : ''}
+            >
+                {isRatified ? <><CheckCircle2 size={16} className="mr-2"/> Ratified in Ledger</> : 'Acknowledge & Ratify'}
+            </GlassButton>
+        </div>
     </div>
-
-    {/* THE ACCOUNT MAP */}
-    <GlassCard className="p-6">
-      <h3 className="font-bold text-white mb-6 flex items-center gap-2">
-        <Activity size={18}/> The Flow of Capital
-      </h3>
-      <div className="space-y-4 relative">
-        <div className="absolute left-[19px] top-4 bottom-4 w-0.5 bg-white/10" />
-        
-        {/* HOLDING */}
-        <div className="relative flex items-start gap-4">
-          <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center shrink-0 z-10 text-white font-bold">1</div>
-          <div>
-            <h4 className="text-white font-bold text-sm">Holding Pen (USD)</h4>
-            <p className="text-xs text-gray-500 mt-1">The Quarantine Zone. Receives 100% of drops. Money sits here for 24h+ before Triage.</p>
-          </div>
-        </div>
-
-        {/* TREASURY */}
-        <div className="relative flex items-start gap-4">
-          <div className="w-10 h-10 rounded-full bg-blue-500/20 border border-blue-500/50 flex items-center justify-center shrink-0 z-10 text-blue-400 font-bold">2</div>
-          <div>
-            <h4 className="text-blue-400 font-bold text-sm">The Treasury (USD)</h4>
-            <p className="text-xs text-gray-500 mt-1">The Runway. Money here is strictly for future salary payments. NEVER accessed directly.</p>
-          </div>
-        </div>
-
-        {/* PAYROLL */}
-        <div className="relative flex items-start gap-4">
-          <div className="w-10 h-10 rounded-full bg-green-500/20 border border-green-500/50 flex items-center justify-center shrink-0 z-10 text-green-400 font-bold">3</div>
-          <div>
-            <h4 className="text-green-400 font-bold text-sm">Payroll (NGN)</h4>
-            <p className="text-xs text-gray-500 mt-1">The Life. Funded monthly on the 1st. This is the only money that exists for daily life.</p>
-          </div>
-        </div>
-      </div>
-    </GlassCard>
-
-    <div className="text-center pt-8 opacity-50">
-      <p className="text-xs uppercase tracking-widest">System Operational • Phase P3</p>
-    </div>
-  </div>
-);
+  );
+};
 
 // --- TAB 2: THE PLAYBOOK (Drills) ---
 const PlaybookTab = () => (
@@ -156,7 +183,7 @@ const PlaybookTab = () => (
             <li>"Are you too big for us?" (Manipulation)</li>
           </ul>
         </div>
-        
+
         <div className="space-y-3">
           <ScriptBlock 
             label="For Tier 3 (Acquaintances)" 
@@ -227,7 +254,7 @@ const PlaybookTab = () => (
         </li>
         <li className="flex gap-3">
           <span className="text-purple-400 font-bold">48h+</span>
-          <span><strong>Triage Execution.</strong> Calculate Generosity Cap (max ₦300k). Fund Buffer (10%). Lock the rest.</span>
+          <span><strong>Triage Execution.</strong> Calculate Generosity Cap. Fund Buffer. Lock the rest in Cold Storage.</span>
         </li>
       </ul>
     </Accordion>
@@ -238,8 +265,7 @@ const PlaybookTab = () => (
 const ManualTab = () => (
   <div className="space-y-6 animate-fade-in">
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      
-      {/* GHOST MODE */}
+
       <GlassCard className="p-5">
         <div className="flex items-center gap-2 mb-2 text-white">
           <Eye size={16}/> <h3 className="font-bold text-sm">Ghost Mode</h3>
@@ -248,11 +274,10 @@ const ManualTab = () => (
           A privacy layer for public environments. Grayscales the interface and dims values to prevent shoulder-surfing.
         </p>
         <div className="text-[10px] text-gray-500 font-mono bg-white/5 p-2 rounded">
-          STATUS: Click the "System Online" pill in Dashboard Header.
+          STATUS: Toggle via System Configuration (Settings).
         </div>
       </GlassCard>
 
-      {/* SOVEREIGN TYPER */}
       <GlassCard className="p-5">
         <div className="flex items-center gap-2 mb-2 text-white">
           <Lock size={16}/> <h3 className="font-bold text-sm">Sovereign Typer</h3>
@@ -265,43 +290,27 @@ const ManualTab = () => (
         </div>
       </GlassCard>
 
-      {/* SIGNAL PROCESSING */}
       <GlassCard className="p-5">
         <div className="flex items-center gap-2 mb-2 text-white">
-          <Zap size={16}/> <h3 className="font-bold text-sm">Signal Workflow</h3>
-        </div>
-        <ul className="text-xs text-gray-400 space-y-2 list-disc pl-4">
-          <li><strong>Discovery:</strong> Raw ideas. Low effort.</li>
-          <li><strong>Validation:</strong> Research phase.</li>
-          <li><strong>Contribution:</strong> Working/Grinding phase.</li>
-          <li><strong>Delivered:</strong> Finished. Waiting for payment.</li>
-          <li><strong>Harvest:</strong> Money received.</li>
-        </ul>
-      </GlassCard>
-
-      {/* THE LEDGER */}
-      <GlassCard className="p-5">
-        <div className="flex items-center gap-2 mb-2 text-white">
-          <Book size={16}/> <h3 className="font-bold text-sm">Forensic Ledger</h3>
+          <Zap size={16}/> <h3 className="font-bold text-sm">Smart Auto-Journal</h3>
         </div>
         <p className="text-xs text-gray-400 mb-3">
-          The Universal Black Box. Every financial move, settings change, or system reset is permanently logged here.
+          The system actively watches your decisions (Budget breaches, Signal kills, CSV Data Lake ingests) and prompts you for psychological context.
         </p>
         <div className="text-[10px] text-gray-500 font-mono bg-white/5 p-2 rounded">
-          NOTE: History cannot be deleted, even by Factory Reset.
+          ACTION: Logs are saved to the Journal tab alongside manual entries.
         </div>
       </GlassCard>
 
-      {/* NUCLEAR OPTIONS */}
       <GlassCard className="p-5 border-red-500/20">
         <div className="flex items-center gap-2 mb-2 text-red-400">
           <Skull size={16}/> <h3 className="font-bold text-sm">Nuclear Protocols</h3>
         </div>
         <p className="text-xs text-gray-400 mb-3">
-          Located in Settings. Allows granular wiping of specific databases (e.g., wipe only Goals, or wipe only Journal).
+          Located in Settings. Allows granular wiping of specific databases (e.g., wipe only Goals, or wipe only Ingestions).
         </p>
         <div className="text-[10px] text-red-400/50 font-mono bg-red-500/10 p-2 rounded border border-red-500/20">
-          WARNING: Action is irreversible.
+          WARNING: Action is irreversible. History Ledger will record the event.
         </div>
       </GlassCard>
 
@@ -310,7 +319,6 @@ const ManualTab = () => (
 );
 
 // --- HELPER COMPONENTS ---
-
 const ScriptBlock = ({ label, script }: { label: string, script: string }) => (
   <div className="space-y-1">
     <span className="text-[10px] font-bold text-gray-500 uppercase">{label}</span>

@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-// CONTEXTS & HOOKS
 import { useUser } from '../context/UserContext'; 
 import { useLedger } from '../context/LedgerContext';
 import { useFinancialStats } from '../hooks/useFinancialStats'; 
 
-// UI COMPONENTS
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassProgressBar } from '../components/ui/GlassProgressBar';
 import { GlassButton } from '../components/ui/GlassButton';
@@ -15,11 +13,9 @@ import { Naira } from '../components/ui/Naira';
 import { RunwayWeather } from '../components/layout/RunwayWeather'; 
 import { formatNumber } from '../utils/format';
 
-// CHARTS
 import { CashFlowChart } from '../components/dashboard/CashFlowChart'; 
 import { ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 
-// ICONS
 import { 
   Clock, AlertTriangle, ArrowRight, Activity, ShieldCheck, 
   BarChart3, Wallet, Heart, Zap, TrendingUp, TrendingDown, 
@@ -28,39 +24,31 @@ import {
 
 export const Dashboard = () => {
   const navigate = useNavigate();
-
-  // 1. STATE & HOOKS
   const { user, isGhostMode } = useUser();
   const [time, setTime] = useState(new Date());
 
-  const { runwayMonths, history } = useLedger();
-  const { 
-    netFlow, inflow, outflow, leakOutflow, burnDelta, chartData, allocation 
-  } = useFinancialStats();
+  const { runwayMonths, history, telemetry } = useLedger();
+  const { netFlow, inflow, outflow, leakOutflow, burnDelta, chartData, allocation } = useFinancialStats();
 
-  // 3. LEDGER STATE
   const [activityFilter, setActivityFilter] = useState<'ALL' | 'IN' | 'OUT'>('ALL');
 
-  // Clock Effect
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // --- DERIVED VALUES ---
   const totalNetWorth = allocation.liquid + allocation.reserved + allocation.generosity + allocation.idle;
   const burnCap = user?.burnCap || 0;
   const burnRatio = burnCap > 0 ? (outflow / burnCap) * 100 : 0;
 
-  // Recent Bleeds Context (Get unique categories that are bleeding right now)
+  // Recent Bleeds Context
   const currentMonthKey = new Date().toISOString().slice(0, 7);
   const activeBleedCategories = Array.from(new Set(
-      history
-        .filter(h => h.highVelocityFlag && h.date.startsWith(currentMonthKey))
-        .map(h => h.categoryGroup || 'Uncategorized')
+      telemetry
+        .filter(t => t.highVelocityFlag && t.date.startsWith(currentMonthKey))
+        .map(t => t.categoryGroup || 'Uncategorized')
   ));
 
-  // Visual Data
   const allocationData = [
     { name: 'Ops', value: allocation.liquid, color: '#10b981' }, 
     { name: 'Defense', value: allocation.reserved, color: '#3b82f6' }, 
@@ -78,7 +66,7 @@ export const Dashboard = () => {
     <RunwayWeather months={runwayMonths}>
       <div className={`p-4 md:p-8 space-y-8 pb-20 max-w-7xl mx-auto transition-all duration-1000 ${isGhostMode ? 'grayscale contrast-125' : ''}`}>
 
-        {/* --- HEADER: SYSTEM CLOCK --- */}
+        {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
           <div>
             <div className="flex items-center gap-2 text-gray-500 font-mono text-xs mb-1">
@@ -97,9 +85,8 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        {/* --- ALERT QUEUE --- */}
+        {/* ALERT QUEUE */}
         <div className="space-y-4">
-            {/* UNALLOCATED CAPITAL */}
             {allocation.idle > 0 && (
             <div className="bg-yellow-500/10 border border-yellow-500/50 p-6 rounded-2xl flex flex-col md:flex-row items-center justify-between shadow-[0_0_20px_rgba(234,179,8,0.1)] gap-4">
                 <div className="flex items-center gap-4">
@@ -120,7 +107,6 @@ export const Dashboard = () => {
             </div>
             )}
 
-            {/* HIGH-VELOCITY BLEED WARNING */}
             {leakOutflow > 0 && (
             <div className="bg-red-500/10 border border-red-500/50 p-6 rounded-2xl flex flex-col md:flex-row items-center justify-between shadow-[0_0_20px_rgba(239,68,68,0.15)] gap-4 animate-fade-in">
                 <div className="flex items-center gap-4">
@@ -147,7 +133,7 @@ export const Dashboard = () => {
             )}
         </div>
 
-        {/* --- DECK A: HUD METRICS --- */}
+        {/* HUD METRICS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <MetricCard 
             title="Liquid Runway" 
@@ -193,10 +179,9 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        {/* --- DECK B: RUNWAY COCKPIT --- */}
+        {/* RUNWAY COCKPIT */}
         <GlassCard className="p-0 overflow-hidden relative group h-48">
           <div className="absolute inset-0 p-8 z-10 flex flex-col md:flex-row justify-between items-start md:items-center">
-            {/* LEFT: TIME */}
             <div>
                 <h3 className="font-bold text-white text-lg flex items-center gap-2">
                   Runway Health
@@ -210,7 +195,6 @@ export const Dashboard = () => {
                 </div>
             </div>
 
-            {/* RIGHT: VELOCITY */}
             <div className="text-left md:text-right mt-4 md:mt-0">
                 <div className="text-sm text-gray-400 uppercase font-bold tracking-widest mb-1">Total Burn Velocity</div>
                 <div className="text-2xl font-mono font-bold text-white flex items-center justify-start md:justify-end gap-1">
@@ -244,13 +228,13 @@ export const Dashboard = () => {
           </div>
         </GlassCard>
 
-        {/* --- DECK C: TACTICAL GRID --- */}
+        {/* TACTICAL GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
            <div className="lg:col-span-2">
               <GlassCard className="p-6 h-full min-h-[300px]">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="font-bold text-white flex items-center gap-2">
-                    <Activity size={16} className="text-purple-400"/> Cash Flow Trend
+                    <Activity size={16} className="text-purple-400"/> Global Cash Flow (Ledger + Lake)
                   </h3>
                   <div className="flex gap-3 text-xs text-gray-400">
                     <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500"/> In</div>
@@ -295,7 +279,7 @@ export const Dashboard = () => {
            </div>
         </div>
 
-        {/* --- DECK E: MINI-LEDGER (With Telemetry Flags) --- */}
+        {/* SYSTEM EVENTS */}
         <GlassCard className="p-6">
           <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Recent System Events</h3>
@@ -315,15 +299,14 @@ export const Dashboard = () => {
                 const isSpend = log.type === 'SPEND' || log.type === 'GENEROSITY' || log.type === 'TRANSFER';
 
                 return (
-                  <div key={log.id} className={`flex justify-between items-center p-4 border rounded-xl hover:bg-white/10 transition-colors group ${log.highVelocityFlag ? 'bg-red-950/20 border-red-500/30' : 'bg-white/5 border-white/5'}`}>
+                  <div key={log.id} className="flex justify-between items-center p-4 border rounded-xl hover:bg-white/10 transition-colors group bg-white/5 border-white/5">
                     <div className="flex items-center gap-3">
                       <div className={`p-2 rounded-lg ${isIncome ? 'bg-emerald-500/10 text-emerald-500' : isSpend ? 'bg-red-500/10 text-red-500' : 'bg-blue-500/10 text-blue-500'}`}>
                          {isIncome ? <ArrowDownLeft size={16}/> : isSpend ? <ArrowUpRight size={16}/> : <Activity size={16}/>}
                       </div>
                       <div>
                         <div className="font-bold text-white text-sm flex items-center gap-2">
-                           {log.categoryGroup || log.title}
-                           {log.highVelocityFlag && <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded font-bold uppercase">BLEED</span>}
+                           {log.title}
                         </div>
                         <div className="text-xs text-gray-500 truncate max-w-[150px] md:max-w-xs">{new Date(log.date).toLocaleDateString()} • {log.description || log.type}</div>
                       </div>
@@ -344,7 +327,6 @@ export const Dashboard = () => {
              </button>
           </div>
         </GlassCard>
-
       </div>
     </RunwayWeather>
   );

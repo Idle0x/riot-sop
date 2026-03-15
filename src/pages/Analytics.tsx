@@ -21,8 +21,6 @@ import {
   BarChart, Bar, Cell 
 } from 'recharts';
 
-// --- INTELLIGENT AXIS FORMATTER ---
-// Replaces "3400k" with "3.4M" and ensures currency context
 const formatAxisAmount = (val: number) => {
   if (val === 0) return '0';
   if (val >= 1000000) return `${(val / 1000000).toFixed(1).replace(/\.0$/, '')}M`;
@@ -30,8 +28,6 @@ const formatAxisAmount = (val: number) => {
   return val.toString();
 };
 
-// --- HUMAN-READABLE PERIOD FORMATTER ---
-// Converts "2025-01" to "Jan 2025" for the UI
 const formatPeriodLabel = (p: string) => {
   if (p.includes('-') && p.length === 7) {
       const [y, m] = p.split('-');
@@ -47,14 +43,16 @@ export const Analytics = () => {
   const bleedSectionRef = useRef<HTMLDivElement>(null);
   const isInit = useRef(false);
 
+  // --- NEW: MASTER TIMEFRAME STATE ---
+  const [masterTimeframe, setMasterTimeframe] = useState('MAX');
+
   const { 
     burnHistory, categorySplit,
     monthlyStatement, ribbon, signalLeaderboard,
     bleedForensics, topMerchants,
     getComparatorData, availablePeriods
-  } = useAnalytics();
+  } = useAnalytics(masterTimeframe);
 
-  // --- NAVIGATION: SCROLL TO LEAKS ---
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get('view') === 'leaks' && bleedSectionRef.current) {
@@ -68,7 +66,6 @@ export const Analytics = () => {
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
   const [periodToAdd, setPeriodToAdd] = useState('');
 
-  // --- AUTO-ANCHOR DEFAULTS ---
   useEffect(() => {
     if (!isInit.current && availablePeriods.years.length > 0) {
         const curY = new Date().getFullYear().toString();
@@ -81,8 +78,6 @@ export const Analytics = () => {
 
   const comparisonData = getComparatorData(selectedPeriods, compMode);
 
-  // --- SMART MODE SWITCHER ---
-  // Ensures switching from Annual -> Monthly doesn't break the chart keys
   const handleModeSwitch = (mode: 'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED') => {
       setCompMode(mode);
       setSelectedPeriods([]); 
@@ -144,15 +139,32 @@ export const Analytics = () => {
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 pb-20 animate-fade-in">
 
-      {/* --- HEADER --- */}
+      {/* --- HEADER WITH MASTER TIMEFRAME --- */}
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
            <h1 className="text-3xl font-bold text-white tracking-tight">Intelligence Hub</h1>
            <p className="text-gray-400 text-sm">Forensic analysis of aggregated system & bank data.</p>
         </div>
-        <GlassButton size="sm" onClick={handleExport}>
-          <Download size={16} className="mr-2"/> Export Data Lake (JSON)
-        </GlassButton>
+        <div className="flex items-center gap-3">
+           <select 
+              value={masterTimeframe}
+              onChange={(e) => setMasterTimeframe(e.target.value)}
+              className="bg-black/40 border border-white/20 text-white text-sm font-bold rounded-lg px-3 py-2 outline-none focus:border-blue-500 transition-colors cursor-pointer"
+           >
+              <option value="24H">Last 24 Hours</option>
+              <option value="3D">Last 3 Days</option>
+              <option value="7D">Last 7 Days</option>
+              <option value="1M">1 Month</option>
+              <option value="3M">3 Months</option>
+              <option value="6M">6 Months</option>
+              <option value="1Y">1 Year</option>
+              <option value="5Y">5 Years</option>
+              <option value="MAX">Max (All-Time)</option>
+           </select>
+           <GlassButton size="sm" onClick={handleExport}>
+             <Download size={16}/> <span className="hidden md:inline ml-2">Export Data Lake</span>
+           </GlassButton>
+        </div>
       </div>
 
       {/* --- TIER 1: EXECUTIVE RIBBON --- */}
@@ -177,14 +189,24 @@ export const Analytics = () => {
            <div className="text-[10px] text-gray-500 mt-1">Total Signal ROI</div>
         </GlassCard>
 
-        <GlassCard className="p-4 relative overflow-hidden border-red-500/20 bg-red-950/10">
-           <div className="flex items-center gap-2 mb-2 text-red-400">
-             <AlertTriangle size={16}/> <span className="text-xs font-bold uppercase">Largest System Leak</span>
+        {/* --- UPGRADED SYSTEM LEAK CARD --- */}
+        <GlassCard className="p-4 relative overflow-hidden border-red-500/30 bg-red-950/10">
+           <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-red-400">
+                <AlertTriangle size={16}/> 
+                <span className="text-xs font-bold uppercase">Largest Leak ({masterTimeframe})</span>
+              </div>
            </div>
-           <div className="text-lg font-bold text-white truncate">{ribbon.largestLeak?.name || 'None'}</div>
-           <div className="text-[10px] text-red-400 mt-1 font-mono font-bold">
-             <Naira/>{formatNumber(ribbon.largestLeak?.amount || 0)} (Total Spend)
+           <div className="text-lg font-bold text-white flex flex-col md:flex-row md:items-baseline gap-1 md:gap-2">
+              <span className="truncate max-w-[120px]">{ribbon.largestLeak?.name || 'None'}</span>
+              {ribbon.largestLeak && (
+                 <>
+                   <span className="hidden md:inline text-gray-600">•</span>
+                   <span className="font-mono text-red-500"><Naira/>{formatNumber(ribbon.largestLeak.amount)}</span>
+                 </>
+              )}
            </div>
+           <div className="text-[10px] text-red-400 mt-1">Total Category Spend</div>
         </GlassCard>
 
         <GlassCard className="p-4 relative overflow-hidden">
@@ -205,7 +227,7 @@ export const Analytics = () => {
           <div className="flex justify-between items-start mb-6">
               <div className="flex items-center gap-2">
                 <TrendingUp className="text-red-500" size={20}/>
-                <h3 className="font-bold text-white">Aggregated Burn Velocity</h3>
+                <h3 className="font-bold text-white">Burn Velocity ({masterTimeframe})</h3>
               </div>
           </div>
           <ResponsiveContainer width="100%" height="85%">
@@ -229,7 +251,7 @@ export const Analytics = () => {
           <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-4">
             <div className="flex items-center gap-2">
                <Calendar className="text-blue-400" size={20}/>
-               <h3 className="font-bold text-white">Comparator</h3>
+               <h3 className="font-bold text-white">Comparator Engine</h3>
             </div>
             <div className="flex gap-2">
                {['ANNUAL', 'QUARTERLY', 'MONTHLY'].map((m) => (
@@ -300,9 +322,10 @@ export const Analytics = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
          
          <GlassCard className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <ShieldCheck className="text-blue-400" size={20}/>
-              <h3 className="font-bold text-white">Aggregated Monthly Statement</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-white flex items-center gap-2">
+                 <ShieldCheck className="text-blue-400" size={20}/> Statements ({masterTimeframe})
+              </h3>
             </div>
             <div className="overflow-x-auto max-h-[350px] overflow-y-auto pr-2">
               <table className="w-full text-xs text-left text-gray-400 relative">
@@ -334,9 +357,10 @@ export const Analytics = () => {
          </GlassCard>
 
          <GlassCard className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Zap className="text-yellow-400" size={20}/>
-              <h3 className="font-bold text-white">Alpha Leaderboard</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-white flex items-center gap-2">
+                 <Zap className="text-yellow-400" size={20}/> Alpha Leaderboard ({masterTimeframe})
+              </h3>
             </div>
             <div className="overflow-x-auto max-h-[350px] overflow-y-auto pr-2">
               <table className="w-full text-xs text-left text-gray-400 relative">
@@ -376,7 +400,7 @@ export const Analytics = () => {
         <GlassCard className="p-6 h-[400px]">
           <div className="flex items-center gap-2 mb-6">
             <PieIcon className="text-purple-400" size={20}/>
-            <h3 className="font-bold text-white">Macro Category Distribution</h3>
+            <h3 className="font-bold text-white">Category Distribution ({masterTimeframe})</h3>
           </div>
           <ResponsiveContainer width="100%" height="85%">
             <BarChart data={categorySplit} layout="vertical" margin={{ left: 10 }}>
@@ -396,7 +420,7 @@ export const Analytics = () => {
         <GlassCard className="p-6 h-[400px] flex flex-col">
             <div className="flex items-center gap-2 mb-4">
               <Briefcase className="text-cyan-400" size={20}/>
-              <h3 className="font-bold text-white">Top Merchants (All-Time)</h3>
+              <h3 className="font-bold text-white">Top Merchants ({masterTimeframe})</h3>
             </div>
             <div className="overflow-x-auto max-h-[300px] overflow-y-auto flex-1 pr-2 relative">
               <table className="w-full text-xs text-left text-gray-400">
@@ -433,12 +457,12 @@ export const Analytics = () => {
           <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-6">
              <div>
                 <h3 className="font-bold text-red-500 flex items-center gap-2 text-xl tracking-tight">
-                  <Search size={22}/> Systemic Friction & Bleed Forensics
+                  <Search size={22}/> Systemic Friction & Bleed Forensics ({masterTimeframe})
                 </h3>
                 <p className="text-xs text-red-400/80 mt-1">High-velocity records flagged by the circuit breaker.</p>
              </div>
              <div className="text-right">
-                <div className="text-[10px] text-gray-500 uppercase font-bold">Monthly Damage</div>
+                <div className="text-[10px] text-gray-500 uppercase font-bold">Timeframe Damage</div>
                 <div className="text-2xl font-mono font-bold text-red-500">
                    <Naira/>{formatNumber(bleedForensics.reduce((sum, item) => sum + item.total, 0))}
                 </div>
@@ -447,7 +471,7 @@ export const Analytics = () => {
 
           <div className="overflow-x-auto max-h-[400px] overflow-y-auto pr-2 relative">
             <table className="w-full text-sm text-left">
-               <thead className="text-xs text-gray-500 border-b border-white/10 uppercase sticky top-0 bg-[#290808] z-10">
+               <thead className="text-xs text-gray-500 border-b border-white/10 uppercase tracking-wider sticky top-0 bg-[#290808] z-10">
                   <tr>
                      <th className="py-3 font-bold">Culprit</th>
                      <th className="py-3 font-bold text-center">Frequency</th>

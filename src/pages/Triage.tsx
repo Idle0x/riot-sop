@@ -22,16 +22,43 @@ import {
   Server, Cpu, Activity, Info
 } from 'lucide-react';
 
-// --- CUSTOM TOOLTIP COMPONENT ---
-const InfoTooltip = ({ content }: { content: string }) => (
-  <div className="group relative inline-block ml-2 align-middle z-50">
-    <Info size={14} className="text-gray-500 group-hover:text-blue-400 cursor-help transition-colors" />
-    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-black/95 border border-white/20 text-[11px] text-gray-300 rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all scale-95 group-hover:scale-100 text-left font-normal tracking-wide leading-relaxed z-50">
-      {content}
-      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black/95" />
+// --- UPGRADED DIRECTION-AWARE TOOLTIP COMPONENT ---
+interface TooltipProps {
+  content: string;
+  position?: 'top' | 'bottom';
+  align?: 'center' | 'left' | 'right';
+}
+
+const InfoTooltip = ({ content, position = 'top', align = 'center' }: TooltipProps) => {
+  // 1. Vertical Positioning
+  const posClass = position === 'top' ? 'bottom-full mb-2' : 'top-full mt-2';
+  const arrowVerticalClass = position === 'top' ? 'top-full border-t-black/95' : 'bottom-full border-b-black/95';
+  
+  // 2. Horizontal Alignment
+  let alignClass = '';
+  let arrowHorizontalClass = '';
+  
+  if (align === 'center') {
+    alignClass = 'left-1/2 -translate-x-1/2';
+    arrowHorizontalClass = 'left-1/2 -translate-x-1/2';
+  } else if (align === 'left') {
+    alignClass = 'left-0 -ml-2'; // Shift slightly to match icon edge
+    arrowHorizontalClass = 'left-4';
+  } else if (align === 'right') {
+    alignClass = 'right-0 -mr-2';
+    arrowHorizontalClass = 'right-4';
+  }
+
+  return (
+    <div className="group relative inline-block ml-2 align-middle z-[100]">
+      <Info size={14} className="text-gray-500 group-hover:text-blue-400 cursor-help transition-colors" />
+      <div className={`absolute ${alignClass} ${posClass} w-64 p-3 bg-black/95 border border-white/20 text-[11px] text-gray-300 rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all scale-95 group-hover:scale-100 text-left font-normal tracking-wide leading-relaxed z-[100]`}>
+        {content}
+        <div className={`absolute ${arrowHorizontalClass} border-4 border-transparent ${arrowVerticalClass}`} />
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export const Triage = () => {
   const navigate = useNavigate();
@@ -366,7 +393,8 @@ export const Triage = () => {
         <div className="text-center flex-1">
           <h1 className="text-3xl font-bold text-white flex items-center justify-center">
             The Accountant 
-            <InfoTooltip content="This is the intake funnel. All incoming capital or unallocated idle funds must be explicitly routed through this engine before they can be deployed." />
+            {/* Top edge: Drop downwards */}
+            <InfoTooltip position="bottom" content="This is the intake funnel. All incoming capital or unallocated idle funds must be explicitly routed through this engine before they can be deployed." />
           </h1>
           <p className={`text-sm font-bold uppercase tracking-wider ${state === 'critical' ? 'text-red-500' : 'text-green-500'}`}>
             {state.toUpperCase()} STATE DETECTED
@@ -386,7 +414,8 @@ export const Triage = () => {
             <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4">
                <h3 className="text-sm font-bold text-white mb-2 flex items-center">
                  Phase 1: Capital Ingestion
-                 <InfoTooltip content="Record the raw incoming capital and the exchange rate. The system automatically calculates your Gross NGN." />
+                 {/* Top edge, left aligned */}
+                 <InfoTooltip position="bottom" align="left" content="Record the raw incoming capital and the exchange rate. The system automatically calculates your Gross NGN." />
                </h3>
                <p className="text-[10px] text-gray-400">If triaging existing idle funds, leave USD at 0. The engine will automatically pull from your Holding Pen.</p>
             </div>
@@ -422,7 +451,7 @@ export const Triage = () => {
             <div>
                <div className="flex items-center mb-1">
                   <span className="text-xs font-bold text-gray-500 uppercase">Cost Basis (USD)</span>
-                  <InfoTooltip content="Rule: Deduct any capital initially risked to execute this signal. Taxes are only calculated on pure profit." />
+                  <InfoTooltip align="left" content="Rule: Deduct any capital initially risked to execute this signal. Taxes are only calculated on pure profit." />
                </div>
                <GlassInput type="number" value={costBasisUSD} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCostBasisUSD(e.target.value)} icon={<Lock size={14}/>}/>
             </div>
@@ -430,7 +459,7 @@ export const Triage = () => {
             <div>
               <div className="flex items-center mb-1">
                  <label className="text-xs font-bold text-gray-500 uppercase">Signal Source</label>
-                 <InfoTooltip content="Rule: Link this capital to a specific War Room mission. This allows the system to accurately calculate the Alpha Yield (ROI) of your efforts." />
+                 <InfoTooltip align="left" content="Rule: Link this capital to a specific War Room mission. This allows the system to accurately calculate the Alpha Yield (ROI) of your efforts." />
               </div>
               <select 
                   className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-white/30 transition-colors" 
@@ -451,7 +480,8 @@ export const Triage = () => {
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center font-bold text-slate-400">
                           <ShieldCheck size={16} className="mr-2"/> Tax Shield (NTA)
-                          <InfoTooltip content="Rule: Legally minimize tax burden using the 20% Rent Shield provision. Never evade, always optimize. Funds are pushed to the Vault." />
+                          {/* Inside container, left aligned */}
+                          <InfoTooltip align="left" content="Rule: Legally minimize tax burden using the 20% Rent Shield provision. Never evade, always optimize. Funds are pushed to the Vault." />
                         </span>
                     </div>
                     <div className="flex justify-between mb-2">
@@ -469,7 +499,7 @@ export const Triage = () => {
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center font-bold text-red-500">
                            <Flame size={16} className="mr-2"/> Venture Tax
-                           <InfoTooltip content="Rule: Self-imposed penalty on high-risk, high-reward plays. Forces you to burn a percentage directly to build anti-fragility." />
+                           <InfoTooltip align="left" content="Rule: Self-imposed penalty on high-risk, high-reward plays. Forces you to burn a percentage directly to build anti-fragility." />
                         </span>
                     </div>
                     <div className="flex justify-between mb-2">
@@ -483,7 +513,7 @@ export const Triage = () => {
                     <div className="flex justify-between mb-2">
                         <span className="flex items-center font-bold text-blue-400">
                            <Landmark size={16} className="mr-2"/> Pre-Tax Cold Storage
-                           <InfoTooltip content="Rule #1: Pay yourself first. This money is severed from operations immediately and pushed to the Vault before any routing begins." />
+                           <InfoTooltip align="left" content="Rule #1: Pay yourself first. This money is severed from operations immediately and pushed to the Vault before any routing begins." />
                         </span>
                     </div>
                     <div className="flex justify-between mb-2">
@@ -508,7 +538,8 @@ export const Triage = () => {
                  <div>
                     <h2 className="text-lg font-bold text-white flex items-center">
                       System Architecture Routing
-                      <InfoTooltip content="Zero-Based Budgeting Phase. Every single Naira remaining in the Net Deployable pool must be assigned a specific job." />
+                      {/* Top Edge, Left Aligned, drops downwards */}
+                      <InfoTooltip position="bottom" align="left" content="Zero-Based Budgeting Phase. Every single Naira remaining in the Net Deployable pool must be assigned a specific job." />
                     </h2>
                     {isBigDrop && (
                       <span className="text-[10px] bg-yellow-500/20 text-yellow-500 px-2 py-0.5 rounded border border-yellow-500/50 font-mono mt-1 inline-block">
@@ -525,20 +556,25 @@ export const Triage = () => {
                   <Server size={14}/> 
                   <span className="hidden md:inline">Execute Hard Fork Auto-Router</span>
                   <span className="md:hidden">Auto-Route</span>
-                  <InfoTooltip content="Action: Automatically caps OpEx to your exact monthly burn, tops up the Chaos Buffer to ₦100k, and aggressively dumps all remaining funds into Cold Storage." />
+                  {/* Top Edge, Right Aligned, drops downwards */}
+                  <InfoTooltip position="bottom" align="right" content="Action: Automatically caps OpEx to your exact monthly burn, tops up the Chaos Buffer to ₦100k, and aggressively dumps all remaining funds into Cold Storage." />
                </button>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-center">
               <div className="p-3 bg-white/5 rounded-xl border border-white/10">
                 <div className="text-xs text-gray-500 uppercase flex justify-center items-center">
-                  Net Deployable <InfoTooltip content="Total NGN available for routing after all taxes and Vault pre-sweeps have been deducted." />
+                  Net Deployable 
+                  {/* Center of container, drops down */}
+                  <InfoTooltip position="bottom" content="Total NGN available for routing after all taxes and Vault pre-sweeps have been deducted." />
                 </div>
                 <div className="font-mono font-bold text-white flex items-center justify-center gap-1 mt-1"><Naira/>{formatNumber(netFunds)}</div>
               </div>
               <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
                 <div className="text-xs text-blue-500 uppercase flex justify-center items-center">
-                  Vault Pre-Stashed <InfoTooltip content="Capital already secured in Tier 3 via the sliders on the previous screen. Untouchable." />
+                  Vault Pre-Stashed 
+                  {/* Center of container, drops down */}
+                  <InfoTooltip position="bottom" content="Capital already secured in Tier 3 via the sliders on the previous screen. Untouchable." />
                 </div>
                 <div className="font-mono font-bold text-white flex items-center justify-center gap-1 mt-1"><Naira/>{formatNumber(vaultAmount)}</div>
               </div>
@@ -550,7 +586,8 @@ export const Triage = () => {
                 <div className="p-4 bg-orange-500/5 border border-orange-500/20 rounded-xl relative">
                     <div className="flex items-center mb-3 text-orange-400 font-bold text-sm">
                         <Cpu size={16} className="mr-2"/> Tier 1: Chaos Buffer
-                        <InfoTooltip content="Rule: Keep at ₦100k minimum. Never use for OpEx. Only for unplannable shocks (medical, urgent repairs)." />
+                        {/* Aligned left */}
+                        <InfoTooltip align="left" content="Rule: Keep at ₦100k minimum. Never use for OpEx. Only for unplannable shocks (medical, urgent repairs)." />
                     </div>
                     <GlassInput 
                         value={chaosBufferAlloc} 
@@ -580,7 +617,8 @@ export const Triage = () => {
                 <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl relative">
                     <div className="flex items-center mb-3 text-blue-400 font-bold text-sm">
                         <Server size={16} className="mr-2"/> Tier 3: Cold Storage
-                        <InfoTooltip content="Rule: The primary wealth engine. Everything left over after OpEx and Buffer is secured here." />
+                        {/* Far right column, aligned right to prevent edge clipping */}
+                        <InfoTooltip align="right" content="Rule: The primary wealth engine. Everything left over after OpEx and Buffer is secured here." />
                     </div>
                     <GlassInput 
                         value={coldStorageAlloc} 
@@ -598,7 +636,7 @@ export const Triage = () => {
                 <span className="flex items-center font-bold text-white">
                   <Heart size={16} className={`mr-2 ${isGenerosityLocked ? 'text-gray-500' : 'text-accent-info'}`}/> 
                   Generosity Wallet
-                  <InfoTooltip content="Rule: If Runway < 3 Months, this is LOCKED. Your oxygen mask comes first. If > 3 Months, dynamically capped by runway health." />
+                  <InfoTooltip align="left" content="Rule: If Runway < 3 Months, this is LOCKED. Your oxygen mask comes first. If > 3 Months, dynamically capped by runway health." />
                 </span>
                 {isGenerosityLocked ? (
                     <span className="text-xs font-bold text-red-500 flex items-center gap-1"><Lock size={12}/> LOCKED</span>
@@ -631,7 +669,7 @@ export const Triage = () => {
               <div className="flex justify-between items-center mb-4">
                  <h3 className="text-xs font-bold text-gray-400 uppercase flex items-center">
                     Strategic Goals
-                    <InfoTooltip content="Rule: War Room missions. Capital deployed here is locked and cannot be used for OpEx or generic savings." />
+                    <InfoTooltip align="left" content="Rule: War Room missions. Capital deployed here is locked and cannot be used for OpEx or generic savings." />
                  </h3>
                  <button onClick={autoDistributeGoals} className="text-xs text-accent-success flex items-center gap-1 hover:underline"><Wand2 size={12}/> Auto-Fill</button>
               </div>
@@ -662,7 +700,7 @@ export const Triage = () => {
               <div className="flex flex-col">
                 <span className="text-white font-bold text-sm flex items-center">
                   Unallocated Capital
-                  <InfoTooltip content="Every single Naira must be assigned a job. Remaining capital must be exactly zero before committing." />
+                  <InfoTooltip position="top" align="left" content="Every single Naira must be assigned a job. Remaining capital must be exactly zero before committing." />
                 </span>
                 <span className="text-[10px] text-gray-400 mt-1">Zero-Based Routing requires exactly 0.</span>
               </div>

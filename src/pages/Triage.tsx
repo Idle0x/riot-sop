@@ -19,8 +19,19 @@ import {
   ArrowRight, ArrowLeft, Flame, Heart, AlertTriangle, 
   CheckCircle2, Lock, Wand2, Landmark, ShieldCheck, 
   RefreshCw, History, X, AlertOctagon,
-  Server, Cpu, Activity
+  Server, Cpu, Activity, Info
 } from 'lucide-react';
+
+// --- CUSTOM TOOLTIP COMPONENT ---
+const InfoTooltip = ({ content }: { content: string }) => (
+  <div className="group relative inline-block ml-2 align-middle z-50">
+    <Info size={14} className="text-gray-500 group-hover:text-blue-400 cursor-help transition-colors" />
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-black/95 border border-white/20 text-[11px] text-gray-300 rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all scale-95 group-hover:scale-100 text-left font-normal tracking-wide leading-relaxed z-50">
+      {content}
+      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black/95" />
+    </div>
+  </div>
+);
 
 export const Triage = () => {
   const navigate = useNavigate();
@@ -353,8 +364,13 @@ export const Triage = () => {
       {/* --- HEADER --- */}
       <div className="flex justify-between items-start">
         <div className="text-center flex-1">
-          <h1 className="text-3xl font-bold text-white">The Accountant</h1>
-          <p className={`text-sm font-bold uppercase tracking-wider ${state === 'critical' ? 'text-red-500' : 'text-green-500'}`}>{state.toUpperCase()} STATE DETECTED</p>
+          <h1 className="text-3xl font-bold text-white flex items-center justify-center">
+            The Accountant 
+            <InfoTooltip content="This is the intake funnel. All incoming capital or unallocated idle funds must be explicitly routed through this engine before they can be deployed." />
+          </h1>
+          <p className={`text-sm font-bold uppercase tracking-wider ${state === 'critical' ? 'text-red-500' : 'text-green-500'}`}>
+            {state.toUpperCase()} STATE DETECTED
+          </p>
         </div>
         <button onClick={() => setShowHistory(true)} className="p-2 bg-white/5 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
           <History size={20}/>
@@ -366,8 +382,19 @@ export const Triage = () => {
         {/* --- STEP 1: INGESTION --- */}
         {step === 1 && (
           <div className="space-y-6 animate-fade-in max-w-2xl mx-auto">
+            
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4">
+               <h3 className="text-sm font-bold text-white mb-2 flex items-center">
+                 Phase 1: Capital Ingestion
+                 <InfoTooltip content="Record the raw incoming capital and the exchange rate. The system automatically calculates your Gross NGN." />
+               </h3>
+               <p className="text-[10px] text-gray-400">If triaging existing idle funds, leave USD at 0. The engine will automatically pull from your Holding Pen.</p>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
-              <GlassInput label="Drop (USD)" type="number" value={amountUSD} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmountUSD(e.target.value)} autoFocus />
+              <div>
+                 <GlassInput label="Drop (USD)" type="number" value={amountUSD} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmountUSD(e.target.value)} autoFocus />
+              </div>
               <div className="relative">
                 <GlassInput 
                   label="Rate (NGN/USD)" 
@@ -392,10 +419,19 @@ export const Triage = () => {
                </div>
             )}
 
-            <GlassInput label="Cost Basis (USD)" type="number" value={costBasisUSD} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCostBasisUSD(e.target.value)} icon={<Lock size={14}/>}/>
+            <div>
+               <div className="flex items-center mb-1">
+                  <span className="text-xs font-bold text-gray-500 uppercase">Cost Basis (USD)</span>
+                  <InfoTooltip content="Rule: Deduct any capital initially risked to execute this signal. Taxes are only calculated on pure profit." />
+               </div>
+               <GlassInput type="number" value={costBasisUSD} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCostBasisUSD(e.target.value)} icon={<Lock size={14}/>}/>
+            </div>
 
             <div>
-              <label className="text-xs font-bold text-gray-500 uppercase">Signal Source</label>
+              <div className="flex items-center mb-1">
+                 <label className="text-xs font-bold text-gray-500 uppercase">Signal Source</label>
+                 <InfoTooltip content="Rule: Link this capital to a specific War Room mission. This allows the system to accurately calculate the Alpha Yield (ROI) of your efforts." />
+              </div>
               <select 
                   className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-white/30 transition-colors" 
                   value={selectedSignalId} 
@@ -408,10 +444,15 @@ export const Triage = () => {
 
             {/* Tax Sliders */}
             <div className="space-y-4 pt-2">
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-white/10 pb-2">Pre-Distribution Deductions</h4>
+                
                 {/* 1. Tax Shield */}
                 <div className="p-4 bg-slate-500/10 rounded-xl border border-slate-500/20">
                     <div className="flex justify-between mb-2">
-                        <span className="flex items-center gap-2 font-bold text-slate-400"><ShieldCheck size={16}/> Tax Shield (NTA 2026)</span>
+                        <span className="flex items-center font-bold text-slate-400">
+                          <ShieldCheck size={16} className="mr-2"/> Tax Shield (NTA)
+                          <InfoTooltip content="Rule: Legally minimize tax burden using the 20% Rent Shield provision. Never evade, always optimize. Funds are pushed to the Vault." />
+                        </span>
                     </div>
                     <div className="flex justify-between mb-2">
                          <span className="font-mono text-slate-300 text-xs">Rate: {taxProvision}%</span>
@@ -426,7 +467,10 @@ export const Triage = () => {
                 {/* 2. Venture Tax */}
                 <div className="p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="flex justify-between mb-2">
-                        <span className="flex items-center gap-2 font-bold text-red-500"><Flame size={16}/> Venture Tax</span>
+                        <span className="flex items-center font-bold text-red-500">
+                           <Flame size={16} className="mr-2"/> Venture Tax
+                           <InfoTooltip content="Rule: Self-imposed penalty on high-risk, high-reward plays. Forces you to burn a percentage directly to build anti-fragility." />
+                        </span>
                     </div>
                     <div className="flex justify-between mb-2">
                          <span className="font-mono text-red-500">{ventureTax}%</span>
@@ -437,7 +481,10 @@ export const Triage = () => {
                 {/* 3. The Pre-Tax Vault */}
                 <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
                     <div className="flex justify-between mb-2">
-                        <span className="flex items-center gap-2 font-bold text-blue-400"><Landmark size={16}/> Pre-Tax Cold Storage (Vault)</span>
+                        <span className="flex items-center font-bold text-blue-400">
+                           <Landmark size={16} className="mr-2"/> Pre-Tax Cold Storage
+                           <InfoTooltip content="Rule #1: Pay yourself first. This money is severed from operations immediately and pushed to the Vault before any routing begins." />
+                        </span>
                     </div>
                     <div className="flex justify-between mb-2">
                         <span className="font-mono text-blue-400">{vaultTax}%</span>
@@ -459,9 +506,12 @@ export const Triage = () => {
                     <ArrowLeft size={16}/>
                  </button>
                  <div>
-                    <h2 className="text-lg font-bold text-white">System Architecture Routing</h2>
+                    <h2 className="text-lg font-bold text-white flex items-center">
+                      System Architecture Routing
+                      <InfoTooltip content="Zero-Based Budgeting Phase. Every single Naira remaining in the Net Deployable pool must be assigned a specific job." />
+                    </h2>
                     {isBigDrop && (
-                      <span className="text-[10px] bg-yellow-500/20 text-yellow-500 px-2 py-0.5 rounded border border-yellow-500/50 font-mono">
+                      <span className="text-[10px] bg-yellow-500/20 text-yellow-500 px-2 py-0.5 rounded border border-yellow-500/50 font-mono mt-1 inline-block">
                           ⚠ BIG DROP MODE: STRICT ADHERENCE
                       </span>
                     )}
@@ -470,29 +520,37 @@ export const Triage = () => {
 
                <button 
                   onClick={executeHardForkRouter} 
-                  className="bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-400 text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition-all"
+                  className="bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-400 text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-2 transition-all"
                >
-                  <Server size={14}/> Execute Hard Fork Auto-Router
+                  <Server size={14}/> 
+                  <span className="hidden md:inline">Execute Hard Fork Auto-Router</span>
+                  <span className="md:hidden">Auto-Route</span>
+                  <InfoTooltip content="Action: Automatically caps OpEx to your exact monthly burn, tops up the Chaos Buffer to ₦100k, and aggressively dumps all remaining funds into Cold Storage." />
                </button>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-center">
               <div className="p-3 bg-white/5 rounded-xl border border-white/10">
-                <div className="text-xs text-gray-500 uppercase">Net Deployable</div>
-                <div className="font-mono font-bold text-white flex items-center justify-center gap-1"><Naira/>{formatNumber(netFunds)}</div>
+                <div className="text-xs text-gray-500 uppercase flex justify-center items-center">
+                  Net Deployable <InfoTooltip content="Total NGN available for routing after all taxes and Vault pre-sweeps have been deducted." />
+                </div>
+                <div className="font-mono font-bold text-white flex items-center justify-center gap-1 mt-1"><Naira/>{formatNumber(netFunds)}</div>
               </div>
               <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
-                <div className="text-xs text-blue-500 uppercase">Vault Pre-Stashed</div>
-                <div className="font-mono font-bold text-white flex items-center justify-center gap-1"><Naira/>{formatNumber(vaultAmount)}</div>
+                <div className="text-xs text-blue-500 uppercase flex justify-center items-center">
+                  Vault Pre-Stashed <InfoTooltip content="Capital already secured in Tier 3 via the sliders on the previous screen. Untouchable." />
+                </div>
+                <div className="font-mono font-bold text-white flex items-center justify-center gap-1 mt-1"><Naira/>{formatNumber(vaultAmount)}</div>
               </div>
             </div>
 
             {/* THE TRI-TIER ARCHITECTURE */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Tier 1: Buffer */}
-                <div className="p-4 bg-orange-500/5 border border-orange-500/20 rounded-xl">
-                    <div className="flex items-center gap-2 mb-3 text-orange-400 font-bold text-sm">
-                        <Cpu size={16}/> Tier 1: Chaos Buffer
+                <div className="p-4 bg-orange-500/5 border border-orange-500/20 rounded-xl relative">
+                    <div className="flex items-center mb-3 text-orange-400 font-bold text-sm">
+                        <Cpu size={16} className="mr-2"/> Tier 1: Chaos Buffer
+                        <InfoTooltip content="Rule: Keep at ₦100k minimum. Never use for OpEx. Only for unplannable shocks (medical, urgent repairs)." />
                     </div>
                     <GlassInput 
                         value={chaosBufferAlloc} 
@@ -504,9 +562,10 @@ export const Triage = () => {
                 </div>
 
                 {/* Tier 2: OpEx */}
-                <div className="p-4 bg-green-500/5 border border-green-500/20 rounded-xl">
-                    <div className="flex items-center gap-2 mb-3 text-green-400 font-bold text-sm">
-                        <Activity size={16}/> Tier 2: Batched OpEx
+                <div className="p-4 bg-green-500/5 border border-green-500/20 rounded-xl relative">
+                    <div className="flex items-center mb-3 text-green-400 font-bold text-sm">
+                        <Activity size={16} className="mr-2"/> Tier 2: Batched OpEx
+                        <InfoTooltip content="Rule: Must not exceed Monthly Burn limit. Funds standard runway and active protocols (Payroll account)." />
                     </div>
                     <GlassInput 
                         value={runwayAlloc} 
@@ -514,13 +573,14 @@ export const Triage = () => {
                         className="text-right font-mono" 
                         placeholder="0" 
                     />
-                    <p className="text-[10px] text-gray-500 mt-2">Operating expenses for the Payroll (Runway) account.</p>
+                    <p className="text-[10px] text-gray-500 mt-2">Operating expenses to sustain your monthly Burn Velocity.</p>
                 </div>
 
                 {/* Tier 3: Cold Storage */}
-                <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl">
-                    <div className="flex items-center gap-2 mb-3 text-blue-400 font-bold text-sm">
-                        <Server size={16}/> Tier 3: Cold Storage
+                <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl relative">
+                    <div className="flex items-center mb-3 text-blue-400 font-bold text-sm">
+                        <Server size={16} className="mr-2"/> Tier 3: Cold Storage
+                        <InfoTooltip content="Rule: The primary wealth engine. Everything left over after OpEx and Buffer is secured here." />
                     </div>
                     <GlassInput 
                         value={coldStorageAlloc} 
@@ -528,14 +588,18 @@ export const Triage = () => {
                         className="text-right font-mono" 
                         placeholder="0" 
                     />
-                    <p className="text-[10px] text-gray-500 mt-2">Strictly severed wealth engine. Pushed to Vault.</p>
+                    <p className="text-[10px] text-gray-500 mt-2">Strictly severed wealth engine. Pushed directly to Vault.</p>
                 </div>
             </div>
 
             {/* Generosity */}
             <div className={`p-4 rounded-xl border transition-colors ${isGenerosityLocked ? 'bg-red-500/5 border-red-500/30' : isOverCap ? 'bg-red-500/10 border-red-500' : 'bg-white/5 border-white/10'}`}>
               <div className="flex justify-between mb-2">
-                <span className="flex items-center gap-2 font-bold text-white"><Heart size={16} className={isGenerosityLocked ? 'text-gray-500' : 'text-accent-info'}/> Generosity Wallet</span>
+                <span className="flex items-center font-bold text-white">
+                  <Heart size={16} className={`mr-2 ${isGenerosityLocked ? 'text-gray-500' : 'text-accent-info'}`}/> 
+                  Generosity Wallet
+                  <InfoTooltip content="Rule: If Runway < 3 Months, this is LOCKED. Your oxygen mask comes first. If > 3 Months, dynamically capped by runway health." />
+                </span>
                 {isGenerosityLocked ? (
                     <span className="text-xs font-bold text-red-500 flex items-center gap-1"><Lock size={12}/> LOCKED</span>
                 ) : (
@@ -548,7 +612,7 @@ export const Triage = () => {
               ) : (
                   <>
                       <GlassInput value={generosity} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGenerosity(e.target.value)} className="text-right mb-3" placeholder="0" />
-                      <div className="text-[10px] text-gray-500 text-right">Funds will be moved to the Generosity Wallet for later distribution.</div>
+                      <div className="text-[10px] text-gray-500 text-right">Funding for Black Tax, charity, and peer-to-peer transfers.</div>
                       {isOverCap && <div className="mt-2 text-[10px] text-red-400 flex items-center gap-1 justify-end"><AlertTriangle size={10}/> Exceeds Cap</div>}
                   </>
               )}
@@ -565,7 +629,10 @@ export const Triage = () => {
               )}
 
               <div className="flex justify-between items-center mb-4">
-                 <h3 className="text-xs font-bold text-gray-400 uppercase">Strategic Goals</h3>
+                 <h3 className="text-xs font-bold text-gray-400 uppercase flex items-center">
+                    Strategic Goals
+                    <InfoTooltip content="Rule: War Room missions. Capital deployed here is locked and cannot be used for OpEx or generic savings." />
+                 </h3>
                  <button onClick={autoDistributeGoals} className="text-xs text-accent-success flex items-center gap-1 hover:underline"><Wand2 size={12}/> Auto-Fill</button>
               </div>
 
@@ -593,8 +660,11 @@ export const Triage = () => {
             {/* Zero-Based Summary */}
             <div className={`flex justify-between items-center p-4 border rounded-xl transition-colors ${Math.abs(remaining) < 1 ? 'bg-green-500/10 border-green-500/50' : 'bg-red-500/10 border-red-500/50'}`}>
               <div className="flex flex-col">
-                <span className="text-white font-bold text-sm">Unallocated Capital</span>
-                <span className="text-[10px] text-gray-400">Zero-Based Routing requires exactly 0.</span>
+                <span className="text-white font-bold text-sm flex items-center">
+                  Unallocated Capital
+                  <InfoTooltip content="Every single Naira must be assigned a job. Remaining capital must be exactly zero before committing." />
+                </span>
+                <span className="text-[10px] text-gray-400 mt-1">Zero-Based Routing requires exactly 0.</span>
               </div>
               <span className={`font-mono font-bold flex items-center gap-1 text-xl ${Math.abs(remaining) < 1 ? 'text-green-500' : 'text-red-500'}`}>
                 {remaining > 0 ? '+' : ''}<Naira/>{formatNumber(remaining)}

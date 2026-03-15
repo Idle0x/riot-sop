@@ -17,6 +17,8 @@ import { CashFlowChart } from '../components/dashboard/CashFlowChart';
 import { ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 
 import { ActionCenter } from '../components/ActionCenter';
+// NEW: Import the Simulator Drawer
+import { RunwayDrawer } from '../components/ui/RunwayDrawer'; 
 
 import { 
   Clock, AlertTriangle, ArrowRight, Activity, ShieldCheck, 
@@ -28,8 +30,11 @@ export const Dashboard = () => {
   const navigate = useNavigate();
   const { user, isGhostMode } = useUser();
   const [time, setTime] = useState(new Date());
-  
+
   const [showActionCenter, setShowActionCenter] = useState(false);
+  // NEW: State to control the simulator drawer
+  const [showRunwayDrawer, setShowRunwayDrawer] = useState(false); 
+  
   const [chartTimeframe, setChartTimeframe] = useState('1M');
 
   const { runwayMonths, history, telemetry } = useLedger();
@@ -42,9 +47,8 @@ export const Dashboard = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // UPDATED: Total Net Worth now accurately tracks deployed Goal Capital
   const totalNetWorth = allocation.liquid + allocation.reserved + allocation.generosity + allocation.idle + allocation.goals;
-  
+
   const burnCap = user?.burnCap || 0;
   const burnRatio = burnCap > 0 ? (outflow / burnCap) * 100 : 0;
 
@@ -55,7 +59,6 @@ export const Dashboard = () => {
         .map(t => t.categoryGroup || 'Uncategorized')
   ));
 
-  // UPDATED: Added Goals (Missions) to the Pie Chart
   const allocationData = [
     { name: 'Ops', value: allocation.liquid, color: '#10b981' }, 
     { name: 'Defense', value: allocation.reserved, color: '#3b82f6' }, 
@@ -147,7 +150,7 @@ export const Dashboard = () => {
                         </div>
                     </div>
                 </button>
-                
+
                 {showActionCenter && (
                     <div className="animate-fade-in -mt-2">
                         <ActionCenter />
@@ -207,19 +210,34 @@ export const Dashboard = () => {
         <GlassCard className="p-0 overflow-hidden relative group h-48">
           <div className="absolute inset-0 p-8 z-10 flex flex-col md:flex-row justify-between items-start md:items-center">
             <div>
-                <h3 className="font-bold text-white text-lg flex items-center gap-2">
-                  Runway Health
-                  <button onClick={() => navigate('/analytics')} className="text-gray-500 hover:text-white transition-colors"><BarChart3 size={14}/></button>
-                </h3>
-                <div className={`text-5xl font-mono font-bold mt-2 ${runwayMonths < 3 ? 'text-red-500' : runwayMonths < 6 ? 'text-orange-500' : 'text-green-500'}`}>
-                  {runwayMonths === Infinity ? '∞' : runwayMonths.toFixed(1)} <span className="text-lg text-gray-500">Mo</span>
+                <div className="flex items-center gap-3">
+                  <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                    Runway Health
+                    <button onClick={() => navigate('/analytics')} className="text-gray-500 hover:text-white transition-colors" title="View Analytics"><BarChart3 size={14}/></button>
+                  </h3>
+                  {/* NEW: Simulation Trigger Badge */}
+                  <button 
+                    onClick={() => setShowRunwayDrawer(true)} 
+                    className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full flex items-center gap-1 hover:bg-blue-500/40 border border-blue-500/30 transition-colors uppercase font-bold tracking-widest"
+                  >
+                    <Activity size={10}/> Simulate
+                  </button>
                 </div>
+                
+                {/* NEW: Make the Runway Number clickable to open the simulator */}
+                <button 
+                  onClick={() => setShowRunwayDrawer(true)}
+                  className={`text-5xl font-mono font-bold mt-2 text-left hover:scale-105 origin-left transition-transform cursor-pointer ${runwayMonths < 3 ? 'text-red-500' : runwayMonths < 6 ? 'text-orange-500' : 'text-green-500'}`}
+                  title="Click to open Scenario Simulator"
+                >
+                  {runwayMonths === Infinity ? '∞' : runwayMonths.toFixed(1)} <span className="text-lg text-gray-500">Mo</span>
+                </button>
                 <div className="mt-2 w-48">
                    <GlassProgressBar value={runwayMonths} max={12} color={runwayMonths < 3 ? 'danger' : runwayMonths < 6 ? 'warning' : 'success'} size="sm" showPercentage={false} />
                 </div>
             </div>
 
-            <div className="text-left md:text-right mt-4 md:mt-0">
+            <div className="text-left md:text-right mt-4 md:mt-0 pointer-events-none">
                 <div className="text-sm text-gray-400 uppercase font-bold tracking-widest mb-1">Total Burn Velocity</div>
                 <div className="text-2xl font-mono font-bold text-white flex items-center justify-start md:justify-end gap-1">
                    <Naira/>{formatNumber(outflow)} <span className="text-sm text-gray-500">/ <Naira/>{formatNumber(burnCap)}</span>
@@ -305,8 +323,7 @@ export const Dashboard = () => {
                   </div>
                   <div className="font-mono font-bold text-white"><Naira/>{formatNumber(allocation.reserved)}</div>
               </div>
-              
-              {/* NEW: War Room / Goals */}
+
               <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center hover:bg-white/10 transition-colors">
                   <div className="flex items-center gap-3">
                      <div className="p-2 bg-purple-500/20 text-purple-400 rounded-lg"><Target size={18}/></div>
@@ -315,7 +332,6 @@ export const Dashboard = () => {
                   <div className="font-mono font-bold text-white"><Naira/>{formatNumber(allocation.goals)}</div>
               </div>
 
-              {/* NEW: Holding / Idle Cash */}
               <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center hover:bg-white/10 transition-colors">
                   <div className="flex items-center gap-3">
                      <div className="p-2 bg-yellow-500/20 text-yellow-400 rounded-lg"><Box size={18}/></div>
@@ -331,7 +347,7 @@ export const Dashboard = () => {
                   </div>
                   <div className="font-mono font-bold text-white"><Naira/>{formatNumber(allocation.generosity)}</div>
               </div>
-              
+
               <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center hover:bg-white/10 transition-colors opacity-70">
                   <div className="flex items-center gap-3">
                      <div className="p-2 bg-gray-500/20 text-gray-400 rounded-lg"><Zap size={18}/></div>
@@ -391,6 +407,12 @@ export const Dashboard = () => {
           </div>
         </GlassCard>
       </div>
+      
+      {/* NEW: Render the Simulator Drawer component */}
+      <RunwayDrawer 
+        isOpen={showRunwayDrawer} 
+        onClose={() => setShowRunwayDrawer(false)} 
+      />
     </RunwayWeather>
   );
 };

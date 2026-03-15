@@ -64,7 +64,8 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
-    reader.onload = (e) => {
+    // Changed to async to allow cryptographic hashing
+    reader.onload = async (e) => {
       try {
         const text = e.target?.result as string;
 
@@ -106,7 +107,7 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
             const tempHeaders = cols.map(h => h.toLowerCase().replace(/["\r]/g, '').trim());
 
             const tempDateIdx = tempHeaders.findIndex(h => h === 'date' || h.includes('date') || h === 'value date' || h === 'txn date' || h === 'date/time');
-            
+
             // Priorities Description over Category
             let tempDescIdx = tempHeaders.findIndex(h => h === 'description' || h === 'narration' || h === 'details' || h === 'remarks');
             if (tempDescIdx === -1) tempDescIdx = tempHeaders.findIndex(h => h === 'category');
@@ -127,6 +128,9 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
 
         const parsedData: Partial<TelemetryRecord>[] = [];
         const merchantFrequency: Record<string, number> = {};
+        
+        // NEW: Memory bank to track identical transactions on the exact same day
+        const occurrenceTracker: Record<string, number> = {};
 
         for (let i = headerRowIndex + 1; i < rows.length; i++) {
           const rawRow = rows[i];
@@ -146,7 +150,7 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
 
           let rawDate = cols[dateIdx]?.replace(/["\r]/g, '').trim();
           const rawDesc = cols[descIdx]?.replace(/["\r\n]/g, ' ').trim() || 'Unknown';
-          
+
           let amount = 0;
           let type: 'SPEND' | 'DROP' = 'SPEND';
 
@@ -158,18 +162,17 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
              const creditStr = cols[creditIdx]?.replace(/[^0-9.-]+/g, '');
              const debitVal = debitStr ? parseFloat(debitStr) : 0;
              const creditVal = creditStr ? parseFloat(creditStr) : 0;
-             
+
              if (debitVal > 0) { amount = debitVal; type = 'SPEND'; }
              else if (creditVal > 0) { amount = creditVal; type = 'DROP'; }
           }
 
           if (!amount || isNaN(amount) || !rawDate) continue;
 
-          rawDate = rawDate.replace(/\n/g, ' '); // Fix Kuda newlines
+          rawDate = rawDate.replace(/\n/g, ' ');
 
           let parsedDate = new Date(rawDate);
-          
-          // Strict Date Formatting (Fixes 23/07/21 bugs)
+
           if (isNaN(parsedDate.getTime())) {
              const dateParts = rawDate.split(' ')[0].split(/[-/]/);
              if (dateParts.length >= 3) {
@@ -177,12 +180,12 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
                  let month = dateParts[1].padStart(2, '0');
                  let year = dateParts[2];
 
-                 if (dateParts[0].length === 4) { // It's actually YYYY/MM/DD
+                 if (dateParts[0].length === 4) { 
                     year = dateParts[0];
                     month = dateParts[1].padStart(2, '0');
                     day = dateParts[2].padStart(2, '0');
                  } else if (year.length === 2) {
-                    year = '20' + year; // Assumes 2000s
+                    year = '20' + year; 
                  }
 
                  const timePart = rawDate.split(' ')[1] || '12:00:00';
@@ -198,6 +201,26 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
               merchantFrequency[merchant] = (merchantFrequency[merchant] || 0) + 1;
           }
 
+          // -------------------------------------------------------------------
+          // THE DETERMINISTIC SHA-256 FINGERPRINT ENGINE
+          // -------------------------------------------------------------------
+          
+          // 1. Create a normalized string based on the raw facts of the transaction
+          const baseSeed = `${parsedDate.toISOString()}_${type}_${amount}_${rawDesc.trim()}`;
+          
+          // 2. Track occurrences (fixes the "two identical coffees on the same day" bug)
+          occurrenceTracker[baseSeed] = (occurrenceTracker[baseSeed] || 0) + 1;
+          const finalSeed = `${baseSeed}_${occurrenceTracker[baseSeed]}`;
+          
+          // 3. Hash the string using the browser's native cryptographic engine
+          const encoder = new TextEncoder();
+          const data = encoder.encode(finalSeed);
+          const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+          
+          // 4. Convert the binary hash into a readable Hexadecimal string
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          const fingerprintHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
           parsedData.push({
             date: parsedDate.toISOString(),
             type,
@@ -206,7 +229,7 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
             amount,
             categoryGroup: category,
             currency: 'NGN',
-            transactionRef: crypto.randomUUID() // Fallback unique ID
+            transactionRef: fingerprintHex // The titanium lock!
           });
         }
 

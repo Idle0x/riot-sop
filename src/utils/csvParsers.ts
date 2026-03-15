@@ -1,57 +1,122 @@
 import { type TelemetryRecord } from '../types';
 
-const classifyTransaction = (rawDescription: string): { merchant: string, category: string } => {
+const classifyTransaction = (rawDescription: string, type: 'SPEND' | 'DROP', amount: number): { merchant: string, category: string } => {
   const desc = rawDescription.toLowerCase();
+  const rawUpper = rawDescription.toUpperCase();
 
-  if (desc.includes('sportybet') || desc.includes('sporty')) return { merchant: 'SportyBet', category: 'Betting & Gaming' };
-  if (desc.includes('bet9ja')) return { merchant: 'Bet9ja', category: 'Betting & Gaming' };
-  if (desc.includes('1xbet')) return { merchant: '1xBet', category: 'Betting & Gaming' };
-  if (desc.includes('msport')) return { merchant: 'MSport', category: 'Betting & Gaming' };
+  // ----------------------------------------------------------------------
+  // LAYER 0: THE IDENTITY FIREWALL (Anti-Inflation)
+  // ----------------------------------------------------------------------
+  if (desc.includes('fawaz ajibade azeez') || desc.includes('azeez fawaz') || desc.includes('fawaz azeez') || desc.includes('fa@wa')) {
+      return { merchant: 'Self Transfer / Liquidity', category: 'Self Transfer' };
+  }
 
-  if (desc.includes('uber')) return { merchant: 'Uber', category: 'Transport' };
-  if (desc.includes('bolt')) return { merchant: 'Bolt', category: 'Transport' };
-  if (desc.includes('indrive')) return { merchant: 'inDrive', category: 'Transport' };
-  if (desc.includes('lago') || desc.includes('cowry')) return { merchant: 'Public Transit', category: 'Transport' };
+  // ----------------------------------------------------------------------
+  // LAYER 1: BLANK DATA & UNKNOWN FALLBACK
+  // ----------------------------------------------------------------------
+  if (desc === 'unknown' || desc.trim() === '') {
+      if (type === 'SPEND') {
+          if (amount === 50) return { merchant: 'FGN Electronic Levy (Inferred)', category: 'Taxes & Levies' };
+          if (amount === 10 || amount === 4 || amount === 25) return { merchant: 'NIP/SMS Fee (Inferred)', category: 'Bank Charges' };
+          if (amount === 0.75 || amount === 3.75 || amount === 7.50) return { merchant: 'VAT Fee (Inferred)', category: 'Taxes & Levies' };
+      }
+      return { merchant: 'Unidentified Ledger Entry', category: 'Uncategorized' };
+  }
 
+  // ----------------------------------------------------------------------
+  // LAYER 2: THE WEALTH ENGINE (Sweeps & Yield)
+  // ----------------------------------------------------------------------
+  if (desc.includes('owealth') || desc.includes('spend and save') || desc.includes('piggybank') || desc.includes('cowrywise')) {
+      return { merchant: 'Automated Savings Sweep', category: 'Internal Transfer' };
+  }
+  if (desc.includes('int.pd') || desc.includes('interest') || desc.includes('cap. yield') || desc.includes('yield')) {
+      return { merchant: 'Bank Interest / Yield', category: 'Yield & Returns' };
+  }
+
+  // ----------------------------------------------------------------------
+  // LAYER 3: MICRO-DRAINS (Taxes & Bank Charges)
+  // ----------------------------------------------------------------------
+  if (desc.includes('electroniclevy') || desc.includes('cbn') || desc.includes('fgn') || desc.includes('stamp duty') || desc.includes('vat')) {
+      return { merchant: 'FGN / CBN Taxes', category: 'Taxes & Levies' };
+  }
+  if (desc.includes('nip-fee') || desc.includes('sms') || desc.includes('alert') || desc.includes('maintenance') || desc.includes('card fee') || desc.includes('charge')) {
+      return { merchant: 'Bank Fees & Alerts', category: 'Bank Charges' };
+  }
+
+  // ----------------------------------------------------------------------
+  // LAYER 4: DYNAMIC WEB SERVICES & GOOGLE EXTRACTION
+  // ----------------------------------------------------------------------
+  if (desc.includes('google')) {
+      // Extracts specific app names from formats like "@DLO*GOOGLE Muviz Edge I NG|"
+      const googleMatch = rawUpper.match(/GOOGLE\s+(.*?)(?:\s+LAGOS\s+NG|\s+NG|\|)/);
+      const appName = googleMatch && googleMatch[1] ? googleMatch[1].trim() : 'Services';
+      return { merchant: `Google: ${appName}`, category: 'Software' };
+  }
+  if (desc.includes('spotify')) return { merchant: 'Spotify', category: 'Subscriptions' };
+  if (desc.includes('netflix')) return { merchant: 'Netflix', category: 'Subscriptions' };
+  if (desc.includes('apple') || desc.includes('itunes')) return { merchant: 'Apple Services', category: 'Subscriptions' };
+  if (desc.includes('aws') || desc.includes('amazon')) return { merchant: 'Amazon', category: 'Software' };
+  if (desc.includes('openai') || desc.includes('chatgpt')) return { merchant: 'OpenAI', category: 'Software' };
+  if (desc.includes('dstv') || desc.includes('gotv') || desc.includes('multichoice') || desc.includes('showmax')) return { merchant: 'Cable TV / Streaming', category: 'Subscriptions' };
+
+  // ----------------------------------------------------------------------
+  // LAYER 5: UTILITIES, TELCO & BETTING
+  // ----------------------------------------------------------------------
   if (desc.includes('mtn') || desc.includes('vtu') || desc.includes('airtime')) return { merchant: 'Telecom / Airtime', category: 'Utilities' };
   if (desc.includes('airtel')) return { merchant: 'Airtel', category: 'Utilities' };
   if (desc.includes('glo') && desc.includes('data')) return { merchant: 'Glo', category: 'Utilities' };
-  if (desc.includes('dstv') || desc.includes('multichoice') || desc.includes('gotv')) return { merchant: 'Cable TV', category: 'Subscriptions' };
-  if (desc.includes('ikedc') || desc.includes('ekedc') || desc.includes('power') || desc.includes('token') || desc.includes('aedc')) return { merchant: 'Electricity (Power)', category: 'Utilities' };
+  if (desc.includes('ikedc') || desc.includes('ekedc') || desc.includes('aedc') || desc.includes('buy power') || desc.includes('token') || desc.includes('power')) return { merchant: 'Electricity (Power)', category: 'Utilities' };
+  if (desc.includes('sportybet') || desc.includes('sporty') || desc.includes('bet9ja') || desc.includes('1xbet') || desc.includes('msport')) return { merchant: 'Betting & Gaming', category: 'Betting & Gaming' };
 
-  if (desc.includes('netflix')) return { merchant: 'Netflix', category: 'Subscriptions' };
-  if (desc.includes('apple') || desc.includes('itunes')) return { merchant: 'Apple Services', category: 'Subscriptions' };
-  if (desc.includes('spotify')) return { merchant: 'Spotify', category: 'Subscriptions' };
-  if (desc.includes('amazon') || desc.includes('aws')) return { merchant: 'Amazon', category: 'Subscriptions' };
-  if (desc.includes('google') || desc.includes('gsuite')) return { merchant: 'Google', category: 'Subscriptions' };
-  if (desc.includes('openai') || desc.includes('chatgpt')) return { merchant: 'OpenAI', category: 'Software' };
-  if (desc.includes('vercel') || desc.includes('github')) return { merchant: 'Dev Tools', category: 'Software' };
+  // ----------------------------------------------------------------------
+  // LAYER 6: DAILY OPEX (Food, Groceries, Transport)
+  // ----------------------------------------------------------------------
+  if (desc.includes('chowdeck') || desc.includes('glovo') || desc.includes('chicken republic') || desc.includes('domino') || desc.includes('feeding')) return { merchant: 'Food & Dining', category: 'Food & Dining' };
+  if (desc.includes('shoprite') || desc.includes('spar')) return { merchant: 'Supermarket / Groceries', category: 'Groceries' };
+  if (desc.includes('uber') || desc.includes('bolt') || desc.includes('indrive') || desc.includes('cowry') || desc.includes('lago')) return { merchant: 'Transport', category: 'Transport' };
 
-  if (desc.includes('shoprite')) return { merchant: 'Shoprite', category: 'Groceries' };
-  if (desc.includes('spar')) return { merchant: 'Spar', category: 'Groceries' };
-  if (desc.includes('chicken republic')) return { merchant: 'Chicken Republic', category: 'Food & Dining' };
-  if (desc.includes('domino') || desc.includes('pizza')) return { merchant: 'Dominos Pizza', category: 'Food & Dining' };
-  if (desc.includes('chowdeck') || desc.includes('glovo') || desc.includes('food')) return { merchant: 'Food Delivery', category: 'Food & Dining' };
+  // ----------------------------------------------------------------------
+  // LAYER 7: DYNAMIC GATEWAYS (Paystack, Flutterwave)
+  // ----------------------------------------------------------------------
+  if (desc.includes('paystack') || desc.includes('flw*') || desc.includes('flutterwave')) {
+      const gatewayMatch = rawUpper.match(/(?:PAYSTACK|FLW)\s*\*?\s*(.*?)(?:\s+LAGOS|\s+NG|\||$)/);
+      const merchantName = gatewayMatch && gatewayMatch[1] ? gatewayMatch[1].trim() : 'Online Merchant';
+      return { merchant: merchantName, category: 'Online Payment' };
+  }
 
-  if (desc.includes('stamp duty') || desc.includes('fgn') || desc.includes('vat')) return { merchant: 'FGN Stamp Duty/VAT', category: 'Bank Charges' };
-  if (desc.includes('sms') || desc.includes('alert')) return { merchant: 'SMS Alert Fee', category: 'Bank Charges' };
-  if (desc.includes('maintenance') || desc.includes('card fee')) return { merchant: 'Card Maintenance', category: 'Bank Charges' };
-  if (desc.includes('fee') || desc.includes('charge')) return { merchant: 'Bank Fees', category: 'Bank Charges' };
+  // ----------------------------------------------------------------------
+  // LAYER 8: DYNAMIC POS & WEB EXTRACTION
+  // ----------------------------------------------------------------------
+  if (desc.includes('pos/pur/') || desc.includes('pos pur')) {
+      // Extracts terminal merchant: "POS/PUR/412345/MEGAPLAZA SURULERE NG|" -> "MEGAPLAZA SURULERE"
+      const posMatch = rawUpper.match(/POS\/?PUR\/?\d*\/?(.*?)(?:\s+LAGOS|\s+NG|\||$)/);
+      const posName = posMatch && posMatch[1] ? posMatch[1].trim() : 'POS Terminal';
+      return { merchant: posName, category: 'POS / Cash' };
+  }
+  if (desc.includes('web purchase')) {
+      const webMatch = rawUpper.match(/WEB PURCHASE\s*@\s*([A-Z0-9_\-\s]+?)(?:\s+LAGOS|\s+NG|\||$)/);
+      const webName = webMatch && webMatch[1] ? webMatch[1].trim() : 'Web Merchant';
+      return { merchant: webName, category: 'Online Payment' };
+  }
 
-  if (desc.includes('paystack')) return { merchant: 'Paystack Checkout', category: 'Online Payment' };
-  if (desc.includes('flutterwave') || desc.includes('flw')) return { merchant: 'Flutterwave', category: 'Online Payment' };
-  if (desc.includes('remita')) return { merchant: 'Remita', category: 'Taxes & Levies' };
+  // ----------------------------------------------------------------------
+  // LAYER 9: TRANSFERS & REVERSALS
+  // ----------------------------------------------------------------------
+  if (desc.includes('reversal') || desc.includes('rev of') || desc.includes('refund')) return { merchant: 'Reversal / Refund', category: 'Refunds' };
+  if (desc.includes('atm') && (desc.includes('wdl') || desc.includes('withdrawal'))) return { merchant: 'ATM Withdrawal', category: 'POS / Cash' };
+  if (desc.includes('trf') || desc.includes('transfer') || desc.includes('nip') || desc.includes('ussd') || desc.includes('fbnmobile')) {
+      return { merchant: 'Bank Transfer', category: type === 'DROP' ? 'Inbound Transfer' : 'Outbound Transfer' };
+  }
 
-  if (desc.includes('pos')) return { merchant: 'POS Terminal', category: 'POS / Cash' };
-  if (desc.includes('atm') && desc.includes('wdl')) return { merchant: 'ATM Withdrawal', category: 'POS / Cash' };
-  if (desc.includes('trf') || desc.includes('transfer') || desc.includes('nip') || desc.includes('ussd')) return { merchant: 'Bank Transfer', category: 'Transfers' };
-  if (desc.includes('reversal')) return { merchant: 'Reversal', category: 'Refunds' };
-
-  let cleanMerchant = rawDescription
-      .replace(/(POS\/PUR\/|NIP TRF|NIP|TRF|USSD|WDL|WEB\/|MOB\/|kip:)/gi, '') 
+  // ----------------------------------------------------------------------
+  // LAYER 10: ULTIMATE CLEANUP FALLBACK
+  // ----------------------------------------------------------------------
+  let cleanMerchant = rawUpper
+      .replace(/(POS\/PUR\/|NIP TRF|NIP|TRF|USSD|WDL|WEB\/|MOB\/|KIP:)/g, '') 
       .replace(/[0-9]{6,}/g, '') 
       .split('/')[0] 
       .split('*')[0] 
+      .split('|')[0] 
       .trim();
 
   cleanMerchant = cleanMerchant.charAt(0).toUpperCase() + cleanMerchant.slice(1).toLowerCase();
@@ -64,11 +129,9 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
-    // Changed to async to allow cryptographic hashing
     reader.onload = async (e) => {
       try {
         const text = e.target?.result as string;
-
         const rows: string[] = [];
         let currentRow = '';
         let inQuotesForSplit = false;
@@ -106,9 +169,7 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
 
             const tempHeaders = cols.map(h => h.toLowerCase().replace(/["\r]/g, '').trim());
 
-            const tempDateIdx = tempHeaders.findIndex(h => h === 'date' || h.includes('date') || h === 'value date' || h === 'txn date' || h === 'date/time');
-
-            // Priorities Description over Category
+            const tempDateIdx = tempHeaders.findIndex(h => h === 'date' || h.includes('date') || h === 'value date' || h === 'txn date');
             let tempDescIdx = tempHeaders.findIndex(h => h === 'description' || h === 'narration' || h === 'details' || h === 'remarks');
             if (tempDescIdx === -1) tempDescIdx = tempHeaders.findIndex(h => h === 'category');
 
@@ -117,8 +178,8 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
                 headers = tempHeaders;
                 dateIdx = tempDateIdx;
                 descIdx = tempDescIdx;
-                debitIdx = headers.findIndex(h => h.includes('debit') || h.includes('withdrawal') || h.includes('money out') || h.includes('paid out'));
-                creditIdx = headers.findIndex(h => h.includes('credit') || h.includes('deposit') || h.includes('money in') || h.includes('paid in'));
+                debitIdx = headers.findIndex(h => h.includes('debit') || h.includes('withdrawal') || h.includes('paid out'));
+                creditIdx = headers.findIndex(h => h.includes('credit') || h.includes('deposit') || h.includes('paid in'));
                 amountIdx = headers.findIndex(h => h === 'amount');
                 break;
             }
@@ -128,8 +189,6 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
 
         const parsedData: Partial<TelemetryRecord>[] = [];
         const merchantFrequency: Record<string, number> = {};
-        
-        // NEW: Memory bank to track identical transactions on the exact same day
         const occurrenceTracker: Record<string, number> = {};
 
         for (let i = headerRowIndex + 1; i < rows.length; i++) {
@@ -168,11 +227,9 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
           }
 
           if (!amount || isNaN(amount) || !rawDate) continue;
-
           rawDate = rawDate.replace(/\n/g, ' ');
 
           let parsedDate = new Date(rawDate);
-
           if (isNaN(parsedDate.getTime())) {
              const dateParts = rawDate.split(' ')[0].split(/[-/]/);
              if (dateParts.length >= 3) {
@@ -187,7 +244,6 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
                  } else if (year.length === 2) {
                     year = '20' + year; 
                  }
-
                  const timePart = rawDate.split(' ')[1] || '12:00:00';
                  parsedDate = new Date(`${year}-${month}-${day}T${timePart}Z`); 
              }
@@ -195,29 +251,20 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
 
           if (isNaN(parsedDate.getTime())) continue;
 
-          const { merchant, category } = classifyTransaction(rawDesc);
+          const { merchant, category } = classifyTransaction(rawDesc, type, amount);
 
           if (type === 'SPEND') {
               merchantFrequency[merchant] = (merchantFrequency[merchant] || 0) + 1;
           }
 
-          // -------------------------------------------------------------------
-          // THE DETERMINISTIC SHA-256 FINGERPRINT ENGINE
-          // -------------------------------------------------------------------
-          
-          // 1. Create a normalized string based on the raw facts of the transaction
+          // TITANIUM HASH ENGINE (Deterministic Duplication Prevention)
           const baseSeed = `${parsedDate.toISOString()}_${type}_${amount}_${rawDesc.trim()}`;
-          
-          // 2. Track occurrences (fixes the "two identical coffees on the same day" bug)
           occurrenceTracker[baseSeed] = (occurrenceTracker[baseSeed] || 0) + 1;
           const finalSeed = `${baseSeed}_${occurrenceTracker[baseSeed]}`;
           
-          // 3. Hash the string using the browser's native cryptographic engine
           const encoder = new TextEncoder();
           const data = encoder.encode(finalSeed);
           const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-          
-          // 4. Convert the binary hash into a readable Hexadecimal string
           const hashArray = Array.from(new Uint8Array(hashBuffer));
           const fingerprintHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
@@ -229,7 +276,7 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
             amount,
             categoryGroup: category,
             currency: 'NGN',
-            transactionRef: fingerprintHex // The titanium lock!
+            transactionRef: fingerprintHex 
           });
         }
 

@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { GlassCard } from '../ui/GlassCard';
 import { GlassInput } from '../ui/GlassInput';
 import { GlassButton } from '../ui/GlassButton';
-import { Shield, Mail, Lock, Loader2, AlertTriangle, ArrowRight, Key } from 'lucide-react';
+import { Shield, Mail, Lock, Loader2, AlertTriangle, Key } from 'lucide-react';
 
 interface Props {
   onAuthenticated: () => void;

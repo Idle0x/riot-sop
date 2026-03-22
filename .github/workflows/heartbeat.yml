@@ -1,0 +1,37 @@
+name: Sovereign Heartbeat
+
+# This runs every day at 11:59 PM (UTC)
+on:
+  schedule:
+    - cron: '59 23 * * *'
+  workflow_dispatch: # Allows you to trigger it manually from GitHub just in case
+
+jobs:
+  ping-database:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Pulse to Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          curl -X POST "${SUPABASE_URL}/rest/v1/rpc/upsert_daily_snapshot" \
+          -H "apikey: ${SUPABASE_ANON_KEY}" \
+          -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "p_date": "'"$(date -u +%Y-%m-%d)"'",
+            "p_net_worth": 0,
+            "p_liquid_capital": 0,
+            "p_runway_months": 0,
+            "p_allocated_goals": 0,
+            "p_generosity_wallet": 0,
+            "p_idle_holding": 0,
+            "p_rolling_30d_burn": 0,
+            "p_total_budget_cap": 0,
+            "p_active_signals": 0,
+            "p_harvested_signals": 0,
+            "p_graveyard_signals": 0,
+            "p_total_signal_yield": 0
+          }'
+          echo "Heartbeat executed successfully."

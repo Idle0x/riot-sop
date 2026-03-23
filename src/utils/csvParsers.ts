@@ -5,7 +5,7 @@ const BANK_BLACKLIST = [
     'access', 'stanbic', 'first bank', 'fcmb', 'wema', 'polaris', 'sterling',
     'keystone', 'union bank', 'fidelity', 'ecobank', 'standard chartered',
     'providus', 'taj', 'jaiz', 'suntrust', 'titan', 'globus', 'optimus', 'rubies',
-    'vfd', 'mint', 'kuda mfb', 'stanbicibtc bank', 'paycom', 'monie point',
+    'vfd', 'mint', 'kuda mfb', 'stanbicibtc bank', 'stanbicibtc', 'paycom', 'monie point',
     'firstcity monument', 'guaranty trust', 'smartcash', 'smart cash'
 ];
 

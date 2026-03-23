@@ -73,8 +73,10 @@ export const Analytics = () => {
     getComparatorData, availablePeriods, filteredSnapshots
   } = useAnalytics(masterTimeframe, customStart, customEnd);
 
+  // --- FIXED: ADDED PREV VARIABLES FOR STRICT MODE ---
   const { 
-    trueInflow, trueOutflow, trueNetFlow, inflowDelta, outflowDelta 
+    trueInflow, trueOutflow, trueNetFlow, inflowDelta, outflowDelta,
+    prevTrueInflow, prevTrueOutflow
   } = useFinancialStats(masterTimeframe, customStart, customEnd);
 
   // EXACT TIMEFRAME NSR CALCULATION FOR TOP RIBBON

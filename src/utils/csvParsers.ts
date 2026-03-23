@@ -6,8 +6,8 @@ const BANK_BLACKLIST = [
     'access', 'stanbic', 'first bank', 'fcmb', 'wema', 'polaris', 'sterling',
     'keystone', 'union bank', 'fidelity', 'ecobank', 'standard chartered',
     'providus', 'taj', 'jaiz', 'suntrust', 'titan', 'globus', 'optimus', 'rubies',
-    'vfd', 'mint', 'kuda mfb', 'stanbicibtc bank', 'paycom', 'monie point',
-    'firstcity monument', 'guaranty trust', 'stanbicibtc', 'StanbicIBTC'
+    'vfd', 'mint', 'kuda mfb', 'stanbicibtc bank', 'stanbicibtc', 'paycom', 'monie point',
+    'firstcity monument', 'guaranty trust', 'smartcash', 'smart cash'
 ];
 
 // --- THE PRE-STEP: SMART ENTITY EXTRACTION & PERMUTATION ---
@@ -63,6 +63,13 @@ const classifyTransaction = (rawDescription: string, type: 'SPEND' | 'DROP', amo
   const nameLower = extractedName.toLowerCase();
 
   // --------------------------------------------------------------------------------
+  // LAYER -1: TELECOM WALLET OVERRIDES (Bypasses Identity Firewall)
+  // --------------------------------------------------------------------------------
+  if ((desc.includes('smartcash') || desc.includes('smart cash') || desc.includes('airtel smartcash')) && type === 'SPEND') {
+      return { merchant: 'Airtel SmartCash', category: 'Utilities' };
+  }
+
+  // --------------------------------------------------------------------------------
   // LAYER 0: THE IDENTITY FIREWALL
   // --------------------------------------------------------------------------------
   const rawAliases = import.meta.env.VITE_IDENTITY_ALIASES || '';
@@ -74,7 +81,7 @@ const classifyTransaction = (rawDescription: string, type: 'SPEND' | 'DROP', amo
   }
 
   // --------------------------------------------------------------------------------
-  // LAYER 1: AUTOMATED WEALTH & YIELD (Strictly Platforms Now)
+  // LAYER 1: AUTOMATED WEALTH & YIELD 
   // --------------------------------------------------------------------------------
   const isWealthPlatform = ['owealth', 'spend and save', 'piggybank', 'piggyvest', 'cowrywise'].some(plat => desc.includes(plat) || nameLower.includes(plat));
   if (isWealthPlatform) {
@@ -231,7 +238,7 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
         if (headerRowIndex === -1) throw new Error("Could not detect standard 'Date' or 'Description' columns.");
 
         // --- PASS 1: EXTRACT AND MAP NAMES FOR DEDUPLICATION ---
-        const rawRowsData: any[] = [];
+        const preParsedRows: any[] = [];
         const uniqueNames = new Set<string>();
 
         for (let i = headerRowIndex + 1; i < rows.length; i++) {

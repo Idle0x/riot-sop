@@ -92,9 +92,12 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
     return Object.keys(dataMap).sort().map(k => dataMap[k]);
   }, [filteredEvents, timeframe]);
 
+  // PURGED 'OUTBOUND TRANSFER' FROM CATEGORY SPLIT
   const categorySplit = useMemo(() => {
     const map: Record<string, number> = {};
-    filteredEvents.filter(e => e.type === 'SPEND').forEach(e => {
+    const ignoredCategories = ['Internal Transfer', 'Self Transfer', 'Inbound Transfer', 'Outbound Transfer'];
+    
+    filteredEvents.filter(e => e.type === 'SPEND' && !ignoredCategories.includes(e.categoryGroup || '')).forEach(e => {
         const key = e.categoryGroup || 'Uncategorized';
         map[key] = (map[key] || 0) + Math.abs(e.amount || 0);
     });
@@ -112,16 +115,22 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
     return Object.values(map).sort((a, b) => b.total - a.total).slice(0, 15);
   }, [filteredTelemetry]);
 
+  // STRICT TIMEFRAME BINDING FOR SIGNALS
+  const filteredSignals = useMemo(() => signals.filter(s => {
+      const d = new Date(s.updatedAt || s.createdAt);
+      return d >= startDate && d <= endDate;
+  }), [signals, startDate, endDate]);
+
   const signalStats = useMemo(() => {
-    const data = signals.filter(s => s.totalGenerated > 0 || s.hoursLogged > 0).map(s => ({
+    const data = filteredSignals.filter(s => s.totalGenerated > 0 || s.hoursLogged > 0).map(s => ({
         id: s.id, name: s.title, sector: s.sector, effort: s.hoursLogged, profit: s.totalGenerated,
         roi: s.hoursLogged > 0 ? (s.totalGenerated / s.hoursLogged) : 0
       })).sort((a, b) => b.roi - a.roi);
 
     const funnel = [
-        { name: 'Active', value: signals.filter(s => s.phase !== 'harvested' && s.phase !== 'graveyard').length, fill: '#3b82f6' },
-        { name: 'Harvested', value: signals.filter(s => s.phase === 'harvested').length, fill: '#10b981' },
-        { name: 'Graveyard', value: signals.filter(s => s.phase === 'graveyard').length, fill: '#ef4444' }
+        { name: 'Active', value: filteredSignals.filter(s => s.phase !== 'harvested' && s.phase !== 'graveyard').length, fill: '#3b82f6' },
+        { name: 'Harvested', value: filteredSignals.filter(s => s.phase === 'harvested').length, fill: '#10b981' },
+        { name: 'Graveyard', value: filteredSignals.filter(s => s.phase === 'graveyard').length, fill: '#ef4444' }
     ].filter(f => f.value > 0);
 
     const totalProfit = data.reduce((sum, s) => sum + s.profit, 0);
@@ -129,16 +138,21 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
     const globalYield = totalEffort > 0 ? totalProfit / totalEffort : 0;
     
     return { leaderboard: data, funnel, globalYield };
-  }, [signals]);
+  }, [filteredSignals]);
 
   const monthlyStatement = useMemo(() => {
     const map = new Map<string, { income: number; expense: number }>();
     filteredEvents.forEach(log => {
-      const key = log.date.slice(0, 7); 
-      if (!map.has(key)) map.set(key, { income: 0, expense: 0 });
-      const entry = map.get(key)!;
-      if (log.type === 'DROP' || log.type === 'TRIAGE_SESSION') entry.income += (log.amount || 0);
-      if (log.type === 'SPEND' || log.type === 'GENEROSITY' || log.type === 'GENEROSITY_GIFT') entry.expense += (log.amount || 0);
+      const cat = log.categoryGroup || '';
+      const isInternal = cat === 'Internal Transfer' || cat === 'Self Transfer' || cat === 'Outbound Transfer' || cat === 'Inbound Transfer' || log.type === 'TRANSFER';
+      
+      if (!isInternal) {
+          const key = log.date.slice(0, 7); 
+          if (!map.has(key)) map.set(key, { income: 0, expense: 0 });
+          const entry = map.get(key)!;
+          if (log.type === 'DROP' || log.type === 'TRIAGE_SESSION') entry.income += (log.amount || 0);
+          if (log.type === 'SPEND' || log.type === 'GENEROSITY' || log.type === 'GENEROSITY_GIFT') entry.expense += (log.amount || 0);
+      }
     });
     return Array.from(map.entries()).map(([month, data]) => {
       const net = data.income - data.expense;
@@ -147,11 +161,9 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
   }, [filteredEvents]);
 
   const ribbon = useMemo(() => {
-    const lastMonth = monthlyStatement[0] || { savingsRate: 0 };
-    const prevMonth = monthlyStatement[1] || { savingsRate: 0 };
     const largestLeak = categorySplit[0] ? { name: categorySplit[0].name, amount: categorySplit[0].value } : null;
-    return { savingsRate: lastMonth.savingsRate, savingsDelta: lastMonth.savingsRate - prevMonth.savingsRate, alphaYield: signalStats.globalYield, largestLeak };
-  }, [monthlyStatement, categorySplit, signalStats]);
+    return { alphaYield: signalStats.globalYield, largestLeak };
+  }, [categorySplit, signalStats]);
 
   const bleedForensics = useMemo(() => {
     const map: Record<string, { desc: string; category: string; count: number; total: number; latestDate: string }> = {};
@@ -165,7 +177,6 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
     return Object.values(map).sort((a, b) => b.total - a.total);
   }, [filteredTelemetry]);
 
-  // --- UPGRADED UNIVERSAL COMPARATOR ENGINE ---
   const getComparatorData = (keys: string[], mode: 'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED', metric: ComparatorMetric = 'BURN') => {
     return keys.map(key => {
         let total = 0;
@@ -198,7 +209,6 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
         }
 
         if (metric === 'BURN' || metric === 'INCOME') {
-            // CUMULATIVE PHYSICS
             allEvents.forEach(log => {
                 const dateStr = log.date; 
                 const logYear = dateStr.slice(0, 4);
@@ -218,7 +228,6 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
                 }
             });
         } else {
-            // POINT-IN-TIME PHYSICS (Finds the absolute latest day logged in the period)
             const snapshotsInPeriod = historicalSnapshots.filter(snap => {
                 const d = new Date(snap.date);
                 const snapYear = d.getFullYear().toString();
@@ -231,7 +240,7 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
             }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
             if (snapshotsInPeriod.length > 0) {
-                const latest = snapshotsInPeriod[0]; // The closing balance of the period
+                const latest = snapshotsInPeriod[0]; 
                 if (metric === 'NET_WORTH') total = latest.netWorth;
                 if (metric === 'RUNWAY') total = latest.runway;
                 if (metric === 'GOALS') total = latest.goals;

@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Activity, ShoppingBag, Clock, FileText } from 'lucide-react';
 import { Naira } from './Naira';
 import { formatNumber } from '../../utils/format';
@@ -12,7 +13,17 @@ interface CategoryDrawerProps {
 
 export const CategoryDrawer = ({ isOpen, onClose, category, events }: CategoryDrawerProps) => {
   
-  // 1. Isolate the exact transactions for this category
+  // Prevent background scrolling when the drawer is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => { document.body.style.overflow = 'unset'; };
+  }, [isOpen]);
+
+  // Isolate the exact transactions for this category
   const categoryData = useMemo(() => {
     if (!category) return { total: 0, count: 0, avg: 0, merchants: [], txs: [] };
 
@@ -25,7 +36,7 @@ export const CategoryDrawer = ({ isOpen, onClose, category, events }: CategoryDr
     const count = txs.length;
     const avg = count > 0 ? total / count : 0;
 
-    // 2. Aggregate the Payees/Merchants
+    // Aggregate the Payees/Merchants
     const merchantMap: Record<string, number> = {};
     txs.forEach(tx => {
         const name = tx.title || 'Unknown Merchant';
@@ -39,16 +50,18 @@ export const CategoryDrawer = ({ isOpen, onClose, category, events }: CategoryDr
     return { total, count, avg, merchants, txs };
   }, [category, events]);
 
-  return (
-    <>
+  // Use createPortal to teleport this component directly to the <body> tag,
+  // bypassing all parent CSS transforms that cause weird scrolling issues.
+  return createPortal(
+    <div className={`fixed inset-0 z-[100] pointer-events-none ${isOpen ? 'pointer-events-auto' : ''}`}>
       {/* Dimmed Overlay */}
       <div 
-        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
+        className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`} 
         onClick={onClose}
       />
 
       {/* Bottom Sheet Drawer */}
-      <div className={`fixed bottom-0 left-0 right-0 h-[85vh] max-w-3xl mx-auto bg-[#0a0a0a]/95 backdrop-blur-2xl border-t border-white/10 rounded-t-3xl z-50 flex flex-col transform transition-transform duration-500 ease-out shadow-[0_-10px_40px_rgba(0,0,0,0.5)] ${isOpen ? 'translate-y-0' : 'translate-y-full'}`}>
+      <div className={`absolute bottom-0 left-0 right-0 h-[85vh] max-w-3xl mx-auto bg-[#0a0a0a]/95 backdrop-blur-2xl border-t border-white/10 rounded-t-3xl flex flex-col transform transition-transform duration-500 ease-out shadow-[0_-10px_40px_rgba(0,0,0,0.5)] ${isOpen ? 'translate-y-0' : 'translate-y-full'}`}>
         
         {/* Drag Handle */}
         <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mt-4 mb-2 cursor-pointer" onClick={onClose} />
@@ -59,7 +72,7 @@ export const CategoryDrawer = ({ isOpen, onClose, category, events }: CategoryDr
               <div className="text-xs text-blue-400 font-bold uppercase tracking-widest mb-1 flex items-center gap-1">
                  <ShoppingBag size={12}/> Category Drill-Down
               </div>
-              <h2 className="text-2xl font-bold text-white tracking-tight">{category}</h2>
+              <h2 className="text-2xl font-bold text-white tracking-tight">{category || 'Select a Category'}</h2>
            </div>
            <button onClick={onClose} className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-gray-400 transition-colors">
               <X size={20} />
@@ -93,7 +106,7 @@ export const CategoryDrawer = ({ isOpen, onClose, category, events }: CategoryDr
                    <FileText size={16} className="text-purple-400"/> Entity Concentration
                 </h3>
                 <div className="space-y-2">
-                    {categoryData.merchants.map((m, idx) => (
+                    {categoryData.merchants.length > 0 ? categoryData.merchants.map((m, idx) => (
                         <div key={idx} className="relative overflow-hidden p-3 bg-white/5 rounded-xl flex justify-between items-center group">
                             <div className="absolute left-0 top-0 bottom-0 bg-purple-500/10 transition-all" style={{ width: `${m.percentage}%` }} />
                             <div className="relative z-10 font-bold text-gray-200 text-sm truncate max-w-[60%]">{m.name}</div>
@@ -102,7 +115,9 @@ export const CategoryDrawer = ({ isOpen, onClose, category, events }: CategoryDr
                                <span className="font-mono font-bold text-purple-400 text-sm"><Naira/>{formatNumber(m.amount)}</span>
                             </div>
                         </div>
-                    ))}
+                    )) : (
+                        <div className="text-center py-4 text-xs text-gray-600 italic">No merchant data found for this period.</div>
+                    )}
                 </div>
             </div>
 
@@ -112,7 +127,7 @@ export const CategoryDrawer = ({ isOpen, onClose, category, events }: CategoryDr
                    <Clock size={16} className="text-blue-400"/> Chronological Ledger
                 </h3>
                 <div className="space-y-2">
-                    {categoryData.txs.map((tx, idx) => (
+                    {categoryData.txs.length > 0 ? categoryData.txs.map((tx, idx) => (
                         <div key={idx} className="flex justify-between items-center p-3 border-b border-white/5 hover:bg-white/5 transition-colors">
                             <div>
                                 <div className="font-bold text-gray-300 text-xs">{tx.title || 'Unknown'}</div>
@@ -122,7 +137,9 @@ export const CategoryDrawer = ({ isOpen, onClose, category, events }: CategoryDr
                                 -<Naira/>{formatNumber(Math.abs(tx.amount))}
                             </div>
                         </div>
-                    ))}
+                    )) : (
+                        <div className="text-center py-4 text-xs text-gray-600 italic">No transactions found for this period.</div>
+                    )}
                 </div>
             </div>
             
@@ -130,6 +147,7 @@ export const CategoryDrawer = ({ isOpen, onClose, category, events }: CategoryDr
             <div className="h-8" />
         </div>
       </div>
-    </>
+    </div>,
+    document.body // Teleports to the exact root of the page
   );
 };

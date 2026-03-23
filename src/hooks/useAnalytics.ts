@@ -57,6 +57,7 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
     return { startDate: start, endDate: end };
   }, [timeframe, customStart, customEnd]);
 
+  // Aggregate Data Pipelines
   const allEvents = useMemo(() => {
       const hEvents = history.map(h => ({ id: h.id, date: h.date, type: h.type, amount: h.amount, title: h.title, isTelemetry: false, categoryGroup: undefined }));
       const tEvents = telemetry.map(t => ({ id: t.id, date: t.date, type: t.type, amount: t.amount, title: t.title, isTelemetry: true, categoryGroup: t.categoryGroup }));
@@ -75,12 +76,21 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
       const d = new Date(s.date); return d >= startDate && d <= endDate;
   }), [historicalSnapshots, startDate, endDate]);
 
+  // --- STRICT EXCLUSION UTILITY ---
+  const isInternalTransfer = (cat: string, title: string, type: string) => {
+      return cat === 'Internal Transfer' || cat === 'Self Transfer' || cat === 'Outbound Transfer' || cat === 'Inbound Transfer' || title.includes('Internal Transfer') || title.includes('Self Transfer') || type === 'TRANSFER';
+  };
+
+  // --- CHART DATA GENERATORS ---
   const burnHistory = useMemo(() => {
     if (filteredEvents.length === 0) return [];
     const isDaily = ['24H', '3D', '7D', '1M'].includes(timeframe);
     const dataMap: Record<string, { date: string; burn: number }> = {};
+    
     filteredEvents.forEach(e => {
-      if (e.type === 'SPEND' || e.type === 'GENEROSITY' || e.type === 'GENEROSITY_GIFT') {
+      const isInternal = isInternalTransfer(e.categoryGroup || '', e.title || '', e.type);
+      
+      if (!isInternal && (e.type === 'SPEND' || e.type === 'GENEROSITY' || e.type === 'GENEROSITY_GIFT')) {
         const d = new Date(e.date);
         let sortKey = isDaily ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
         let displayKey = isDaily ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
@@ -92,25 +102,30 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
     return Object.keys(dataMap).sort().map(k => dataMap[k]);
   }, [filteredEvents, timeframe]);
 
-  // PURGED 'OUTBOUND TRANSFER' FROM CATEGORY SPLIT
   const categorySplit = useMemo(() => {
     const map: Record<string, number> = {};
-    const ignoredCategories = ['Internal Transfer', 'Self Transfer', 'Inbound Transfer', 'Outbound Transfer'];
     
-    filteredEvents.filter(e => e.type === 'SPEND' && !ignoredCategories.includes(e.categoryGroup || '')).forEach(e => {
-        const key = e.categoryGroup || 'Uncategorized';
-        map[key] = (map[key] || 0) + Math.abs(e.amount || 0);
+    filteredEvents.forEach(e => {
+        const isInternal = isInternalTransfer(e.categoryGroup || '', e.title || '', e.type);
+        if (e.type === 'SPEND' && !isInternal) {
+            const key = e.categoryGroup || 'Uncategorized';
+            map[key] = (map[key] || 0) + Math.abs(e.amount || 0);
+        }
     });
     return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [filteredEvents]);
 
   const topMerchants = useMemo(() => {
     const map: Record<string, { merchant: string; total: number; count: number; category: string }> = {};
-    filteredTelemetry.filter(t => t.type === 'SPEND').forEach(t => {
-       const m = t.title || 'Unknown Merchant';
-       if (!map[m]) map[m] = { merchant: m, total: 0, count: 0, category: t.categoryGroup || 'General' };
-       map[m].total += Math.abs(t.amount);
-       map[m].count += 1;
+    
+    filteredTelemetry.forEach(t => {
+       const isInternal = isInternalTransfer(t.categoryGroup || '', t.title || '', t.type);
+       if (t.type === 'SPEND' && !isInternal) {
+           const m = t.title || 'Unknown Merchant';
+           if (!map[m]) map[m] = { merchant: m, total: 0, count: 0, category: t.categoryGroup || 'General' };
+           map[m].total += Math.abs(t.amount);
+           map[m].count += 1;
+       }
     });
     return Object.values(map).sort((a, b) => b.total - a.total).slice(0, 15);
   }, [filteredTelemetry]);
@@ -143,15 +158,14 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
   const monthlyStatement = useMemo(() => {
     const map = new Map<string, { income: number; expense: number }>();
     filteredEvents.forEach(log => {
-      const cat = log.categoryGroup || '';
-      const isInternal = cat === 'Internal Transfer' || cat === 'Self Transfer' || cat === 'Outbound Transfer' || cat === 'Inbound Transfer' || log.type === 'TRANSFER';
+      const isInternal = isInternalTransfer(log.categoryGroup || '', log.title || '', log.type);
       
       if (!isInternal) {
           const key = log.date.slice(0, 7); 
           if (!map.has(key)) map.set(key, { income: 0, expense: 0 });
           const entry = map.get(key)!;
-          if (log.type === 'DROP' || log.type === 'TRIAGE_SESSION') entry.income += (log.amount || 0);
-          if (log.type === 'SPEND' || log.type === 'GENEROSITY' || log.type === 'GENEROSITY_GIFT') entry.expense += (log.amount || 0);
+          if (log.type === 'DROP' || log.type === 'TRIAGE_SESSION') entry.income += Math.abs(log.amount || 0);
+          if (log.type === 'SPEND' || log.type === 'GENEROSITY' || log.type === 'GENEROSITY_GIFT') entry.expense += Math.abs(log.amount || 0);
       }
     });
     return Array.from(map.entries()).map(([month, data]) => {
@@ -168,15 +182,19 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
   const bleedForensics = useMemo(() => {
     const map: Record<string, { desc: string; category: string; count: number; total: number; latestDate: string }> = {};
     filteredTelemetry.filter(t => t.highVelocityFlag).forEach(b => {
-        const rawDesc = (b.description || b.title || 'Unknown Friction').split(' - ')[0].trim();
-        if (!map[rawDesc]) map[rawDesc] = { desc: rawDesc, category: b.categoryGroup || 'General', count: 0, total: 0, latestDate: b.date };
-        map[rawDesc].count += 1;
-        map[rawDesc].total += Math.abs(b.amount || 0);
-        if (new Date(b.date) > new Date(map[rawDesc].latestDate)) map[rawDesc].latestDate = b.date;
+        const isInternal = isInternalTransfer(b.categoryGroup || '', b.title || '', b.type);
+        if (!isInternal) {
+            const rawDesc = (b.description || b.title || 'Unknown Friction').split(' - ')[0].trim();
+            if (!map[rawDesc]) map[rawDesc] = { desc: rawDesc, category: b.categoryGroup || 'General', count: 0, total: 0, latestDate: b.date };
+            map[rawDesc].count += 1;
+            map[rawDesc].total += Math.abs(b.amount || 0);
+            if (new Date(b.date) > new Date(map[rawDesc].latestDate)) map[rawDesc].latestDate = b.date;
+        }
     });
     return Object.values(map).sort((a, b) => b.total - a.total);
   }, [filteredTelemetry]);
 
+  // --- UPGRADED UNIVERSAL COMPARATOR ENGINE ---
   const getComparatorData = (keys: string[], mode: 'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED', metric: ComparatorMetric = 'BURN') => {
     return keys.map(key => {
         let total = 0;
@@ -220,11 +238,14 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
                 else if (effectiveMode === 'QUARTERLY' && logYear === yearStr && logMonth >= startMonth && logMonth <= endMonth) inPeriod = true;
 
                 if (inPeriod) {
-                    const isBurn = log.type === 'SPEND' || log.type === 'GENEROSITY' || log.type === 'GENEROSITY_GIFT';
-                    const isIncome = log.type === 'DROP' || log.type === 'TRIAGE_SESSION';
+                    const isInternal = isInternalTransfer(log.categoryGroup || '', log.title || '', log.type);
+                    if (!isInternal) {
+                        const isBurn = log.type === 'SPEND' || log.type === 'GENEROSITY' || log.type === 'GENEROSITY_GIFT';
+                        const isIncome = log.type === 'DROP' || log.type === 'TRIAGE_SESSION';
 
-                    if (metric === 'BURN' && isBurn) total += Math.abs(log.amount || 0);
-                    if (metric === 'INCOME' && isIncome) total += Math.abs(log.amount || 0);
+                        if (metric === 'BURN' && isBurn) total += Math.abs(log.amount || 0);
+                        if (metric === 'INCOME' && isIncome) total += Math.abs(log.amount || 0);
+                    }
                 }
             });
         } else {
@@ -277,6 +298,7 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
     signalLeaderboard: signalStats.leaderboard, signalFunnel: signalStats.funnel,
     monthlyStatement, ribbon, bleedForensics, topMerchants,
     getComparatorData, availablePeriods,
-    filteredSnapshots
+    filteredSnapshots,
+    filteredEvents // Exported for the Category Drawer
   };
 };

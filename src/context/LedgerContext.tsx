@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useUser } from './UserContext';
@@ -139,16 +139,16 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
       let allData: any[] = [];
       let from = 0;
       const step = 1000;
-      
+
       while (true) {
         const { data, error } = await supabase.from('history')
             .select('*')
             .order('date', { ascending: false })
             .range(from, from + step - 1);
-            
+
         if (error) throw error;
         if (!data || data.length === 0) break;
-        
+
         allData = [...allData, ...data];
         if (data.length < step) break;
         from += step;
@@ -173,16 +173,16 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
       let allData: any[] = [];
       let from = 0;
       const step = 1000;
-      
+
       while (true) {
         const { data, error } = await supabase.from('telemetry_raw')
             .select('*')
             .order('date', { ascending: false })
             .range(from, from + step - 1);
-            
+
         if (error) throw error;
         if (!data || data.length === 0) break;
-        
+
         allData = [...allData, ...data];
         if (data.length < step) break;
         from += step;
@@ -258,6 +258,53 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const closeJournalPrompt = () => setActiveJournalPrompt(null);
 
+  // --- NEW: SMART SYNC ENGINE (Daily Database Heartbeat Updater) ---
+  useEffect(() => {
+    const syncDailySnapshot = async () => {
+      if (!userId || accounts.length === 0) return;
+      
+      try {
+        const reserved = accounts.find(a => a.type === 'vault')?.balance || 0;
+        const idle = unallocatedCash;
+        const generosity = accounts.find(a => a.type === 'generosity')?.balance || 0;
+        const goalsAllocated = goals.filter(g => !g.isCompleted).reduce((sum, g) => sum + g.currentAmount, 0);
+        
+        // Calculate the absolute state
+        const totalNetWorth = totalLiquid + reserved + idle + generosity + goalsAllocated;
+        const totalBudgetCap = user?.burnCap || 0; 
+
+        // Extract Signal Intelligence
+        const activeSignals = signals.filter(s => s.phase !== 'harvested' && s.phase !== 'graveyard').length;
+        const harvestedSignals = signals.filter(s => s.phase === 'harvested').length;
+        const graveyardSignals = signals.filter(s => s.phase === 'graveyard').length;
+        const totalSignalYield = signals.reduce((sum, s) => sum + (Number(s.totalGenerated) || 0), 0);
+        
+        // Push to the RPC Backfill Engine
+        await supabase.rpc('upsert_daily_snapshot', {
+            p_date: new Date().toISOString().split('T')[0],
+            p_net_worth: totalNetWorth,
+            p_liquid_capital: totalLiquid,
+            p_runway_months: runwayMonths === Infinity ? 999 : runwayMonths,
+            p_allocated_goals: goalsAllocated,
+            p_generosity_wallet: generosity,
+            p_idle_holding: idle,
+            p_rolling_30d_burn: monthlyBurn,
+            p_total_budget_cap: totalBudgetCap,
+            p_active_signals: activeSignals,
+            p_harvested_signals: harvestedSignals,
+            p_graveyard_signals: graveyardSignals,
+            p_total_signal_yield: totalSignalYield
+        });
+      } catch (error) {
+        console.error("Silent snapshot sync failed:", error);
+      }
+    };
+
+    // The sync will fire whenever any of these critical state variables change
+    syncDailySnapshot();
+  }, [accounts, goals, signals, runwayMonths, monthlyBurn, user?.burnCap, userId, totalLiquid, unallocatedCash]);
+
+
   // --- MUTATIONS ---
   const updateAccountMutation = useMutation({
     mutationFn: async ({ id, amount }: { id: AccountType; amount: number }) => {
@@ -290,7 +337,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
   const updateGoalMutation = useMutation({
     mutationFn: async (goal: Goal) => {
        const oldGoal = goals.find(g => g.id === goal.id);
-       
+
        const { error } = await supabase.from('goals').update({
          target_amount: goal.targetAmount,
          current_amount: goal.currentAmount,
@@ -424,7 +471,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         time_estimates: rest.timeEstimates,
         session_logs: rest.sessionLogs,
         last_session_at: rest.lastSessionAt,
-        lifecycle: rest.lifecycle // Important: Save the lifecycle history array
+        lifecycle: rest.lifecycle
       };
       await supabase.from('signals').update(dbSignal).eq('id', id);
 
@@ -433,7 +480,6 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
           let title = `Signal Advanced: ${signal.title}`;
           let desc = `Shifted from ${oldSignal.phase.toUpperCase()} to ${signal.phase.toUpperCase()}`;
 
-          // VERCEL CACHE BYPASS
           const newPhase = signal.phase as string;
           const oldPhase = oldSignal.phase as string;
 
@@ -447,7 +493,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
               type = 'SIGNAL_REVIVE';
               title = `Signal Revived: ${signal.title}`;
           }
-          
+
           autoLog(type, title, desc, undefined, signal.id);
       }
     },
@@ -530,7 +576,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         .select();
 
       if (error) throw error;
-      
+
       return {
           imported: data ? data.length : 0,
           ignored: payload.length - (data ? data.length : 0)
@@ -549,7 +595,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
             linked_log_id: entry.linkedLogId,
             audit_batch_id: entry.auditBatchId
         }).select('id').single();
-        
+
         if (error) throw error;
 
         if (data) {
@@ -604,7 +650,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         await supabase.from('signals').delete().eq('user_id', userId);
         await autoLog('SYSTEM_RESET', 'Signals Database Wiped', 'All deal flow deleted');
       }
-      
+
       if (module === 'goals' || module === 'all') {
         await supabase.from('history').update({ linked_goal_id: null }).eq('user_id', userId);
         await supabase.from('goals').delete().eq('user_id', userId);
@@ -615,12 +661,12 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         await supabase.from('budgets').delete().eq('user_id', userId);
         await autoLog('SYSTEM_RESET', 'Budgets Database Wiped', 'Recurring expenses cleared');
       }
-      
+
       if (module === 'journal' || module === 'all') {
         await supabase.from('journal').delete().eq('user_id', userId);
         await autoLog('SYSTEM_RESET', 'Journal Entries Wiped', 'Personal notes cleared');
       }
-      
+
       if (module === 'telemetry' || module === 'all') {
         await supabase.from('telemetry_raw').delete().eq('user_id', userId);
         await autoLog('SYSTEM_RESET', 'Data Lake Cleared', 'All raw telemetry data purged');
@@ -630,12 +676,12 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
         await supabase.from('accounts').update({ balance: 0 }).eq('user_id', userId);
         await autoLog('SYSTEM_RESET', 'Dashboard Balance Reset', 'All accounts set to 0');
       }
-      
+
       if (module === 'generosity' || module === 'all') {
         await supabase.from('accounts').update({ balance: 0 }).eq('type', 'generosity').eq('user_id', userId);
         await autoLog('SYSTEM_RESET', 'Generosity Wallet Emptied', 'Funds cleared');
       }
-      
+
       if (module === 'all') {
         await autoLog('SYSTEM_RESET', 'FACTORY RESET EXECUTED', 'Complete system wipe initiated');
       }
@@ -648,7 +694,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     <LedgerContext.Provider value={{
       accounts, budgets, goals, signals, history, telemetry, journals,
       runwayMonths, realRunwayMonths, monthlyBurn, totalLiquid, unallocatedCash, isSyncing: loadingAccounts || loadingBudgets,
-      
+
       activeJournalPrompt,
       triggerJournalPrompt,
       closeJournalPrompt,

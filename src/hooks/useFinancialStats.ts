@@ -10,7 +10,7 @@ export const useFinancialStats = (timeframe: string = '1M', customStart?: string
     let prevStart = new Date();
     let prevEnd = new Date();
 
-    // 1. DYNAMIC TIMEFRAME PARSER (NOW INCLUDES YTD & CUSTOM)
+    // 1. DYNAMIC TIMEFRAME PARSER
     switch (timeframe) {
       case '24H':
         currentStart.setHours(now.getHours() - 24);
@@ -48,11 +48,10 @@ export const useFinancialStats = (timeframe: string = '1M', customStart?: string
         prevStart = new Date(prevEnd);
         prevStart.setMonth(prevStart.getMonth() - 6);
         break;
-      case 'YTD': // NEW YTD LOGIC
+      case 'YTD': 
         currentStart = new Date(now.getFullYear(), 0, 1);
-        prevEnd = new Date(currentStart);
-        prevStart = new Date(prevEnd);
-        prevStart.setFullYear(prevStart.getFullYear() - 1);
+        prevEnd = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate(), now.getHours(), now.getMinutes());
+        prevStart = new Date(now.getFullYear() - 1, 0, 1);
         break;
       case '1Y':
         currentStart.setFullYear(now.getFullYear() - 1);
@@ -66,12 +65,11 @@ export const useFinancialStats = (timeframe: string = '1M', customStart?: string
         prevStart = new Date(prevEnd);
         prevStart.setFullYear(prevStart.getFullYear() - 5);
         break;
-      case 'CUSTOM': // NEW CUSTOM RANGE LOGIC
+      case 'CUSTOM': 
         if (customStart && customEnd) {
            currentStart = new Date(customStart);
            const end = new Date(customEnd);
            end.setHours(23, 59, 59, 999);
-           // Mock previous period for custom by shifting back the exact duration
            const duration = end.getTime() - currentStart.getTime();
            prevEnd = new Date(currentStart);
            prevStart = new Date(currentStart.getTime() - duration);
@@ -96,50 +94,49 @@ export const useFinancialStats = (timeframe: string = '1M', customStart?: string
     let prevTrueOutflow = 0;
     const merchantTracker: Record<string, number> = {};
 
-    history.forEach(tx => {
+    // Merge both arrays so True Flow calculates from both Manual Ledger AND Bank CSVs
+    const allEvents = [...history, ...telemetry];
+
+    allEvents.forEach((tx: any) => {
       const txDate = new Date(tx.date);
-      // For CUSTOM, we cap the 'now' comparison to the customEnd
-      const effectiveEnd = timeframe === 'CUSTOM' && customEnd ? new Date(customEnd) : now;
-      if (timeframe === 'CUSTOM' && customEnd) effectiveEnd.setHours(23, 59, 59, 999);
+      const effectiveEnd = timeframe === 'CUSTOM' && customEnd ? new Date(`${customEnd}T23:59:59`) : now;
 
       const isCurrent = txDate >= currentStart && txDate <= effectiveEnd;
       const isPrev = txDate >= prevStart && txDate < prevEnd;
 
-      const isInternal = tx.title?.includes('Internal Transfer') || tx.title?.includes('Self Transfer') || tx.type === 'TRANSFER';
+      const cat = tx.categoryGroup || '';
+      const tit = tx.title || '';
+      
+      // PURGE ALL INTERNAL TRANSFERS FROM BEING CALCULATED AS "EXPENSES"
+      const isInternal = cat === 'Internal Transfer' || cat === 'Self Transfer' || cat === 'Outbound Transfer' || cat === 'Inbound Transfer' || tit.includes('Internal Transfer') || tit.includes('Self Transfer') || tx.type === 'TRANSFER';
+
       const amount = Math.abs(tx.amount || 0);
 
       if (isCurrent) {
         if (tx.type === 'DROP' || tx.type === 'TRIAGE_SESSION') inflow += amount;
-        if (tx.type === 'SPEND' || tx.type === 'GENEROSITY' || tx.type === 'TRANSFER') outflow += amount;
+        if (tx.type === 'SPEND' || tx.type === 'GENEROSITY' || tx.type === 'GENEROSITY_GIFT' || tx.type === 'TRANSFER') outflow += amount;
 
         const dayKey = txDate.toISOString().split('T')[0];
         if (!chartMap[dayKey]) chartMap[dayKey] = { income: 0, expense: 0, date: dayKey };
         if (tx.type === 'DROP' || tx.type === 'TRIAGE_SESSION') chartMap[dayKey].income += amount;
-        if (tx.type === 'SPEND' || tx.type === 'GENEROSITY' || tx.type === 'TRANSFER') chartMap[dayKey].expense += amount;
+        if (tx.type === 'SPEND' || tx.type === 'GENEROSITY' || tx.type === 'GENEROSITY_GIFT' || tx.type === 'TRANSFER') chartMap[dayKey].expense += amount;
 
         if (!isInternal) {
           if (tx.type === 'DROP' || tx.type === 'TRIAGE_SESSION') trueInflow += amount;
-          if (tx.type === 'SPEND' || tx.type === 'GENEROSITY' || tx.type === 'TRANSFER') {
+          if (tx.type === 'SPEND' || tx.type === 'GENEROSITY' || tx.type === 'GENEROSITY_GIFT') {
             trueOutflow += amount;
             const merchantName = tx.title || 'Unknown';
             merchantTracker[merchantName] = (merchantTracker[merchantName] || 0) + amount;
           }
         }
+
+        if (tx.highVelocityFlag) leakOutflow += amount;
+
       } else if (isPrev) {
         if (!isInternal) {
           if (tx.type === 'DROP' || tx.type === 'TRIAGE_SESSION') prevTrueInflow += amount;
-          if (tx.type === 'SPEND' || tx.type === 'GENEROSITY' || tx.type === 'TRANSFER') prevTrueOutflow += amount;
+          if (tx.type === 'SPEND' || tx.type === 'GENEROSITY' || tx.type === 'GENEROSITY_GIFT') prevTrueOutflow += amount;
         }
-      }
-    });
-
-    telemetry.forEach(t => {
-      const tDate = new Date(t.date);
-      const effectiveEnd = timeframe === 'CUSTOM' && customEnd ? new Date(customEnd) : now;
-      if (timeframe === 'CUSTOM' && customEnd) effectiveEnd.setHours(23, 59, 59, 999);
-      
-      if (tDate >= currentStart && tDate <= effectiveEnd && t.highVelocityFlag) {
-        leakOutflow += Math.abs(t.amount || 0);
       }
     });
 

@@ -28,7 +28,6 @@ import {
 
 export const Signals = () => {
   const navigate = useNavigate();
-  // STRATEGIC UPDATE: Import triggerJournalPrompt
   const { signals, updateSignal, addSignal, commitAction, triggerJournalPrompt } = useLedger();
 
   // --- STATE MANAGEMENT ---
@@ -183,7 +182,6 @@ export const Signals = () => {
         linkedSignalId: killSignal.id 
     });
 
-    // 1. TRIGGER JOURNAL INTERCEPT
     triggerJournalPrompt({
         type: 'SIGNAL_KILL',
         data: {
@@ -197,17 +195,12 @@ export const Signals = () => {
   };
 
   const handleHarvestClick = (signal: Signal) => {
-    // We navigate to triage first, the actual harvest logic runs during the drop triage.
-    // However, if the user explicitly clicks harvest here, we prompt them for the psychological win.
-    
-    // Check if they've logged hours but no cash yet (signaling a fresh win)
     if (signal.totalGenerated === 0 && signal.hoursLogged > 0) {
-       // Just a visual intercept before they triage
        triggerJournalPrompt({
            type: 'SIGNAL_HARVEST',
            data: {
                signalName: signal.title,
-               profit: 0, // Not realized yet, but they are initiating
+               profit: 0,
                hours: signal.hoursLogged || 0
            }
        });
@@ -224,7 +217,7 @@ export const Signals = () => {
   ];
 
   return (
-    <div className="h-[calc(100vh-100px)] flex flex-col p-4 md:p-8 pb-20" onClick={() => setSelectedSignalId(null)}>
+    <div className="h-[calc(100vh-100px)] flex flex-col p-3 md:p-8 pb-16 md:pb-20" onClick={() => setSelectedSignalId(null)}>
 
       {/* --- MODAL MANAGER --- */}
       {isDrillOpen && <DrillModeModal onClose={() => setIsDrillOpen(false)} onSave={handleCreateFromDrill} />}
@@ -236,16 +229,16 @@ export const Signals = () => {
       <OperatorsManual isOpen={showManual} onClose={() => setShowManual(false)} onAction={handleManualAction} />
 
       {/* --- HEADER --- */}
-      <div className="flex flex-col md:flex-row justify-between md:items-end gap-6 mb-6">
+      <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 md:gap-6 mb-4 md:mb-6">
         <div>
-           <h1 className="text-3xl font-bold text-white mb-2">Deal Flow</h1>
-           <div className="flex gap-4 text-xs">
-             <div className="flex items-center gap-2">
+           <h1 className="text-xl md:text-3xl font-bold text-white mb-1.5 md:mb-2">Deal Flow</h1>
+           <div className="flex flex-wrap gap-3 md:gap-4 text-[10px] md:text-xs">
+             <div className="flex items-center gap-1.5 md:gap-2">
                <span className="text-gray-500">Win Rate:</span>
                <span className="font-mono font-bold text-green-400">{analytics.winRate.toFixed(1)}%</span>
              </div>
              {analytics.bestSector && (
-               <div className="flex items-center gap-2">
+               <div className="flex items-center gap-1.5 md:gap-2">
                  <span className="text-gray-500">Top Sector:</span>
                  <span className="font-mono font-bold text-blue-400">{analytics.bestSector[0]} (${formatNumber(analytics.bestSector[1].value)})</span>
                </div>
@@ -254,28 +247,28 @@ export const Signals = () => {
         </div>
 
         <div className="flex gap-2">
-          <GlassButton size="sm" variant="secondary" onClick={() => setShowTreasury(true)} className="text-yellow-400 border-yellow-500/20 hover:bg-yellow-500/10">
-             <Landmark size={16} className="mr-2"/> Treasury
+          <GlassButton size="sm" variant="secondary" onClick={() => setShowTreasury(true)} className="text-[10px] md:text-xs text-yellow-400 border-yellow-500/20 hover:bg-yellow-500/10 px-2.5 md:px-4">
+             <Landmark size={14} className="md:w-4 md:h-4 mr-1.5 md:mr-2"/> <span className="hidden sm:inline">Treasury</span>
           </GlassButton>
-          <GlassButton size="sm" variant="secondary" onClick={() => setShowGraveyard(true)}>
-             <Archive size={16} className="mr-2"/> The Crypt
+          <GlassButton size="sm" variant="secondary" onClick={() => setShowGraveyard(true)} className="text-[10px] md:text-xs px-2.5 md:px-4">
+             <Archive size={14} className="md:w-4 md:h-4 mr-1.5 md:mr-2"/> The Crypt
           </GlassButton>
-          <GlassButton size="sm" onClick={(e) => { e.stopPropagation(); setIsDrillOpen(true); }}>
-             <Zap size={16} className="mr-2"/> New Drill
+          <GlassButton size="sm" onClick={(e) => { e.stopPropagation(); setIsDrillOpen(true); }} className="text-[10px] md:text-xs px-2.5 md:px-4">
+             <Zap size={14} className="md:w-4 md:h-4 mr-1.5 md:mr-2"/> New Drill
           </GlassButton>
         </div>
       </div>
 
       {/* --- KANBAN BOARD --- */}
-      <div className="flex-1 flex gap-4 overflow-x-auto pb-12">
+      <div className="flex-1 flex gap-3 md:gap-4 overflow-x-auto pb-12 scrollbar-hide">
         {activeColumns.map(col => (
-          <div key={col.id} className="min-w-[300px] flex flex-col gap-3">
-            <div className="flex items-center gap-2 pb-2 border-b border-white/10">
-              <div className={`w-2 h-2 rounded-full ${col.color}`}/>
-              <span className="font-bold text-xs uppercase text-gray-400">{col.label}</span>
+          <div key={col.id} className="min-w-[260px] md:min-w-[300px] flex flex-col gap-2 md:gap-3">
+            <div className="flex items-center gap-2 pb-1.5 md:pb-2 border-b border-white/10">
+              <div className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full ${col.color}`}/>
+              <span className="font-bold text-[10px] md:text-xs uppercase text-gray-400">{col.label}</span>
             </div>
 
-            <div className="flex-1 space-y-3 overflow-y-auto pb-20">
+            <div className="flex-1 space-y-2 md:space-y-3 overflow-y-auto pb-20 scrollbar-hide">
               {signals.filter(s => s.phase === col.id).map(s => {
                 const isSelected = selectedSignalId === s.id;
                 const sectorStyle = getSectorStyle(s.sector);
@@ -292,33 +285,33 @@ export const Signals = () => {
                   <div key={s.id} onClick={(e) => { e.stopPropagation(); setSelectedSignalId(isSelected ? null : s.id); }}>
                     <GlassCard 
                         className={`
-                            p-4 cursor-pointer relative transition-all duration-300 border-l-4
+                            p-3 md:p-4 cursor-pointer relative transition-all duration-300 border-l-4
                             ${sectorStyle.border} ${sectorStyle.shadow}
                             ${isStale ? 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0' : 'hover:bg-white/5'}
                             ${isSelected ? 'scale-[1.02] z-10 bg-white/10' : ''}
                         `}
                     >
-                      <div className="absolute top-2 right-2 text-[10px] font-mono text-gray-600 tracking-wider opacity-50">
+                      <div className="absolute top-2 right-2 text-[9px] md:text-[10px] font-mono text-gray-600 tracking-wider opacity-50">
                           {assetID}
                       </div>
 
                       <div className="flex gap-1 absolute top-2 right-12">
-                          {isHot && <div title="Hot Streak"><Flame size={12} className="text-orange-500 animate-pulse"/></div>}
-                          {isStale && <div title="Stale / Frozen"><Snowflake size={12} className="text-blue-300"/></div>}
-                          {isMissingIntel && <div title="Incomplete Data" className="w-2 h-2 bg-orange-500 rounded-full animate-pulse mt-1"/>}
+                          {isHot && <div title="Hot Streak"><Flame size={10} className="md:w-3 md:h-3 text-orange-500 animate-pulse"/></div>}
+                          {isStale && <div title="Stale / Frozen"><Snowflake size={10} className="md:w-3 md:h-3 text-blue-300"/></div>}
+                          {isMissingIntel && <div title="Incomplete Data" className="w-1.5 h-1.5 md:w-2 md:h-2 bg-orange-500 rounded-full animate-pulse mt-1"/>}
                       </div>
 
                       {s.totalGenerated > 0 && (
-                        <div className={`absolute top-2 left-3 z-20 ${sectorStyle.bg} ${sectorStyle.text} text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm`}>
+                        <div className={`absolute top-2 left-2.5 md:left-3 z-20 ${sectorStyle.bg} ${sectorStyle.text} text-[9px] md:text-[10px] font-bold px-1 md:px-1.5 py-0.5 rounded shadow-sm`}>
                           ${formatNumber(s.totalGenerated)}
                         </div>
                       )}
 
-                      <h4 className={`font-bold text-white text-sm mb-2 mt-4 truncate pr-8 ${isStale ? 'text-gray-400' : ''}`}>
+                      <h4 className={`font-bold text-white text-xs md:text-sm mb-1.5 md:mb-2 mt-3 md:mt-4 truncate pr-8 ${isStale ? 'text-gray-400' : ''}`}>
                           {s.title}
                       </h4>
 
-                      <div className="flex justify-between items-center text-[10px]">
+                      <div className="flex justify-between items-center text-[9px] md:text-[10px]">
                         <span className={`px-1.5 py-0.5 rounded font-mono ${sectorStyle.bg} ${sectorStyle.text}`}>
                            {s.sector}
                         </span>
@@ -328,44 +321,44 @@ export const Signals = () => {
                       </div>
 
                       {isSelected && (
-                        <div className="mt-4 pt-3 border-t border-white/10 flex flex-col gap-2 animate-fade-in">
-                           <div className="flex justify-between items-center gap-2">
+                        <div className="mt-3 md:mt-4 pt-2.5 md:pt-3 border-t border-white/10 flex flex-col gap-2 animate-fade-in">
+                           <div className="flex justify-between items-center gap-1.5 md:gap-2">
 
                              {col.id !== 'discovery' && (
                                 <button 
                                     onClick={(e) => { e.stopPropagation(); initiateMove(s, col.id, 'prev'); }} 
-                                    className="text-xs font-bold text-orange-400 hover:text-white bg-orange-500/10 hover:bg-orange-500/30 px-3 py-1.5 rounded-lg border border-orange-500/20"
+                                    className="text-[10px] md:text-xs font-bold text-orange-400 hover:text-white bg-orange-500/10 hover:bg-orange-500/30 px-2 py-1.5 md:px-3 rounded-md md:rounded-lg border border-orange-500/20"
                                     title="Regress Phase"
                                 >
-                                    <ArrowLeft size={14} />
+                                    <ArrowLeft size={12} className="md:w-3.5 md:h-3.5" />
                                 </button>
                              )}
 
-                             <button onClick={(e) => { e.stopPropagation(); setDossierSignal(s); }} className="flex-1 text-xs font-bold text-white bg-green-600/20 hover:bg-green-600/40 px-3 py-1.5 rounded-lg flex items-center justify-center gap-2 border border-green-500/30">
-                               <Maximize2 size={12}/> Dossier
+                             <button onClick={(e) => { e.stopPropagation(); setDossierSignal(s); }} className="flex-1 text-[10px] md:text-xs font-bold text-white bg-green-600/20 hover:bg-green-600/40 px-2 py-1.5 md:px-3 rounded-md md:rounded-lg flex items-center justify-center gap-1.5 border border-green-500/30">
+                               <Maximize2 size={10} className="md:w-3 md:h-3"/> Dossier
                              </button>
 
                              <button 
                                 onClick={(e) => { e.stopPropagation(); handleHarvestClick(s); }} 
-                                className="text-xs font-bold text-green-400 hover:text-white bg-green-500/10 hover:bg-green-500/30 px-3 py-1.5 rounded-lg border border-green-500/20"
+                                className="text-[10px] md:text-xs font-bold text-green-400 hover:text-white bg-green-500/10 hover:bg-green-500/30 px-2 py-1.5 md:px-3 rounded-md md:rounded-lg border border-green-500/20"
                                 title="Harvest (Go to Triage)"
                              >
-                                <DollarSign size={14} />
+                                <DollarSign size={12} className="md:w-3.5 md:h-3.5" />
                              </button>
 
                              {col.id !== 'delivered' && (
                                 <button 
                                     onClick={(e) => { e.stopPropagation(); initiateMove(s, col.id, 'next'); }} 
-                                    className="text-xs font-bold text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500/30 px-3 py-1.5 rounded-lg border border-blue-500/20"
+                                    className="text-[10px] md:text-xs font-bold text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500/30 px-2 py-1.5 md:px-3 rounded-md md:rounded-lg border border-blue-500/20"
                                     title="Advance Phase"
                                 >
-                                    <ArrowRight size={14} />
+                                    <ArrowRight size={12} className="md:w-3.5 md:h-3.5" />
                                 </button>
                              )}
                            </div>
 
-                           <button onClick={(e) => { e.stopPropagation(); setKillSignal(s); }} className="text-[10px] text-red-500 hover:text-red-400 flex items-center justify-center gap-1 w-full pt-1">
-                             <Skull size={12}/> Kill / End Signal
+                           <button onClick={(e) => { e.stopPropagation(); setKillSignal(s); }} className="text-[9px] md:text-[10px] text-red-500 hover:text-red-400 flex items-center justify-center gap-1 w-full pt-1">
+                             <Skull size={10} className="md:w-3 md:h-3"/> Kill / End Signal
                            </button>
                         </div>
                       )}
@@ -381,13 +374,13 @@ export const Signals = () => {
       {/* --- FOOTER MANUAL TRIGGER --- */}
       <div 
         onClick={() => setShowManual(true)}
-        className="fixed bottom-0 left-0 right-0 h-12 bg-black/80 backdrop-blur-md border-t border-white/10 flex items-center justify-between px-6 cursor-pointer hover:bg-black/90 transition-colors z-40 group"
+        className="fixed bottom-0 left-0 right-0 h-10 md:h-12 bg-black/80 backdrop-blur-md border-t border-white/10 flex items-center justify-between px-4 md:px-6 cursor-pointer hover:bg-black/90 transition-colors z-40 group"
       >
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"/>
-          <span className="text-xs font-bold tracking-widest text-gray-400 group-hover:text-white transition-colors">SIGNAL OPERATOR'S MANUAL [v2.0]</span>
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-green-500 animate-pulse"/>
+          <span className="text-[10px] md:text-xs font-bold tracking-widest text-gray-400 group-hover:text-white transition-colors">SIGNAL OPERATOR'S MANUAL [v2.0]</span>
         </div>
-        <div className="text-[10px] text-gray-600 font-mono hidden md:block">
+        <div className="text-[9px] md:text-[10px] text-gray-600 font-mono hidden sm:block">
           SYSTEM_READY // CLICK_TO_INIT
         </div>
       </div>

@@ -1,26 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAnalytics } from '../hooks/useAnalytics';
-import { useFinancialStats } from '../hooks/useFinancialStats'; // NEW: Comparative Engine
+import { useFinancialStats } from '../hooks/useFinancialStats';
 import { useUser } from '../context/UserContext';
 
-// UI COMPONENTS
 import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
 import { Naira } from '../components/ui/Naira';
 import { formatNumber } from '../utils/format';
 
-// ICONS
 import { 
   Download, TrendingUp, PieChart as PieIcon, Target, Calendar, 
   Zap, AlertTriangle, ShieldCheck, Plus, X, BarChart2, Layers, 
   Search, Briefcase, Activity, Landmark, LineChart
 } from 'lucide-react';
 
-// CHARTS
 import { 
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, 
-  BarChart, Bar, Cell, ComposedChart, Line, CartesianGrid, Legend
+  BarChart, Bar, Cell, ComposedChart, Line, CartesianGrid, Legend, PieChart, Pie
 } from 'recharts';
 
 const formatAxisAmount = (val: number) => {
@@ -39,16 +36,6 @@ const formatPeriodLabel = (p: string) => {
   return p;
 };
 
-// MOCK DATA: For the new Sovereignty & Allocation tabs (Will be replaced by your DB Heartbeat soon)
-const mockHistoricalSnapshots = [
-  { month: 'Oct', netWorth: 850000, runway: 2.1, goals: 50000, idle: 300000, generosity: 10000 },
-  { month: 'Nov', netWorth: 1100000, runway: 3.5, goals: 150000, idle: 250000, generosity: 20000 },
-  { month: 'Dec', netWorth: 1450000, runway: 4.2, goals: 250000, idle: 400000, generosity: 35000 },
-  { month: 'Jan', netWorth: 1300000, runway: 3.8, goals: 300000, idle: 100000, generosity: 40000 },
-  { month: 'Feb', netWorth: 1800000, runway: 5.5, goals: 450000, idle: 200000, generosity: 50000 },
-  { month: 'Mar', netWorth: 2100000, runway: 6.8, goals: 600000, idle: 150000, generosity: 80000 },
-];
-
 type AnalyticsTab = 'VELOCITY' | 'SOVEREIGNTY' | 'ALLOCATION' | 'INTELLIGENCE';
 
 export const Analytics = () => {
@@ -59,20 +46,21 @@ export const Analytics = () => {
 
   // --- MASTER STATE ---
   const [masterTimeframe, setMasterTimeframe] = useState('1M');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('VELOCITY');
 
   // Hooks
   const { 
     burnHistory, categorySplit,
-    monthlyStatement, ribbon, signalLeaderboard,
+    monthlyStatement, ribbon, signalLeaderboard, signalFunnel,
     bleedForensics, topMerchants,
-    getComparatorData, availablePeriods
-  } = useAnalytics(masterTimeframe);
+    getComparatorData, availablePeriods, filteredSnapshots
+  } = useAnalytics(masterTimeframe, customStart, customEnd);
 
-  // NEW: True Flow Comparative Engine
   const { 
     trueInflow, trueOutflow, trueNetFlow, inflowDelta, outflowDelta 
-  } = useFinancialStats(masterTimeframe);
+  } = useFinancialStats(masterTimeframe, customStart, customEnd);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -84,7 +72,6 @@ export const Analytics = () => {
     }
   }, [location]);
 
-  // Comparator State
   const [compMode, setCompMode] = useState<'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED'>('ANNUAL');
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
   const [periodToAdd, setPeriodToAdd] = useState('');
@@ -148,7 +135,7 @@ export const Analytics = () => {
           {payload.map((p: any, idx: number) => (
             <p key={idx} style={{ color: p.color || '#fff' }} className="flex items-center gap-1">
               {p.name === 'value' ? 'Amount' : p.name}: 
-              {typeof p.value === 'number' ? <span className="font-mono"><Naira/>{formatNumber(p.value)}</span> : p.value}
+              {typeof p.value === 'number' ? <span className="font-mono">{p.name === 'Liquid Runway' ? `${p.value}mo` : <><Naira/>{formatNumber(p.value)}</>}</span> : p.value}
             </p>
           ))}
         </div>
@@ -166,7 +153,17 @@ export const Analytics = () => {
            <h1 className="text-3xl font-bold text-white tracking-tight">Intelligence Hub</h1>
            <p className="text-gray-400 text-sm">Forensic analysis of aggregated system & bank data.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col md:flex-row items-end md:items-center gap-3">
+           
+           {/* CUSTOM DATE PICKER UI */}
+           {masterTimeframe === 'CUSTOM' && (
+             <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg p-1">
+                <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="bg-transparent text-xs text-white outline-none px-2" />
+                <span className="text-gray-500 text-xs">to</span>
+                <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="bg-transparent text-xs text-white outline-none px-2" />
+             </div>
+           )}
+
            <select 
               value={masterTimeframe}
               onChange={(e) => setMasterTimeframe(e.target.value)}
@@ -178,9 +175,11 @@ export const Analytics = () => {
               <option value="1M">1 Month</option>
               <option value="3M">3 Months</option>
               <option value="6M">6 Months</option>
+              <option value="YTD">Year to Date (YTD)</option>
               <option value="1Y">1 Year</option>
               <option value="5Y">5 Years</option>
               <option value="MAX">Max (All-Time)</option>
+              <option value="CUSTOM">Custom Range...</option>
            </select>
            <GlassButton size="sm" onClick={handleExport}>
              <Download size={16}/> <span className="hidden md:inline ml-2">Export Data Lake</span>
@@ -196,7 +195,7 @@ export const Analytics = () => {
            </div>
            <div className="text-2xl font-mono font-bold text-white">{ribbon.savingsRate.toFixed(1)}%</div>
            <div className={`text-[10px] mt-1 ${ribbon.savingsDelta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-             {ribbon.savingsDelta >= 0 ? '▲' : '▼'} {Math.abs(ribbon.savingsDelta).toFixed(1)}% vs Last Month
+             {ribbon.savingsDelta >= 0 ? '▲' : '▼'} {Math.abs(ribbon.savingsDelta).toFixed(1)}% vs Prev Period
            </div>
         </GlassCard>
 
@@ -263,12 +262,11 @@ export const Analytics = () => {
       </div>
 
       {/* ========================================================================= */}
-      {/* TAB 1: FLOW & VELOCITY (The original analytics + PoP engine)              */}
+      {/* TAB 1: FLOW & VELOCITY */}
       {/* ========================================================================= */}
       {activeTab === 'VELOCITY' && (
         <div className="space-y-6 animate-fade-in">
           
-          {/* NEW: TRUE FLOW PoP ENGINE SUMMARY */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
              <div className="p-4 rounded-xl border border-white/10 bg-white/5">
                 <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">True Income (Excl. Transfers)</div>
@@ -442,6 +440,43 @@ export const Analytics = () => {
             </GlassCard>
           </div>
 
+          {/* NEW: LIFESTYLE CREEP CHART */}
+          <GlassCard className="p-6 h-[400px]">
+            <div className="flex flex-col mb-6">
+              <h3 className="font-bold text-white flex items-center gap-2">
+                 <Activity className="text-orange-400" size={20}/> Lifestyle Inflation Tracker
+              </h3>
+              <p className="text-xs text-gray-400 mt-1">
+                Plots your rolling 30-day burn against your hard budget cap. If the orange area crosses the red line, you are bleeding out.
+              </p>
+            </div>
+            <ResponsiveContainer width="100%" height="80%">
+              {filteredSnapshots.length > 0 ? (
+                <ComposedChart data={filteredSnapshots}>
+                  <defs>
+                    <linearGradient id="colorCreep" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f97316" stopOpacity={0.4}/>
+                      <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                  <XAxis dataKey="month" stroke="#777" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#777" fontSize={10} tickFormatter={(val) => `₦${formatAxisAmount(val)}`} tickLine={false} axisLine={false} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                  
+                  <Area type="monotone" dataKey="rollingBurn" fill="url(#colorCreep)" stroke="#f97316" strokeWidth={2} name="Trailing 30D Burn" />
+                  <Line type="stepAfter" dataKey="budgetCap" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Total Budget Cap" />
+                </ComposedChart>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-gray-500 border border-dashed border-white/10 rounded-xl">
+                    <Activity size={32} className="mb-2 opacity-50"/>
+                    <span className="text-sm">Awaiting first nightly snapshot.</span>
+                </div>
+              )}
+            </ResponsiveContainer>
+          </GlassCard>
+
           <div ref={bleedSectionRef} id="bleed-forensics" className="pt-4">
             <GlassCard className="p-6 border-red-500/30 bg-red-950/10">
               <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-6">
@@ -526,7 +561,7 @@ export const Analytics = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 2: SOVEREIGNTY (The New Dual-Axis Wealth & Runway Tracker)            */}
+      {/* TAB 2: SOVEREIGNTY (LIVE DATA) */}
       {/* ========================================================================= */}
       {activeTab === 'SOVEREIGNTY' && (
         <div className="space-y-6 animate-fade-in">
@@ -537,30 +572,36 @@ export const Analytics = () => {
               </h3>
               <p className="text-xs text-gray-400 mt-1">
                  Tracking the correlation between Total System Value (Net Worth) and Survival Duration (Runway). 
-                 <br/>*Powered by the nightly database heartbeat.
+                 <br/><span className="text-yellow-500">*Chart updates dynamically as daily snapshots are collected. Check back tomorrow to see lines form.</span>
               </p>
             </div>
             
-            
             <ResponsiveContainer width="100%" height="80%">
-              <ComposedChart data={mockHistoricalSnapshots}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                <XAxis dataKey="month" stroke="#777" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis yAxisId="left" stroke="#10b981" fontSize={10} tickFormatter={(val) => `₦${formatAxisAmount(val)}`} tickLine={false} axisLine={false} />
-                <YAxis yAxisId="right" orientation="right" stroke="#3b82f6" fontSize={10} tickFormatter={(val) => `${val}mo`} tickLine={false} axisLine={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '20px' }} />
-                
-                <Area yAxisId="left" type="monotone" dataKey="netWorth" fill="#10b981" fillOpacity={0.1} stroke="#10b981" strokeWidth={3} name="Total Net Worth" />
-                <Line yAxisId="right" type="monotone" dataKey="runway" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6', strokeWidth: 0 }} name="Liquid Runway" />
-              </ComposedChart>
+              {filteredSnapshots.length > 0 ? (
+                <ComposedChart data={filteredSnapshots}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                  <XAxis dataKey="month" stroke="#777" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis yAxisId="left" stroke="#10b981" fontSize={10} tickFormatter={(val) => `₦${formatAxisAmount(val)}`} tickLine={false} axisLine={false} />
+                  <YAxis yAxisId="right" orientation="right" stroke="#3b82f6" fontSize={10} tickFormatter={(val) => `${val}mo`} tickLine={false} axisLine={false} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '20px' }} />
+                  
+                  <Area yAxisId="left" type="monotone" dataKey="netWorth" fill="#10b981" fillOpacity={0.1} stroke="#10b981" strokeWidth={3} name="Total Net Worth" />
+                  <Line yAxisId="right" type="monotone" dataKey="runway" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6', strokeWidth: 0 }} name="Liquid Runway" />
+                </ComposedChart>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-gray-500 border border-dashed border-white/10 rounded-xl">
+                    <LineChart size={32} className="mb-2 opacity-50"/>
+                    <span className="text-sm">Database Syncing. Awaiting first nightly snapshot.</span>
+                </div>
+              )}
             </ResponsiveContainer>
           </GlassCard>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 3: CAPITAL ALLOCATION (Historical tracking of Goals & Idle Cash)        */}
+      {/* TAB 3: CAPITAL ALLOCATION (LIVE DATA) */}
       {/* ========================================================================= */}
       {activeTab === 'ALLOCATION' && (
         <div className="space-y-6 animate-fade-in">
@@ -574,27 +615,93 @@ export const Analytics = () => {
               </p>
             </div>
             <ResponsiveContainer width="100%" height="80%">
-              <AreaChart data={mockHistoricalSnapshots}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                <XAxis dataKey="month" stroke="#777" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#777" fontSize={10} tickFormatter={(val) => `₦${formatAxisAmount(val)}`} tickLine={false} axisLine={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '20px' }} />
-                
-                <Area type="monotone" dataKey="idle" stackId="1" stroke="#eab308" fill="#eab308" fillOpacity={0.3} name="Idle / Holding" />
-                <Area type="monotone" dataKey="goals" stackId="1" stroke="#a855f7" fill="#a855f7" fillOpacity={0.5} name="War Room Goals" />
-                <Area type="monotone" dataKey="generosity" stackId="1" stroke="#ec4899" fill="#ec4899" fillOpacity={0.7} name="Generosity" />
-              </AreaChart>
+              {filteredSnapshots.length > 0 ? (
+                <AreaChart data={filteredSnapshots}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                  <XAxis dataKey="month" stroke="#777" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#777" fontSize={10} tickFormatter={(val) => `₦${formatAxisAmount(val)}`} tickLine={false} axisLine={false} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '20px' }} />
+                  
+                  <Area type="monotone" dataKey="idle" stackId="1" stroke="#eab308" fill="#eab308" fillOpacity={0.3} name="Idle / Holding" />
+                  <Area type="monotone" dataKey="goals" stackId="1" stroke="#a855f7" fill="#a855f7" fillOpacity={0.5} name="War Room Goals" />
+                  <Area type="monotone" dataKey="generosity" stackId="1" stroke="#ec4899" fill="#ec4899" fillOpacity={0.7} name="Generosity" />
+                </AreaChart>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-gray-500 border border-dashed border-white/10 rounded-xl">
+                    <Landmark size={32} className="mb-2 opacity-50"/>
+                    <span className="text-sm">Database Syncing. Awaiting first nightly snapshot.</span>
+                </div>
+              )}
             </ResponsiveContainer>
           </GlassCard>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 4: SIGNAL INTELLIGENCE (The original Alpha Leaderboard)               */}
+      {/* TAB 4: SIGNAL INTELLIGENCE (NEW FUNNEL & YIELD CHARTS ADDED) */}
       {/* ========================================================================= */}
       {activeTab === 'INTELLIGENCE' && (
         <div className="space-y-6 animate-fade-in">
+          
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* NEW: Signal Funnel Chart */}
+            <GlassCard className="p-6 h-[350px]">
+              <div className="flex items-center gap-2 mb-2">
+                <PieIcon className="text-blue-400" size={20}/>
+                <h3 className="font-bold text-white">Conversion Funnel</h3>
+              </div>
+              <ResponsiveContainer width="100%" height="90%">
+                {signalFunnel.length > 0 ? (
+                  <PieChart>
+                    <Pie data={signalFunnel} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                      {signalFunnel.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend verticalAlign="bottom" height={36}/>
+                  </PieChart>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-600">
+                      <span className="text-xs">No Signal Data</span>
+                  </div>
+                )}
+              </ResponsiveContainer>
+            </GlassCard>
+
+            {/* NEW: Cumulative Yield Trajectory */}
+            <GlassCard className="p-6 h-[350px] lg:col-span-2">
+              <div className="flex flex-col mb-4">
+                <h3 className="font-bold text-white flex items-center gap-2">
+                   <TrendingUp className="text-green-400" size={20}/> Cumulative Yield Trajectory
+                </h3>
+                <p className="text-xs text-gray-400 mt-1">Total revenue generated from harvested signals over time.</p>
+              </div>
+              <ResponsiveContainer width="100%" height="80%">
+                {filteredSnapshots.length > 0 ? (
+                  <AreaChart data={filteredSnapshots}>
+                    <defs>
+                      <linearGradient id="colorYield" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                    <XAxis dataKey="month" stroke="#777" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#10b981" fontSize={10} tickFormatter={(val) => `₦${formatAxisAmount(val)}`} tickLine={false} axisLine={false} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Area type="monotone" dataKey="signalYield" stroke="#10b981" fill="url(#colorYield)" strokeWidth={3} name="Total Harvested Revenue" />
+                  </AreaChart>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-500 border border-dashed border-white/10 rounded-xl">
+                      <span className="text-sm">Awaiting first nightly snapshot.</span>
+                  </div>
+                )}
+              </ResponsiveContainer>
+            </GlassCard>
+          </div>
+
           <GlassCard className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-white flex items-center gap-2">

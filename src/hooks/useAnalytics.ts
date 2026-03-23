@@ -1,8 +1,45 @@
-import { useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLedger } from '../context/LedgerContext';
+import { supabase } from '../lib/supabase'; // NEEDED for fetching snapshots
 
 export const useAnalytics = (timeframe: string = 'MAX') => {
   const { history, telemetry, signals } = useLedger();
+
+  // --- NEW: FETCH HISTORICAL SNAPSHOTS FROM DB ---
+  const [historicalSnapshots, setHistoricalSnapshots] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchSnapshots = async () => {
+      // Pull the daily snapshots from the database
+      const { data, error } = await supabase
+        .from('daily_snapshots')
+        .select('*')
+        .order('date', { ascending: true }); // Must be chronological for charts
+        
+      if (error) {
+        console.error("Error fetching snapshots:", error);
+        return;
+      }
+      
+      // Format the data so Recharts can read it easily
+      const formattedData = data.map(snap => {
+        const d = new Date(snap.date);
+        return {
+          ...snap,
+          month: d.toLocaleString('en-US', { month: 'short', day: 'numeric' }), // e.g. "Mar 23"
+          netWorth: Number(snap.net_worth || 0),
+          runway: Number(snap.runway_months || 0),
+          goals: Number(snap.allocated_goals || 0),
+          idle: Number(snap.idle_holding || 0),
+          generosity: Number(snap.generosity_wallet || 0)
+        };
+      });
+      
+      setHistoricalSnapshots(formattedData);
+    };
+
+    fetchSnapshots();
+  }, []);
 
   // --- 1. GLOBAL TIMEFRAME CONTROLLER ---
   const startDate = useMemo(() => {
@@ -137,7 +174,7 @@ export const useAnalytics = (timeframe: string = 'MAX') => {
   // --- TABLE 4: BLEED FORENSICS ---
   const bleedForensics = useMemo(() => {
     const map: Record<string, { desc: string; category: string; count: number; total: number; latestDate: string }> = {};
-    
+
     // Looks at the selected timeframe instead of just currentMonthKey
     filteredTelemetry.filter(t => t.highVelocityFlag).forEach(b => {
         const rawDesc = (b.description || b.title || 'Unknown Friction').split(' - ')[0].trim();
@@ -176,7 +213,7 @@ export const useAnalytics = (timeframe: string = 'MAX') => {
                 }
             }
         });
-        
+
         let displayName = key;
         if (key.includes('-') && key.length === 7) {
            const [y, m] = key.split('-');
@@ -209,6 +246,7 @@ export const useAnalytics = (timeframe: string = 'MAX') => {
   return { 
     burnHistory, categorySplit, signalLeaderboard: signalStats.leaderboard,
     monthlyStatement, ribbon, bleedForensics, topMerchants,
-    getComparatorData, availablePeriods 
+    getComparatorData, availablePeriods,
+    historicalSnapshots // <-- NEW RETURN VARIABLE EXPORTED TO ANALYTICS PAGE
   };
 };

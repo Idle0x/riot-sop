@@ -8,6 +8,7 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { GlassButton } from '../components/ui/GlassButton';
 import { Naira } from '../components/ui/Naira';
 import { formatNumber } from '../utils/format';
+import { CategoryDrawer } from '../components/ui/CategoryDrawer';
 
 import { 
   Download, TrendingUp, PieChart as PieIcon, Target, Calendar, 
@@ -57,7 +58,9 @@ export const Analytics = () => {
   const [compMetric, setCompMetric] = useState<ComparatorMetric>('BURN');
   const [compMode, setCompMode] = useState<'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED'>('ANNUAL');
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
-  const [periodToAdd, setPeriodToAdd] = useState('');
+  
+  // NEW: Drawer State
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   useEffect(() => {
       if (activeTab === 'VELOCITY') setCompMetric('BURN');
@@ -70,10 +73,10 @@ export const Analytics = () => {
     burnHistory, categorySplit,
     monthlyStatement, ribbon, signalLeaderboard, signalFunnel,
     bleedForensics, topMerchants,
-    getComparatorData, availablePeriods, filteredSnapshots
+    getComparatorData, availablePeriods, filteredSnapshots,
+    filteredEvents // Extracted for the Drawer
   } = useAnalytics(masterTimeframe, customStart, customEnd);
 
-  // --- FIXED: ADDED PREV VARIABLES FOR STRICT MODE ---
   const { 
     trueInflow, trueOutflow, trueNetFlow, inflowDelta, outflowDelta,
     prevTrueInflow, prevTrueOutflow
@@ -125,13 +128,6 @@ export const Analytics = () => {
         default: return [];
     }
   })();
-
-  const addPeriod = () => {
-      if (periodToAdd && !selectedPeriods.includes(periodToAdd)) {
-          setSelectedPeriods([...selectedPeriods, periodToAdd]);
-          setPeriodToAdd('');
-      }
-  };
 
   const removePeriod = (p: string) => setSelectedPeriods(selectedPeriods.filter(x => x !== p));
   const clearAll = () => setSelectedPeriods([]);
@@ -201,20 +197,25 @@ export const Analytics = () => {
          ))}
       </div>
 
+      {/* AUTO-ADD SELECTOR (NO PLUS BUTTON NEEDED) */}
       <div className="flex gap-2 mb-4">
          <select 
-           className="bg-black/40 border border-white/10 text-white text-xs rounded px-2 py-2 flex-1 focus:border-white/30 outline-none"
-           value={periodToAdd}
-           onChange={(e) => setPeriodToAdd(e.target.value)}
+           className="bg-black/40 border border-white/10 text-white text-xs rounded px-2 py-2 flex-1 focus:border-white/30 outline-none cursor-pointer"
+           value="" 
+           onChange={(e) => {
+               const val = e.target.value;
+               if (val && !selectedPeriods.includes(val)) {
+                   setSelectedPeriods([...selectedPeriods, val]);
+               }
+           }}
          >
-            <option value="">
-                {compMode === 'MIXED' ? 'Select period...' : `Add ${compMode.toLowerCase().slice(0, -2)}...`}
+            <option value="" disabled hidden>
+                {compMode === 'MIXED' ? 'Select period to add...' : `Add ${compMode.toLowerCase().slice(0, -2)}...`}
             </option>
             {periodOptions.map(p => (
                 <option key={p} value={p}>{formatPeriodLabel(p)}</option>
             ))}
          </select>
-         <button onClick={addPeriod} disabled={!periodToAdd} className="bg-white/10 hover:bg-white/20 text-white p-2 rounded disabled:opacity-50 transition-colors"><Plus size={16}/></button>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4 min-h-[24px]">
@@ -368,21 +369,21 @@ export const Analytics = () => {
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
              <div className="p-4 rounded-xl border border-white/10 bg-white/5">
-                <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">True Income (Excl. Transfers)</div>
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Total Income (Excl. Transfers)</div>
                 <div className="text-2xl font-mono font-bold text-white"><Naira/>{formatNumber(trueInflow)}</div>
                 <div className={`text-xs mt-1 font-bold ${inflowDelta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                    {inflowDelta >= 0 ? '▲' : '▼'} {Math.abs(inflowDelta).toFixed(1)}% vs Prev Period
                 </div>
              </div>
              <div className="p-4 rounded-xl border border-white/10 bg-white/5">
-                <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">True Burn (Excl. Transfers)</div>
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Total Expenses (Excl. Transfers)</div>
                 <div className="text-2xl font-mono font-bold text-white"><Naira/>{formatNumber(trueOutflow)}</div>
                 <div className={`text-xs mt-1 font-bold ${outflowDelta <= 0 ? 'text-green-400' : 'text-red-400'}`}>
                    {outflowDelta <= 0 ? '▼' : '▲'} {Math.abs(outflowDelta).toFixed(1)}% vs Prev Period
                 </div>
              </div>
              <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-900/10">
-                <div className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">True Net Flow</div>
+                <div className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Net Flow</div>
                 <div className={`text-2xl font-mono font-bold ${trueNetFlow >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
                    {trueNetFlow >= 0 ? '+' : '-'}<Naira/>{formatNumber(Math.abs(trueNetFlow))}
                 </div>
@@ -414,7 +415,7 @@ export const Analytics = () => {
               </ResponsiveContainer>
             </GlassCard>
 
-            {renderComparator([{label: 'True Burn', val: 'BURN'}, {label: 'True Income', val: 'INCOME'}])}
+            {renderComparator([{label: 'Total Expenses', val: 'BURN'}, {label: 'Total Income', val: 'INCOME'}])}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -422,13 +423,21 @@ export const Analytics = () => {
               <div className="flex items-center gap-2 mb-6">
                 <PieIcon className="text-purple-400" size={20}/>
                 <h3 className="font-bold text-white">Category Distribution</h3>
+                <span className="text-[10px] text-gray-500 ml-2 border border-white/10 px-2 py-0.5 rounded-full">Tap bars to drill-down</span>
               </div>
               <ResponsiveContainer width="100%" height="85%">
                 <BarChart data={categorySplit} layout="vertical" margin={{ left: 10 }}>
                   <XAxis type="number" stroke="#555" fontSize={10} tickFormatter={(val) => `₦${formatAxisAmount(val)}`}/>
                   <YAxis dataKey="name" type="category" stroke="#fff" fontSize={10} width={100}/>
-                  <Tooltip content={<CustomTooltip />}/>
-                  <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} name="Spent" barSize={20}>
+                  <Bar 
+                    dataKey="value" 
+                    fill="#8b5cf6" 
+                    radius={[0, 4, 4, 0]} 
+                    name="Spent" 
+                    barSize={20}
+                    className="cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={(data) => setSelectedCategory(data.name || data.payload?.name)}
+                  >
                     {categorySplit.map((_entry, index) => (
                       <Cell key={`cell-${index}`} fill={index === 0 ? '#ef4444' : '#8b5cf6'} />
                     ))}
@@ -436,6 +445,13 @@ export const Analytics = () => {
                 </BarChart>
               </ResponsiveContainer>
             </GlassCard>
+
+            <CategoryDrawer 
+               isOpen={!!selectedCategory} 
+               onClose={() => setSelectedCategory(null)} 
+               category={selectedCategory} 
+               events={filteredEvents} 
+            />
 
             <GlassCard className="p-6 h-[400px] flex flex-col">
                 <div className="flex items-center gap-2 mb-4">

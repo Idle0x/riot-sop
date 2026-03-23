@@ -122,10 +122,10 @@ export const CategoryDrawer = ({ isOpen, onClose, category, events }: CategoryDr
       />
 
       {/* ==================================================================================== */}
-      {/* LAYER 1: CATEGORY OVERVIEW (Mobile: 45vh, Desktop: 50vh) */}
+      {/* LAYER 1: CATEGORY OVERVIEW (Mobile: 60vh, Desktop: 65vh) */}
       {/* ==================================================================================== */}
       <div 
-        className={`absolute bottom-0 left-0 right-0 h-[45vh] md:h-[50vh] max-w-3xl mx-auto bg-[#0a0a0a] rounded-t-2xl md:rounded-t-3xl overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.8)] border-t border-white/10
+        className={`absolute bottom-0 left-0 right-0 h-[60vh] md:h-[65vh] max-w-3xl mx-auto bg-[#0a0a0a] rounded-t-2xl md:rounded-t-3xl overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.8)] border-t border-white/10
         ${isOpen ? 'translate-y-0' : 'translate-y-[120%]'} 
         ${selectedEntity ? 'scale-[0.96] opacity-40 blur-[2px] pointer-events-none' : 'scale-100 opacity-100 blur-0'}`}
       >
@@ -203,10 +203,10 @@ export const CategoryDrawer = ({ isOpen, onClose, category, events }: CategoryDr
       </div>
 
       {/* ==================================================================================== */}
-      {/* LAYER 2: ENTITY DETAIL (Mobile: 50vh, Desktop: 60vh) */}
+      {/* LAYER 2: ENTITY DETAIL (Mobile: 65vh, Desktop: 75vh) */}
       {/* ==================================================================================== */}
       <div 
-        className={`absolute bottom-0 left-0 right-0 h-[50vh] md:h-[60vh] max-w-3xl mx-auto bg-black rounded-t-2xl md:rounded-t-3xl overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col shadow-[0_-20px_60px_rgba(0,0,0,0.9)] border-t border-white/10
+        className={`absolute bottom-0 left-0 right-0 h-[65vh] md:h-[75vh] max-w-3xl mx-auto bg-black rounded-t-2xl md:rounded-t-3xl overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col shadow-[0_-20px_60px_rgba(0,0,0,0.9)] border-t border-white/10
         ${selectedEntity ? 'translate-y-0' : 'translate-y-[120%]'}`}
       >
         <div className="w-10 md:w-12 h-1 bg-white/20 rounded-full mx-auto mt-2 md:mt-3 mb-1.5 md:mb-2" />

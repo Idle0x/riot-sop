@@ -20,8 +20,12 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
         goals: Number(snap.allocated_goals || 0),
         idle: Number(snap.idle_holding || 0),
         generosity: Number(snap.generosity_wallet || 0),
-        signalYield: Number(snap.total_signal_yield || 0)
+        signalYield: Number(snap.total_signal_yield || 0),
+        // NEW: Pulling the Lifestyle variables
+        rollingBurn: Number(snap.rolling_30d_burn || 0),
+        budgetCap: Number(snap.total_budget_cap || 0)
       }));
+      
       setHistoricalSnapshots(formattedData);
     };
     fetchSnapshots();
@@ -66,7 +70,7 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
       const d = new Date(t.date); return d >= startDate && d <= endDate;
   }), [telemetry, startDate, endDate]);
 
-  // NEW: Filtered Snapshots so historical charts obey the Master Timeframe
+  // Filtered Snapshots so historical charts obey the Master Timeframe
   const filteredSnapshots = useMemo(() => historicalSnapshots.filter(s => {
       const d = new Date(s.date); return d >= startDate && d <= endDate;
   }), [historicalSnapshots, startDate, endDate]);
@@ -108,7 +112,7 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
     return Object.values(map).sort((a, b) => b.total - a.total).slice(0, 15);
   }, [filteredTelemetry]);
 
-  // NEW: Expanded Signal Intelligence Metrics
+  // Expanded Signal Intelligence Metrics
   const signalStats = useMemo(() => {
     const data = signals.filter(s => s.totalGenerated > 0 || s.hoursLogged > 0).map(s => ({
         id: s.id, name: s.title, sector: s.sector, effort: s.hoursLogged, profit: s.totalGenerated,
@@ -214,6 +218,6 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
     signalLeaderboard: signalStats.leaderboard, signalFunnel: signalStats.funnel,
     monthlyStatement, ribbon, bleedForensics, topMerchants,
     getComparatorData, availablePeriods,
-    filteredSnapshots // <-- This is the LIVE DB data filtered by your timeframe
+    filteredSnapshots
   };
 };

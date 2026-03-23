@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useLedger } from '../context/LedgerContext';
 import { supabase } from '../lib/supabase';
 
+export type ComparatorMetric = 'BURN' | 'INCOME' | 'NET_WORTH' | 'RUNWAY' | 'GOALS' | 'IDLE' | 'YIELD';
+
 export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, customEnd?: string) => {
   const { history, telemetry, signals } = useLedger();
 
@@ -21,7 +23,6 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
         idle: Number(snap.idle_holding || 0),
         generosity: Number(snap.generosity_wallet || 0),
         signalYield: Number(snap.total_signal_yield || 0),
-        // NEW: Pulling the Lifestyle variables
         rollingBurn: Number(snap.rolling_30d_burn || 0),
         budgetCap: Number(snap.total_budget_cap || 0)
       }));
@@ -70,7 +71,6 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
       const d = new Date(t.date); return d >= startDate && d <= endDate;
   }), [telemetry, startDate, endDate]);
 
-  // Filtered Snapshots so historical charts obey the Master Timeframe
   const filteredSnapshots = useMemo(() => historicalSnapshots.filter(s => {
       const d = new Date(s.date); return d >= startDate && d <= endDate;
   }), [historicalSnapshots, startDate, endDate]);
@@ -112,7 +112,6 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
     return Object.values(map).sort((a, b) => b.total - a.total).slice(0, 15);
   }, [filteredTelemetry]);
 
-  // Expanded Signal Intelligence Metrics
   const signalStats = useMemo(() => {
     const data = signals.filter(s => s.totalGenerated > 0 || s.hoursLogged > 0).map(s => ({
         id: s.id, name: s.title, sector: s.sector, effort: s.hoursLogged, profit: s.totalGenerated,
@@ -166,7 +165,8 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
     return Object.values(map).sort((a, b) => b.total - a.total);
   }, [filteredTelemetry]);
 
-  const getComparatorData = (keys: string[], mode: 'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED') => {
+  // --- UPGRADED UNIVERSAL COMPARATOR ENGINE ---
+  const getComparatorData = (keys: string[], mode: 'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED', metric: ComparatorMetric = 'BURN') => {
     return keys.map(key => {
         let total = 0;
         let effectiveMode = mode;
@@ -175,21 +175,71 @@ export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, cu
             else if (key.startsWith('Q')) effectiveMode = 'QUARTERLY';    
             else effectiveMode = 'MONTHLY';                               
         }
-        allEvents.filter(h => h.type === 'SPEND' || h.type === 'GENEROSITY' || h.type === 'GENEROSITY_GIFT').forEach(log => {
-            const dateStr = log.date; 
-            const year = dateStr.slice(0, 4);
-            const month = parseInt(dateStr.slice(5, 7)); 
-            if (effectiveMode === 'ANNUAL' && dateStr.startsWith(key)) total += Math.abs(log.amount || 0);
-            else if (effectiveMode === 'MONTHLY' && dateStr.startsWith(key)) total += Math.abs(log.amount || 0);
-            else if (effectiveMode === 'QUARTERLY') {
-                const parts = key.split(' '); 
-                if (parts.length === 2 && year === parts[1]) {
-                    const qNum = parseInt(parts[0].replace('Q', '')); 
-                    const startMonth = (qNum - 1) * 3 + 1;
-                    if (month >= startMonth && month <= startMonth + 2) total += Math.abs(log.amount || 0);
+
+        let yearStr = '';
+        let startMonth = 1;
+        let endMonth = 12;
+        let prefix = '';
+
+        if (effectiveMode === 'ANNUAL') {
+            yearStr = key;
+            prefix = key;
+        } else if (effectiveMode === 'MONTHLY') {
+            yearStr = key.slice(0, 4);
+            startMonth = parseInt(key.slice(5, 7));
+            endMonth = startMonth;
+            prefix = key;
+        } else if (effectiveMode === 'QUARTERLY') {
+            const parts = key.split(' ');
+            yearStr = parts[1];
+            const qNum = parseInt(parts[0].replace('Q', ''));
+            startMonth = (qNum - 1) * 3 + 1;
+            endMonth = startMonth + 2;
+        }
+
+        if (metric === 'BURN' || metric === 'INCOME') {
+            // CUMULATIVE PHYSICS
+            allEvents.forEach(log => {
+                const dateStr = log.date; 
+                const logYear = dateStr.slice(0, 4);
+                const logMonth = parseInt(dateStr.slice(5, 7)); 
+
+                let inPeriod = false;
+                if (effectiveMode === 'ANNUAL' && logYear === yearStr) inPeriod = true;
+                else if (effectiveMode === 'MONTHLY' && dateStr.startsWith(prefix)) inPeriod = true;
+                else if (effectiveMode === 'QUARTERLY' && logYear === yearStr && logMonth >= startMonth && logMonth <= endMonth) inPeriod = true;
+
+                if (inPeriod) {
+                    const isBurn = log.type === 'SPEND' || log.type === 'GENEROSITY' || log.type === 'GENEROSITY_GIFT';
+                    const isIncome = log.type === 'DROP' || log.type === 'TRIAGE_SESSION';
+
+                    if (metric === 'BURN' && isBurn) total += Math.abs(log.amount || 0);
+                    if (metric === 'INCOME' && isIncome) total += Math.abs(log.amount || 0);
                 }
+            });
+        } else {
+            // POINT-IN-TIME PHYSICS (Finds the absolute latest day logged in the period)
+            const snapshotsInPeriod = historicalSnapshots.filter(snap => {
+                const d = new Date(snap.date);
+                const snapYear = d.getFullYear().toString();
+                const snapMonth = d.getMonth() + 1;
+
+                if (effectiveMode === 'ANNUAL' && snapYear === yearStr) return true;
+                if (effectiveMode === 'MONTHLY' && snapYear === yearStr && snapMonth === startMonth) return true;
+                if (effectiveMode === 'QUARTERLY' && snapYear === yearStr && snapMonth >= startMonth && snapMonth <= endMonth) return true;
+                return false;
+            }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+            if (snapshotsInPeriod.length > 0) {
+                const latest = snapshotsInPeriod[0]; // The closing balance of the period
+                if (metric === 'NET_WORTH') total = latest.netWorth;
+                if (metric === 'RUNWAY') total = latest.runway;
+                if (metric === 'GOALS') total = latest.goals;
+                if (metric === 'IDLE') total = latest.idle;
+                if (metric === 'YIELD') total = latest.signalYield;
             }
-        });
+        }
+
         let displayName = key;
         if (key.includes('-') && key.length === 7) {
            const [y, m] = key.split('-');

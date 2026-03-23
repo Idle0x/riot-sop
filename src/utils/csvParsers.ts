@@ -1,17 +1,89 @@
 import { type TelemetryRecord } from '../types';
 
-const classifyTransaction = (rawDescription: string, type: 'SPEND' | 'DROP', amount: number): { merchant: string, category: string } => {
+// Robust list of Nigerian banks and fintechs to ignore when extracting human names
+const BANK_BLACKLIST = [
+    'palmpay', 'opay', 'kuda', 'moniepoint', 'gtbank', 'uba', 'zenith',
+    'access', 'stanbic', 'first bank', 'fcmb', 'wema', 'polaris', 'sterling',
+    'keystone', 'union bank', 'fidelity', 'ecobank', 'standard chartered',
+    'providus', 'taj', 'jaiz', 'suntrust', 'titan', 'globus', 'optimus', 'rubies',
+    'vfd', 'mint', 'kuda mfb', 'stanbicibtc bank', 'paycom', 'monie point',
+    'firstcity monument', 'guaranty trust'
+];
+
+// --- THE PRE-STEP: SMART ENTITY EXTRACTION & PERMUTATION ---
+const extractEntityName = (rawDesc: string): string => {
+    let name = '';
+    const desc = rawDesc.trim();
+
+    // 1. Slashes Format (e.g., Name/Account/Bank)
+    if (desc.includes('/')) {
+        name = desc.split('/')[0];
+    }
+    // 2. Transfer To/From Format
+    else if (/transfer (to|from)\s+/i.test(desc)) {
+        name = desc.replace(/.*?transfer (to|from)\s+/i, '').split('|')[0];
+    }
+    // 3. Pipe Format (The Smart Scanner)
+    else if (desc.includes('|')) {
+        const parts = desc.split('|').map(p => p.trim());
+        const validPart = parts.find(p => {
+            const pLower = p.toLowerCase();
+            const isLongID = /^[0-9A-Z]{10,}$/i.test(p);
+            const isBank = BANK_BLACKLIST.some(bank => pLower === bank || pLower.includes(bank));
+            const hasLetters = /[a-zA-Z]{3,}/.test(p);
+            return !isLongID && !isBank && hasLetters;
+        });
+        name = validPart || parts[0];
+    }
+    // 4. Web & POS Format
+    else if (desc.includes('@')) {
+        name = desc.split('@')[1];
+    } 
+    else {
+        name = desc;
+    }
+
+    // Clean up banking noise
+    let cleanName = name
+        .replace(/^(MB TRF|TRF|NIP TRF|NIP|USSD_|-|REV -MB TRF|REV:|REV-|REV\s)\s*/i, '') 
+        .replace(/(POS\/PUR\/|WEB PURCHASE\s*@|ATM CASH WITHDRAWAL@|DLO\*)/gi, '') 
+        .replace(/[0-9]{6,}/g, '') 
+        .replace(/\s+/g, ' ') 
+        .trim();
+
+    if (cleanName) {
+        // The Permutation Engine: Sort human names alphabetically to prevent duplicate profiles
+        // Only applies to strings with just letters and spaces (2 to 4 words long)
+        if (/^[a-zA-Z\s]{5,40}$/.test(cleanName)) {
+            const words = cleanName.split(/\s+/);
+            if (words.length >= 2 && words.length <= 4) {
+                cleanName = words.sort((a, b) => a.localeCompare(b)).join(' ');
+            }
+        }
+
+        // Title Case Conversion
+        cleanName = cleanName.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+        
+        if (cleanName.length > 30) cleanName = cleanName.substring(0, 30) + '...';
+        return cleanName;
+    }
+
+    return 'Unknown Merchant';
+};
+
+// --- THE 11-LAYER TRIAGE ENGINE ---
+const classifyTransaction = (rawDescription: string, type: 'SPEND' | 'DROP', amount: number, extractedName: string): { merchant: string, category: string } => {
   const desc = rawDescription.toLowerCase();
+  const nameLower = extractedName.toLowerCase();
 
   // --------------------------------------------------------------------------------
   // LAYER 0: THE IDENTITY FIREWALL (Anti-Inflation - ENVIRONMENT PROTECTED)
   // --------------------------------------------------------------------------------
   const rawAliases = import.meta.env.VITE_IDENTITY_ALIASES || '';
   const identityAliases = rawAliases.split(',').map((a: string) => a.toLowerCase().trim());
-  
-  // Check if the transaction description contains any of the protected aliases
-  const isSelfTransfer = identityAliases.some((alias: string) => alias && desc.includes(alias));
-  
+
+  const isSelfTransfer = identityAliases.some((alias: string) => alias && (desc.includes(alias) || nameLower.includes(alias)));
+
   if (isSelfTransfer) {
       return { merchant: 'Self Transfer / Liquidity', category: 'Self Transfer' };
   }
@@ -19,7 +91,7 @@ const classifyTransaction = (rawDescription: string, type: 'SPEND' | 'DROP', amo
   // --------------------------------------------------------------------------------
   // LAYER 1: AUTOMATED WEALTH & YIELD
   // --------------------------------------------------------------------------------
-  if (desc.includes('owealth') || desc.includes('spend and save') || desc.includes('piggybank')) {
+  if (desc.includes('owealth') || desc.includes('spend and save') || desc.includes('piggybank') || desc.includes('piggyvest') || desc.includes('cowrywise') || desc.includes('savings')) {
       return { merchant: 'Automated Savings Sweep', category: 'Internal Transfer' };
   }
   if (desc.includes('int.pd') || desc.includes('interest run') || desc.includes('interest') || desc.includes('cap. yield')) {
@@ -32,7 +104,7 @@ const classifyTransaction = (rawDescription: string, type: 'SPEND' | 'DROP', amo
   if (desc.includes('cbn') || desc.includes('electroniclevy') || desc.includes('stamp duty') || desc.includes('vat')) {
       return { merchant: 'FGN / CBN Taxes', category: 'Taxes & Levies' };
   }
-  if (desc.includes('nip-fee') || desc.includes('sms') || desc.includes('alert') || desc.includes('maintenance') || desc.includes('card fee') || desc.includes('charge')) {
+  if (desc.includes('nip-fee') || desc.includes('sms') || desc.includes('alert') || desc.includes('maintenance') || desc.includes('card fee') || desc.includes('charge') || desc.includes('issuance')) {
       return { merchant: 'Bank Fees', category: 'Bank Charges' };
   }
 
@@ -40,8 +112,8 @@ const classifyTransaction = (rawDescription: string, type: 'SPEND' | 'DROP', amo
   // LAYER 3: DYNAMIC DIGITAL EXTRACTION (Google, Spotify, Apple, etc.)
   // --------------------------------------------------------------------------------
   if (desc.includes('google')) {
-      const googleMatch = rawDescription.match(/GOOGLE\s+([a-zA-Z0-9\s]+?)(?:\s+(?:Lagos|NG|IE|GB|US|\|))/i);
-      const appName = googleMatch && googleMatch[1] ? googleMatch[1].trim() : 'Services';
+      const googleMatch = rawDescription.match(/(@DLO\*GOOGLE|\*GOOGLE|GOOGLE)\s+([a-zA-Z0-9\s]+?)(?:\s+(?:Lagos|NG|IE|GB|US|\|))/i);
+      const appName = googleMatch && googleMatch[2] ? googleMatch[2].trim() : 'Services';
       return { merchant: `Google: ${appName}`, category: 'Software & Apps' };
   }
   if (desc.includes('apple') || desc.includes('itunes')) return { merchant: 'Apple Services', category: 'Software & Apps' };
@@ -54,9 +126,9 @@ const classifyTransaction = (rawDescription: string, type: 'SPEND' | 'DROP', amo
   // --------------------------------------------------------------------------------
   // LAYER 4: UTILITIES & TELCO
   // --------------------------------------------------------------------------------
-  if (desc.includes('mtn') || desc.includes('vtu') || desc.includes('airtime') || desc.includes('recharge')) return { merchant: 'Telecom / Airtime', category: 'Utilities' };
+  if (desc.includes('mtn') || desc.includes('vtu') || desc.includes('airtime') || desc.includes('recharge') || desc.includes('mobile data')) return { merchant: 'Telecom / Airtime', category: 'Utilities' };
   if (desc.includes('airtel')) return { merchant: 'Airtel', category: 'Utilities' };
-  if (desc.includes('glo') && (desc.includes('data') || desc.includes('airtime'))) return { merchant: 'Glo', category: 'Utilities' };
+  if (desc.includes('glo') && (desc.includes('data') || desc.includes('airtime') || desc.includes('glo-'))) return { merchant: 'Glo', category: 'Utilities' };
   if (desc.includes('ikedc') || desc.includes('ekedc') || desc.includes('aedc') || desc.includes('buy power') || desc.includes('token') || desc.includes('power')) return { merchant: 'Electricity (Power)', category: 'Utilities' };
 
   // --------------------------------------------------------------------------------
@@ -71,19 +143,25 @@ const classifyTransaction = (rawDescription: string, type: 'SPEND' | 'DROP', amo
   // LAYER 6: FOOD, GROCERIES & TRANSPORT
   // --------------------------------------------------------------------------------
   if (desc.includes('chowdeck') || desc.includes('glovo') || desc.includes('food')) return { merchant: 'Food Delivery', category: 'Food & Dining' };
-  if (desc.includes('chicken republic') || desc.includes('domino') || desc.includes('pizza')) return { merchant: 'Fast Food', category: 'Food & Dining' };
+  if (desc.includes('item 7') || desc.includes('item7') || desc.includes('chicken republic') || desc.includes('domino') || desc.includes('pizza') || desc.includes('basic feeding')) return { merchant: 'Fast Food', category: 'Food & Dining' };
   if (desc.includes('shoprite') || desc.includes('spar')) return { merchant: 'Supermarket', category: 'Groceries' };
   if (desc.includes('uber') || desc.includes('bolt') || desc.includes('indrive') || desc.includes('cowry') || desc.includes('lago')) return { merchant: 'Transport / Ride', category: 'Transport' };
-  if (desc.includes('basic feeding')) return { merchant: 'Basic Feeding', category: 'Food & Dining' }; 
+
+  // --------------------------------------------------------------------------------
+  // LAYER 6.5: GENEROSITY & SOCIAL TAX
+  // --------------------------------------------------------------------------------
+  if (desc.includes('gift') || desc.includes('donation') || desc.includes('tithe') || desc.includes('offering') || desc.includes('party') || desc.includes('birthday') || desc.includes('love ')) {
+      return { merchant: extractedName !== 'Unknown Merchant' ? extractedName : 'Social Spend', category: 'Generosity' };
+  }
 
   // --------------------------------------------------------------------------------
   // LAYER 7: DYNAMIC ONLINE GATEWAYS (Paystack, Flutterwave)
   // --------------------------------------------------------------------------------
   if (desc.includes('paystack*') || desc.includes('flw*') || desc.includes('paystack') || desc.includes('flutterwave')) {
-      let extractedName = rawDescription.split('*')[1]?.split('|')[0]?.trim() || 'Online Merchant';
-      extractedName = extractedName.replace(/[0-9]{6,}/g, '').trim(); 
-      extractedName = extractedName.charAt(0).toUpperCase() + extractedName.slice(1).toLowerCase();
-      return { merchant: `Paystack: ${extractedName}`, category: 'Online Payment' };
+      let gwName = rawDescription.split('*')[1]?.split('|')[0]?.trim() || extractedName;
+      gwName = gwName.replace(/[0-9]{6,}/g, '').trim(); 
+      gwName = gwName.charAt(0).toUpperCase() + gwName.slice(1).toLowerCase();
+      return { merchant: `Paystack: ${gwName}`, category: 'Online Payment' };
   }
   if (desc.includes('remita')) return { merchant: 'Remita Payment', category: 'Taxes & Levies' };
 
@@ -91,22 +169,25 @@ const classifyTransaction = (rawDescription: string, type: 'SPEND' | 'DROP', amo
   // LAYER 8: DYNAMIC WEB & POS PURCHASES
   // --------------------------------------------------------------------------------
   if (desc.includes('web purchase')) {
-      const webMatch = rawDescription.match(/@([a-zA-Z0-9_*]+)/);
-      let merchantName = webMatch && webMatch[1] ? webMatch[1].replace('DLO*', '').replace(/_/g, ' ') : 'Online Purchase';
-      return { merchant: merchantName, category: 'Online Payment' };
+      return { merchant: extractedName || 'Online Purchase', category: 'Online Payment' };
   }
-  if (desc.includes('pos/pur') || desc.includes('pos terminal')) {
-      let posName = rawDescription.replace(/(POS\/PUR\/[0-9]+\/)/gi, '').split('|')[0].trim();
-      posName = posName.charAt(0).toUpperCase() + posName.slice(1).toLowerCase();
-      return { merchant: posName || 'POS Terminal', category: 'POS / Cash' };
+  if (desc.includes('pos/pur') || desc.includes('pos terminal') || desc.includes('pos payment') || desc.includes('pos purchase')) {
+      return { merchant: extractedName !== 'Unknown Merchant' ? extractedName : 'POS Terminal', category: 'POS / Cash' };
   }
-  if (desc.includes('atm') && (desc.includes('wdl') || desc.includes('withdrawal'))) return { merchant: 'ATM Withdrawal', category: 'POS / Cash' };
+  if (desc.includes('atm') && (desc.includes('wdl') || desc.includes('withdrawal') || desc.includes('purchase'))) {
+      return { merchant: extractedName !== 'Unknown Merchant' ? extractedName : 'ATM Withdrawal', category: 'POS / Cash' };
+  }
 
   // --------------------------------------------------------------------------------
-  // LAYER 9: TRANSFERS & REFUNDS
+  // LAYER 9: TRANSFERS, REFUNDS & P2P CONTACTS
   // --------------------------------------------------------------------------------
-  if (desc.includes('reversal') || desc.includes('rev of') || desc.includes('refund')) return { merchant: 'Reversal / Refund', category: 'Refunds' };
+  if (desc.includes('reversal') || desc.includes('rev of') || desc.includes('refund') || desc.includes('rev-') || desc.includes('rev:') || desc.includes('rev ')) {
+      return { merchant: 'Reversal / Refund', category: 'Refunds' };
+  }
   if (desc.includes('trf') || desc.includes('transfer') || desc.includes('nip') || desc.includes('ussd') || desc.includes('mobile banking')) {
+      if (extractedName && extractedName !== 'Unknown Merchant') {
+          return { merchant: extractedName, category: 'Contacts & P2P' };
+      }
       return { merchant: 'Bank Transfer', category: type === 'DROP' ? 'Inbound Transfer' : 'Outbound Transfer' };
   }
 
@@ -119,19 +200,11 @@ const classifyTransaction = (rawDescription: string, type: 'SPEND' | 'DROP', amo
       return { merchant: 'Unidentified Ledger Entry', category: 'Uncategorized' };
   }
 
-  // Dynamic Merchant Cleanup for anything that slips through the 10 layers
-  let cleanMerchant = rawDescription
-      .replace(/(POS\/PUR\/|NIP TRF|NIP|TRF|USSD|WDL|WEB\/|MOB\/|kip:)/gi, '') 
-      .replace(/[0-9]{6,}/g, '') 
-      .split('/')[0] 
-      .split('*')[0] 
-      .split('|')[0]
-      .trim();
+  if (extractedName && extractedName !== 'Unknown Merchant') {
+      return { merchant: extractedName, category: 'Uncategorized' };
+  }
 
-  cleanMerchant = cleanMerchant.charAt(0).toUpperCase() + cleanMerchant.slice(1).toLowerCase();
-  if (cleanMerchant.length > 25) cleanMerchant = cleanMerchant.substring(0, 25) + '...';
-
-  return { merchant: cleanMerchant || 'Unknown Merchant', category: 'Uncategorized' };
+  return { merchant: 'Unknown Merchant', category: 'Uncategorized' };
 };
 
 export const processStatement = async (file: File): Promise<Partial<TelemetryRecord>[]> => {
@@ -200,7 +273,6 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
 
         const parsedData: Partial<TelemetryRecord>[] = [];
         const merchantFrequency: Record<string, number> = {};
-        
         const occurrenceTracker: Record<string, number> = {};
 
         for (let i = headerRowIndex + 1; i < rows.length; i++) {
@@ -266,7 +338,11 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
 
           if (isNaN(parsedDate.getTime())) continue;
 
-          const { merchant, category } = classifyTransaction(rawDesc, type, amount);
+          // EXTRACT THE CLEAN ENTITY NAME FIRST
+          const extractedName = extractEntityName(rawDesc);
+
+          // PASS IT TO THE CLASSIFICATION ENGINE
+          const { merchant, category } = classifyTransaction(rawDesc, type, amount, extractedName);
 
           if (type === 'SPEND') {
               merchantFrequency[merchant] = (merchantFrequency[merchant] || 0) + 1;
@@ -276,11 +352,11 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
           const baseSeed = `${parsedDate.toISOString()}_${type}_${amount}_${rawDesc.trim()}`;
           occurrenceTracker[baseSeed] = (occurrenceTracker[baseSeed] || 0) + 1;
           const finalSeed = `${baseSeed}_${occurrenceTracker[baseSeed]}`;
-          
+
           const encoder = new TextEncoder();
           const data = encoder.encode(finalSeed);
           const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-          
+
           const hashArray = Array.from(new Uint8Array(hashBuffer));
           const fingerprintHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 

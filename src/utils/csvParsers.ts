@@ -1,19 +1,23 @@
 import { type TelemetryRecord } from '../types';
 
-// Robust list of Nigerian banks and fintechs to ignore when extracting human names
 const BANK_BLACKLIST = [
     'palmpay', 'opay', 'kuda', 'moniepoint', 'gtbank', 'uba', 'zenith',
     'access', 'stanbic', 'first bank', 'fcmb', 'wema', 'polaris', 'sterling',
     'keystone', 'union bank', 'fidelity', 'ecobank', 'standard chartered',
     'providus', 'taj', 'jaiz', 'suntrust', 'titan', 'globus', 'optimus', 'rubies',
-    'vfd', 'mint', 'kuda mfb', 'stanbicibtc bank', 'stanbicibtc', 'paycom', 'monie point',
+    'vfd', 'mint', 'kuda mfb', 'stanbicibtc bank', 'paycom', 'monie point',
     'firstcity monument', 'guaranty trust', 'smartcash', 'smart cash'
 ];
 
-// --- THE PRE-STEP: SMART ENTITY EXTRACTION & PERMUTATION ---
-const extractEntityName = (rawDesc: string): string => {
+const FAKE_ENTITY_BLACKLIST = [
+    'unidentified ledger entry', 'money for savings', 'airtime', 'mobile data',
+    'from kuda', 'to kuda', 'spend and save', 'local funds transfer', 'outward transfer', 'inward transfer'
+];
+
+// --- EXTRACTOR 1: THE ENTITY (WHO) ---
+const extractEntityName = (rawString: string): string => {
     let name = '';
-    const desc = rawDesc.trim();
+    const desc = rawString.trim();
 
     if (desc.includes('/')) {
         name = desc.split('/')[0];
@@ -36,13 +40,17 @@ const extractEntityName = (rawDesc: string): string => {
     }
 
     let cleanName = name
-        .replace(/^(MB TRF|TRF|NIP TRF|NIP|USSD_|-|REV -MB TRF|REV:|REV-|REV\s)\s*/i, '') 
-        .replace(/(POS\/PUR\/|WEB PURCHASE\s*@|ATM CASH WITHDRAWAL@|DLO\*)/gi, '') 
+        .replace(/^(MB TRF|TRF|NIP TRF|NIP|USSD_|-|REV -MB TRF|REV:|REV-|REV\s|IFO\s)\s*/i, '') 
+        .replace(/(POS\/PUR\/|WEB PURCHASE\s*@|POS PAYMENT\s*@|ATM CASH WITHDRAWAL@|DLO\*)/gi, '') 
         .replace(/[0-9]{6,}/g, '') 
         .replace(/\s+/g, ' ') 
         .trim();
 
     if (cleanName) {
+        if (FAKE_ENTITY_BLACKLIST.some(fake => cleanName.toLowerCase().includes(fake))) {
+            return 'Unknown Merchant';
+        }
+
         if (/^[a-zA-Z\s]{5,40}$/.test(cleanName)) {
             const words = cleanName.split(/\s+/);
             if (words.length >= 2 && words.length <= 4) {
@@ -57,49 +65,82 @@ const extractEntityName = (rawDesc: string): string => {
     return 'Unknown Merchant';
 };
 
-// --- THE 11-LAYER TRIAGE ENGINE ---
+// --- EXTRACTOR 2: THE NARRATION (WHY & WHERE) ---
+const extractNarration = (rawDesc: string, merchantName: string, type: string): string => {
+    let text = rawDesc;
+    let detectedBank = '';
+
+    // 1. Hunt for the Bank Name first
+    if (rawDesc.includes('/')) {
+        // Kuda format often puts the bank at the end: Name/Account/Bank Name
+        const parts = rawDesc.split('/');
+        if (parts.length >= 3) detectedBank = parts[parts.length - 1].trim(); 
+    } 
+    if (!detectedBank && rawDesc.includes('|')) {
+        // OPay/Stanbic format: Narration | Bank | ID
+        const parts = rawDesc.split('|').map(p => p.trim());
+        const bankPart = parts.find(p => 
+            BANK_BLACKLIST.some(b => p.toLowerCase().includes(b)) || 
+            p.toLowerCase().includes('bank') ||
+            p.toLowerCase() === 'opay' || p.toLowerCase() === 'monie point'
+        );
+        if (bankPart) detectedBank = bankPart;
+    }
+
+    // 2. Extract the actual custom Narration
+    if (text.includes('|')) {
+        const parts = text.split('|').map(p => p.trim());
+        const possibleNarrations = parts.filter(p => 
+            p.length > 2 && 
+            !/^[0-9A-Z]{10,}$/i.test(p) && 
+            !p.toLowerCase().includes(merchantName.toLowerCase()) &&
+            (!detectedBank || p.toLowerCase() !== detectedBank.toLowerCase()) &&
+            !/transfer (to|from)\s+/i.test(p)
+        );
+        text = possibleNarrations.length > 0 ? possibleNarrations[0] : '';
+    } else if (text.includes('@')) {
+        text = text.split('@')[0].trim(); // e.g. "POS PAYMENT"
+    } else if (/transfer (to|from)\s+/i.test(text) || text.includes('/')) {
+        // If it's just a generic transfer string or a raw Kuda slash string with no extra text
+        text = ''; 
+    }
+
+    text = text.replace(/^(MB TRF|TRF|NIP TRF|NIP|USSD_|-|REV -MB TRF|REV:|REV-|REV\s|IFO\s)\s*/i, '').trim();
+    
+    // 3. Fallback logic
+    if (!text || text.toLowerCase() === merchantName.toLowerCase() || text.length < 3 || text.toLowerCase() === 'unknown') {
+        if (detectedBank) {
+            let cleanBank = detectedBank.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+            if (cleanBank.length > 25) cleanBank = cleanBank.substring(0, 25) + '...';
+            return type === 'SPEND' ? `Transfer to ${cleanBank}` : `Transfer from ${cleanBank}`;
+        }
+        // If no bank and no narration, return empty string so the UI leaves it beautifully blank
+        return ''; 
+    }
+
+    return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+};
+
 const classifyTransaction = (rawDescription: string, type: 'SPEND' | 'DROP', amount: number, extractedName: string): { merchant: string, category: string } => {
   const desc = rawDescription.toLowerCase();
   const nameLower = extractedName.toLowerCase();
 
-  // --------------------------------------------------------------------------------
-  // LAYER -1: TELECOM WALLET OVERRIDES (Bypasses Identity Firewall)
-  // --------------------------------------------------------------------------------
   if ((desc.includes('smartcash') || desc.includes('smart cash') || desc.includes('airtel smartcash')) && type === 'SPEND') {
       return { merchant: 'Airtel SmartCash', category: 'Utilities' };
   }
 
-  // --------------------------------------------------------------------------------
-  // LAYER 0: THE IDENTITY FIREWALL
-  // --------------------------------------------------------------------------------
   const rawAliases = import.meta.env.VITE_IDENTITY_ALIASES || '';
   const identityAliases = rawAliases.split(',').map((a: string) => a.toLowerCase().trim());
   const isSelfTransfer = identityAliases.some((alias: string) => alias && (desc.includes(alias) || nameLower.includes(alias)));
 
-  if (isSelfTransfer) {
-      return { merchant: 'Self Transfer / Liquidity', category: 'Self Transfer' };
-  }
+  if (isSelfTransfer) return { merchant: 'Self Transfer / Liquidity', category: 'Self Transfer' };
 
-  // --------------------------------------------------------------------------------
-  // LAYER 1: AUTOMATED WEALTH & YIELD 
-  // --------------------------------------------------------------------------------
   const isWealthPlatform = ['owealth', 'spend and save', 'piggybank', 'piggyvest', 'cowrywise'].some(plat => desc.includes(plat) || nameLower.includes(plat));
-  if (isWealthPlatform) {
-      return { merchant: 'Automated Savings Sweep', category: 'Internal Transfer' };
-  }
-  if (desc.includes('int.pd') || desc.includes('interest run') || desc.includes('interest') || desc.includes('cap. yield')) {
-      return { merchant: 'Bank Interest', category: 'Yield & Returns' };
-  }
-
-  // --------------------------------------------------------------------------------
-  // LAYER 2: TAXES & BANK CHARGES
-  // --------------------------------------------------------------------------------
+  if (isWealthPlatform) return { merchant: 'Automated Savings Sweep', category: 'Internal Transfer' };
+  if (desc.includes('int.pd') || desc.includes('interest run') || desc.includes('interest') || desc.includes('cap. yield')) return { merchant: 'Bank Interest', category: 'Yield & Returns' };
   if (desc.includes('cbn') || desc.includes('electroniclevy') || desc.includes('stamp duty') || desc.includes('vat')) return { merchant: 'FGN / CBN Taxes', category: 'Taxes & Levies' };
   if (desc.includes('nip-fee') || desc.includes('sms') || desc.includes('alert') || desc.includes('maintenance') || desc.includes('card fee') || desc.includes('charge') || desc.includes('issuance')) return { merchant: 'Bank Fees', category: 'Bank Charges' };
 
-  // --------------------------------------------------------------------------------
-  // LAYER 3: DYNAMIC DIGITAL EXTRACTION
-  // --------------------------------------------------------------------------------
   if (desc.includes('google')) {
       const googleMatch = rawDescription.match(/(@DLO\*GOOGLE|\*GOOGLE|GOOGLE)\s+([a-zA-Z0-9\s]+?)(?:\s+(?:Lagos|NG|IE|GB|US|\|))/i);
       const appName = googleMatch && googleMatch[2] ? googleMatch[2].trim() : 'Services';
@@ -112,40 +153,23 @@ const classifyTransaction = (rawDescription: string, type: 'SPEND' | 'DROP', amo
   if (desc.includes('openai') || desc.includes('chatgpt')) return { merchant: 'OpenAI', category: 'Software & Apps' };
   if (desc.includes('dstv') || desc.includes('gotv') || desc.includes('multichoice') || desc.includes('showmax')) return { merchant: 'Cable TV / Streaming', category: 'Subscriptions' };
 
-  // --------------------------------------------------------------------------------
-  // LAYER 4: UTILITIES & TELCO
-  // --------------------------------------------------------------------------------
   if (desc.includes('mtn') || desc.includes('vtu') || desc.includes('airtime') || desc.includes('recharge') || desc.includes('mobile data')) return { merchant: 'Telecom / Airtime', category: 'Utilities' };
   if (desc.includes('airtel')) return { merchant: 'Airtel', category: 'Utilities' };
   if (desc.includes('glo') && (desc.includes('data') || desc.includes('airtime') || desc.includes('glo-'))) return { merchant: 'Glo', category: 'Utilities' };
   if (desc.includes('ikedc') || desc.includes('ekedc') || desc.includes('aedc') || desc.includes('buy power') || desc.includes('token') || desc.includes('power')) return { merchant: 'Electricity (Power)', category: 'Utilities' };
 
-  // --------------------------------------------------------------------------------
-  // LAYER 5: BETTING & GAMING
-  // --------------------------------------------------------------------------------
   if (desc.includes('sportybet') || desc.includes('sporty')) return { merchant: 'SportyBet', category: 'Betting & Gaming' };
   if (desc.includes('bet9ja')) return { merchant: 'Bet9ja', category: 'Betting & Gaming' };
   if (desc.includes('1xbet')) return { merchant: '1xBet', category: 'Betting & Gaming' };
   if (desc.includes('msport')) return { merchant: 'MSport', category: 'Betting & Gaming' };
 
-  // --------------------------------------------------------------------------------
-  // LAYER 6: FOOD, GROCERIES & TRANSPORT
-  // --------------------------------------------------------------------------------
   if (desc.includes('chowdeck') || desc.includes('glovo') || desc.includes('food')) return { merchant: 'Food Delivery', category: 'Food & Dining' };
   if (desc.includes('item 7') || desc.includes('item7') || desc.includes('chicken republic') || desc.includes('domino') || desc.includes('pizza') || desc.includes('basic feeding')) return { merchant: 'Fast Food', category: 'Food & Dining' };
   if (desc.includes('shoprite') || desc.includes('spar')) return { merchant: 'Supermarket', category: 'Groceries' };
   if (desc.includes('uber') || desc.includes('bolt') || desc.includes('indrive') || desc.includes('cowry') || desc.includes('lago')) return { merchant: 'Transport / Ride', category: 'Transport' };
 
-  // --------------------------------------------------------------------------------
-  // LAYER 6.5: GENEROSITY & SOCIAL TAX
-  // --------------------------------------------------------------------------------
-  if (desc.includes('gift') || desc.includes('donation') || desc.includes('tithe') || desc.includes('offering') || desc.includes('party') || desc.includes('birthday') || desc.includes('love ')) {
-      return { merchant: extractedName !== 'Unknown Merchant' ? extractedName : 'Social Spend', category: 'Generosity' };
-  }
+  if (desc.includes('gift') || desc.includes('donation') || desc.includes('tithe') || desc.includes('offering') || desc.includes('party') || desc.includes('birthday') || desc.includes('love ')) return { merchant: extractedName !== 'Unknown Merchant' ? extractedName : 'Social Spend', category: 'Generosity' };
 
-  // --------------------------------------------------------------------------------
-  // LAYER 7: DYNAMIC ONLINE GATEWAYS (Paystack, Flutterwave)
-  // --------------------------------------------------------------------------------
   if (desc.includes('paystack*') || desc.includes('flw*') || desc.includes('paystack') || desc.includes('flutterwave')) {
       let gwName = rawDescription.split('*')[1]?.split('|')[0]?.trim() || extractedName;
       gwName = gwName.replace(/[0-9]{6,}/g, '').trim(); 
@@ -154,25 +178,16 @@ const classifyTransaction = (rawDescription: string, type: 'SPEND' | 'DROP', amo
   }
   if (desc.includes('remita')) return { merchant: 'Remita Payment', category: 'Taxes & Levies' };
 
-  // --------------------------------------------------------------------------------
-  // LAYER 8: DYNAMIC WEB & POS PURCHASES
-  // --------------------------------------------------------------------------------
   if (desc.includes('web purchase')) return { merchant: extractedName || 'Online Purchase', category: 'Online Payment' };
   if (desc.includes('pos/pur') || desc.includes('pos terminal') || desc.includes('pos payment') || desc.includes('pos purchase')) return { merchant: extractedName !== 'Unknown Merchant' ? extractedName : 'POS Terminal', category: 'POS / Cash' };
   if (desc.includes('atm') && (desc.includes('wdl') || desc.includes('withdrawal') || desc.includes('purchase'))) return { merchant: extractedName !== 'Unknown Merchant' ? extractedName : 'ATM Withdrawal', category: 'POS / Cash' };
 
-  // --------------------------------------------------------------------------------
-  // LAYER 9: TRANSFERS, REFUNDS & P2P CONTACTS
-  // --------------------------------------------------------------------------------
   if (desc.includes('reversal') || desc.includes('rev of') || desc.includes('refund') || desc.includes('rev-') || desc.includes('rev:') || desc.includes('rev ')) return { merchant: 'Reversal / Refund', category: 'Refunds' };
   if (desc.includes('trf') || desc.includes('transfer') || desc.includes('nip') || desc.includes('ussd') || desc.includes('mobile banking')) {
       if (extractedName && extractedName !== 'Unknown Merchant') return { merchant: extractedName, category: 'Contacts & P2P' };
       return { merchant: 'Bank Transfer', category: type === 'DROP' ? 'Inbound Transfer' : 'Outbound Transfer' };
   }
 
-  // --------------------------------------------------------------------------------
-  // LAYER 10: THE FALLBACK (Blank Data & Unknowns)
-  // --------------------------------------------------------------------------------
   if (desc === 'unknown' || desc.trim() === '') {
       if (type === 'SPEND' && amount === 50) return { merchant: 'System Fee (Inferred)', category: 'Taxes & Levies' };
       if (type === 'SPEND' && amount <= 20) return { merchant: 'Bank Fee (Inferred)', category: 'Bank Charges' };
@@ -206,7 +221,7 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
 
         let headerRowIndex = -1;
         let headers: string[] = [];
-        let dateIdx = -1, descIdx = -1, debitIdx = -1, creditIdx = -1, amountIdx = -1;
+        let dateIdx = -1, descIdx = -1, entityIdx = -1, debitIdx = -1, creditIdx = -1, amountIdx = -1;
 
         for (let i = 0; i < Math.min(rows.length, 50); i++) {
             let cols = [];
@@ -221,13 +236,17 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
 
             const tempHeaders = cols.map(h => h.toLowerCase().replace(/["\r]/g, '').trim());
             const tempDateIdx = tempHeaders.findIndex(h => h === 'date' || h.includes('date') || h === 'value date' || h === 'txn date' || h === 'date/time');
-            let tempDescIdx = tempHeaders.findIndex(h => h === 'description' || h === 'narration' || h === 'details' || h === 'remarks' || h === 'category');
+            let tempDescIdx = tempHeaders.findIndex(h => h === 'description' || h === 'narration' || h === 'details' || h === 'remarks');
+            let tempEntityIdx = tempHeaders.findIndex(h => h === 'to / from' || h === 'beneficiary' || h === 'sender' || h === 'counterparty' || h === 'account name');
+            
+            if (tempDescIdx === -1) tempDescIdx = tempHeaders.findIndex(h => h === 'category');
 
             if (tempDateIdx !== -1 && tempDescIdx !== -1) {
                 headerRowIndex = i;
                 headers = tempHeaders;
                 dateIdx = tempDateIdx;
                 descIdx = tempDescIdx;
+                entityIdx = tempEntityIdx;
                 debitIdx = headers.findIndex(h => h.includes('debit') || h.includes('withdrawal') || h.includes('money out') || h.includes('paid out'));
                 creditIdx = headers.findIndex(h => h.includes('credit') || h.includes('deposit') || h.includes('money in') || h.includes('paid in'));
                 amountIdx = headers.findIndex(h => h === 'amount');
@@ -237,7 +256,6 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
 
         if (headerRowIndex === -1) throw new Error("Could not detect standard 'Date' or 'Description' columns.");
 
-        // --- PASS 1: EXTRACT AND MAP NAMES FOR DEDUPLICATION ---
         const preParsedRows: any[] = [];
         const uniqueNames = new Set<string>();
 
@@ -258,7 +276,9 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
           if (cols.length <= Math.max(dateIdx, descIdx)) continue;
 
           let rawDate = cols[dateIdx]?.replace(/["\r]/g, '').trim();
-          const rawDesc = cols[descIdx]?.replace(/["\r\n]/g, ' ').trim() || 'Unknown';
+          const explicitDesc = cols[descIdx]?.replace(/["\r\n]/g, ' ').trim() || 'Unknown';
+          const explicitEntity = entityIdx !== -1 ? cols[entityIdx]?.replace(/["\r\n]/g, ' ').trim() : '';
+          const rawStringForEntity = explicitEntity || explicitDesc;
 
           let amount = 0;
           let type: 'SPEND' | 'DROP' = 'SPEND';
@@ -276,7 +296,6 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
           if (!amount || isNaN(amount) || !rawDate) continue;
 
           rawDate = rawDate.replace(/\n/g, ' ');
-
           let parsedDate = new Date(rawDate);
 
           if (isNaN(parsedDate.getTime())) {
@@ -293,7 +312,7 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
 
           if (isNaN(parsedDate.getTime())) continue;
 
-          const baseExtractedName = extractEntityName(rawDesc);
+          const baseExtractedName = extractEntityName(rawStringForEntity);
 
           if (baseExtractedName && baseExtractedName !== 'Unknown Merchant') {
               uniqueNames.add(baseExtractedName);
@@ -303,12 +322,11 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
               parsedDate,
               type,
               amount,
-              rawDesc,
+              rawDesc: explicitDesc, 
               extractedName: baseExtractedName
           });
         }
 
-        // --- SUBSET MERGER (2-PASS RESOLUTION) ---
         const aliasMap: Record<string, string> = {};
         const nameList = Array.from(uniqueNames).sort((a, b) => b.length - a.length);
 
@@ -327,7 +345,6 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
             }
         });
 
-        // --- PASS 2: FINAL CLASSIFICATION & HASHING ---
         const parsedData: Partial<TelemetryRecord>[] = [];
         const merchantFrequency: Record<string, number> = {};
         const occurrenceTracker: Record<string, number> = {};
@@ -337,6 +354,9 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
 
             const resolvedName = aliasMap[extractedName] || extractedName;
             const { merchant, category } = classifyTransaction(rawDesc, type, amount, resolvedName);
+            
+            // Generate the clean human-readable narration
+            const cleanNarration = extractNarration(rawDesc, merchant, type);
 
             if (type === 'SPEND') {
                 merchantFrequency[merchant] = (merchantFrequency[merchant] || 0) + 1;
@@ -356,12 +376,13 @@ export const processStatement = async (file: File): Promise<Partial<TelemetryRec
               date: parsedDate.toISOString(),
               type,
               title: merchant,
-              description: rawDesc,
-              amount,
+              description: rawDesc, 
               categoryGroup: category,
               currency: 'NGN',
-              transactionRef: fingerprintHex
-            });
+              amount,
+              transactionRef: fingerprintHex,
+              narration: cleanNarration 
+            } as any);
         }
 
         const finalData = parsedData.map(record => ({

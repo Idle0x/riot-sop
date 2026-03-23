@@ -82,10 +82,12 @@ export const CategoryDrawer = ({ isOpen, onClose, category, events }: CategoryDr
         onClick={onClose}
       />
 
-      {/* The Drawer Base - Adds a deep indigo glow when an entity is selected */}
-      <div className={`absolute bottom-0 left-0 right-0 h-[85vh] max-w-3xl mx-auto backdrop-blur-2xl border-t border-white/10 rounded-t-3xl flex flex-col transform transition-all duration-500 ease-out shadow-[0_-10px_40px_rgba(0,0,0,0.5)] ${isOpen ? 'translate-y-0' : 'translate-y-full'} ${selectedEntity ? 'bg-indigo-950/40' : 'bg-[#0a0a0a]/95'}`}>
+      {/* The Atmospheric Drawer Base 
+        Switches between Frosted Slate (Tier 1) and Deep Indigo (Tier 2)
+      */}
+      <div className={`absolute bottom-0 left-0 right-0 h-[85vh] max-w-3xl mx-auto backdrop-blur-3xl rounded-t-3xl flex flex-col transform transition-all duration-700 ease-out shadow-[0_-10px_50px_rgba(0,0,0,0.7)] ${isOpen ? 'translate-y-0' : 'translate-y-full'} ${selectedEntity ? 'bg-gradient-to-b from-indigo-950/90 via-[#0a0a0a]/95 to-[#0a0a0a] border-t border-indigo-500/30' : 'bg-gradient-to-b from-slate-900/90 via-[#0a0a0a]/95 to-[#0a0a0a] border-t border-slate-700/50'}`}>
         
-        <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mt-4 mb-2 cursor-pointer" onClick={onClose} />
+        <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mt-4 mb-2 cursor-pointer hover:bg-white/40 transition-colors" onClick={onClose} />
         
         {/* Dynamic Header */}
         <div className="px-6 py-4 flex justify-between items-start border-b border-white/5 flex-shrink-0 transition-all duration-300">
@@ -108,17 +110,17 @@ export const CategoryDrawer = ({ isOpen, onClose, category, events }: CategoryDr
                       
                       {/* Avatar Profile Layout */}
                       <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold tracking-widest flex-shrink-0 shadow-lg shadow-indigo-500/30">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold tracking-widest flex-shrink-0 shadow-lg shadow-indigo-500/30 ring-2 ring-white/10">
                               {getInitials(selectedEntity)}
                           </div>
-                          <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight leading-tight truncate max-w-[240px] md:max-w-full">
+                          <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight leading-tight truncate max-w-[240px] md:max-w-full drop-shadow-md">
                               {selectedEntity}
                           </h2>
                       </div>
                   </div>
               )}
            </div>
-           <button onClick={onClose} className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-gray-400 transition-colors flex-shrink-0 ml-4">
+           <button onClick={onClose} className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-gray-400 transition-colors flex-shrink-0 ml-4 backdrop-blur-md border border-white/5">
               <X size={20} />
            </button>
         </div>
@@ -130,46 +132,47 @@ export const CategoryDrawer = ({ isOpen, onClose, category, events }: CategoryDr
                 /* VIEW 1: THE ENTITY BOARD */
                 <div className="space-y-6 animate-fade-in">
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="p-4 bg-white/5 border border-white/5 rounded-2xl">
-                            <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Total Deployed</div>
-                            <div className="text-2xl font-mono font-bold text-white"><Naira/>{formatNumber(categoryData.total)}</div>
+                        <div className="p-4 bg-white/5 border border-white/5 rounded-2xl shadow-inner backdrop-blur-sm">
+                            <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1 font-medium">Total Deployed</div>
+                            <div className="text-2xl font-mono font-bold text-white drop-shadow-md"><Naira/>{formatNumber(categoryData.total)}</div>
                         </div>
                         <div className="grid grid-rows-2 gap-2">
-                            <div className="p-3 bg-white/5 border border-white/5 rounded-xl flex items-center justify-between">
-                                <div className="text-[10px] text-gray-500 uppercase tracking-wider flex items-center gap-1"><Activity size={10}/> Frequency</div>
+                            <div className="p-3 bg-white/5 border border-white/5 rounded-xl flex items-center justify-between backdrop-blur-sm">
+                                <div className="text-[10px] text-gray-400 uppercase tracking-wider flex items-center gap-1 font-medium"><Activity size={10}/> Frequency</div>
                                 <div className="font-mono font-bold text-white text-sm">{categoryData.count}x</div>
                             </div>
-                            <div className="p-3 bg-white/5 border border-white/5 rounded-xl flex items-center justify-between">
-                                <div className="text-[10px] text-gray-500 uppercase tracking-wider flex items-center gap-1"><Activity size={10}/> Avg. Spend</div>
+                            <div className="p-3 bg-white/5 border border-white/5 rounded-xl flex items-center justify-between backdrop-blur-sm">
+                                <div className="text-[10px] text-gray-400 uppercase tracking-wider flex items-center gap-1 font-medium"><Activity size={10}/> Avg. Spend</div>
                                 <div className="font-mono font-bold text-white text-sm"><Naira/>{formatNumber(categoryData.avg)}</div>
                             </div>
                         </div>
                     </div>
 
                     <div>
-                        <h3 className="text-sm font-bold text-white mb-3 flex items-center justify-between border-b border-white/5 pb-2">
-                           <div className="flex items-center gap-2"><FileText size={16} className="text-purple-400"/> Entity Concentration</div>
-                           <span className="text-[10px] text-gray-500 font-normal">Tap an entity to view micro-ledger</span>
+                        <h3 className="text-sm font-bold text-white mb-3 flex items-center justify-between border-b border-slate-700/50 pb-2">
+                           <div className="flex items-center gap-2"><FileText size={16} className="text-blue-400"/> Entity Concentration</div>
+                           <span className="text-[10px] text-gray-500 font-normal hidden sm:inline">Tap an entity to view micro-ledger</span>
                         </h3>
                         <div className="space-y-2">
                             {categoryData.merchants.length > 0 ? categoryData.merchants.map((m, idx) => (
                                 <div 
                                     key={idx} 
                                     onClick={() => setSelectedEntity(m.name)}
-                                    className="relative overflow-hidden p-3 bg-white/5 hover:bg-white/10 border border-transparent hover:border-white/10 rounded-xl flex justify-between items-center group cursor-pointer transition-all"
+                                    className="relative overflow-hidden p-3 bg-slate-900/40 hover:bg-slate-800/60 border border-white/5 hover:border-blue-500/30 rounded-xl flex justify-between items-center group cursor-pointer transition-all shadow-sm"
                                 >
-                                    <div className="absolute left-0 top-0 bottom-0 bg-purple-500/10 transition-all" style={{ width: `${m.percentage}%` }} />
+                                    {/* Subtle blue progress bar for Tier 1 instead of purple */}
+                                    <div className="absolute left-0 top-0 bottom-0 bg-blue-500/10 transition-all" style={{ width: `${m.percentage}%` }} />
                                     <div className="relative z-10 flex flex-col max-w-[55%]">
-                                        <div className="font-bold text-gray-200 text-sm truncate">{m.name}</div>
-                                        <div className="text-[10px] text-gray-500">{m.frequency} Transactions</div>
+                                        <div className="font-bold text-gray-100 text-sm truncate group-hover:text-white transition-colors">{m.name}</div>
+                                        <div className="text-[10px] text-slate-400 font-medium">{m.frequency} Transactions</div>
                                     </div>
                                     <div className="relative z-10 flex items-center gap-3">
-                                       <span className="text-[10px] text-gray-500 hidden sm:inline">{m.percentage.toFixed(0)}%</span>
-                                       <span className="font-mono font-bold text-purple-400 text-sm"><Naira/>{formatNumber(m.amount)}</span>
+                                       <span className="text-[10px] text-slate-400 hidden sm:inline font-medium">{m.percentage.toFixed(0)}%</span>
+                                       <span className="font-mono font-bold text-blue-400 text-sm drop-shadow-sm"><Naira/>{formatNumber(m.amount)}</span>
                                     </div>
                                 </div>
                             )) : (
-                                <div className="text-center py-8 text-xs text-gray-600 italic border border-dashed border-white/5 rounded-xl">No entity data found for this period.</div>
+                                <div className="text-center py-8 text-xs text-slate-500 font-medium italic border border-dashed border-slate-700/50 rounded-xl bg-slate-900/20">No entity data found for this period.</div>
                             )}
                         </div>
                     </div>
@@ -178,14 +181,14 @@ export const CategoryDrawer = ({ isOpen, onClose, category, events }: CategoryDr
                 /* VIEW 2: THE MICRO-LEDGER PROFILE */
                 <div className="space-y-6 animate-fade-in">
                     
-                    <div className="flex items-center justify-between p-4 bg-indigo-500/20 border border-indigo-500/30 rounded-2xl shadow-inner">
+                    <div className="flex items-center justify-between p-4 bg-indigo-900/30 border border-indigo-500/30 rounded-2xl shadow-inner backdrop-blur-sm">
                         <div>
                             <div className="text-[10px] text-indigo-300 uppercase tracking-wider mb-1 font-bold">Total Allocated</div>
-                            <div className="font-mono text-xl font-bold text-white"><Naira/>{formatNumber(entityData.total)}</div>
+                            <div className="font-mono text-xl font-bold text-white drop-shadow-md"><Naira/>{formatNumber(entityData.total)}</div>
                         </div>
                         <div className="text-right">
                             <div className="text-[10px] text-indigo-300 uppercase tracking-wider mb-1 font-bold">Frequency</div>
-                            <div className="font-mono text-xl font-bold text-white">{entityData.txs.length}x</div>
+                            <div className="font-mono text-xl font-bold text-white drop-shadow-md">{entityData.txs.length}x</div>
                         </div>
                     </div>
 
@@ -195,17 +198,17 @@ export const CategoryDrawer = ({ isOpen, onClose, category, events }: CategoryDr
                         </h3>
                         <div className="space-y-3">
                             {entityData.txs.map((tx, idx) => (
-                                <div key={idx} className="flex flex-col p-4 bg-[#0a0a0a]/80 border border-white/5 rounded-xl hover:border-indigo-500/30 transition-colors shadow-sm">
+                                <div key={idx} className="flex flex-col p-4 bg-black/40 border border-indigo-500/10 rounded-xl hover:border-indigo-500/30 transition-colors shadow-sm backdrop-blur-sm">
                                     <div className="flex justify-between items-center mb-3">
-                                        <div className="text-xs text-gray-300 font-medium">
+                                        <div className="text-xs text-indigo-200/70 font-medium tracking-wide">
                                             {new Date(tx.date).toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })}
                                         </div>
-                                        <div className="font-mono text-base font-bold text-red-400">
+                                        <div className="font-mono text-base font-bold text-red-400 drop-shadow-sm">
                                             -<Naira/>{formatNumber(Math.abs(tx.amount))}
                                         </div>
                                     </div>
                                     
-                                    <div className="text-[11px] text-indigo-200/60 font-mono bg-black/40 p-2.5 rounded border border-indigo-500/10 break-words leading-relaxed">
+                                    <div className="text-[11px] text-indigo-200/60 font-mono bg-black/60 p-2.5 rounded border border-indigo-500/5 break-words leading-relaxed">
                                         {tx.description}
                                     </div>
                                 </div>

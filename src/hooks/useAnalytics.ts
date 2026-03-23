@@ -1,112 +1,93 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLedger } from '../context/LedgerContext';
-import { supabase } from '../lib/supabase'; // NEEDED for fetching snapshots
+import { supabase } from '../lib/supabase';
 
-export const useAnalytics = (timeframe: string = 'MAX') => {
+export const useAnalytics = (timeframe: string = 'MAX', customStart?: string, customEnd?: string) => {
   const { history, telemetry, signals } = useLedger();
 
-  // --- NEW: FETCH HISTORICAL SNAPSHOTS FROM DB ---
   const [historicalSnapshots, setHistoricalSnapshots] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchSnapshots = async () => {
-      // Pull the daily snapshots from the database
-      const { data, error } = await supabase
-        .from('daily_snapshots')
-        .select('*')
-        .order('date', { ascending: true }); // Must be chronological for charts
-        
-      if (error) {
-        console.error("Error fetching snapshots:", error);
-        return;
-      }
+      const { data, error } = await supabase.from('daily_snapshots').select('*').order('date', { ascending: true });
+      if (error) { console.error(error); return; }
       
-      // Format the data so Recharts can read it easily
-      const formattedData = data.map(snap => {
-        const d = new Date(snap.date);
-        return {
-          ...snap,
-          month: d.toLocaleString('en-US', { month: 'short', day: 'numeric' }), // e.g. "Mar 23"
-          netWorth: Number(snap.net_worth || 0),
-          runway: Number(snap.runway_months || 0),
-          goals: Number(snap.allocated_goals || 0),
-          idle: Number(snap.idle_holding || 0),
-          generosity: Number(snap.generosity_wallet || 0)
-        };
-      });
-      
+      const formattedData = data.map(snap => ({
+        ...snap,
+        month: new Date(snap.date).toLocaleString('en-US', { month: 'short', day: 'numeric' }), 
+        netWorth: Number(snap.net_worth || 0),
+        runway: Number(snap.runway_months || 0),
+        goals: Number(snap.allocated_goals || 0),
+        idle: Number(snap.idle_holding || 0),
+        generosity: Number(snap.generosity_wallet || 0),
+        signalYield: Number(snap.total_signal_yield || 0)
+      }));
       setHistoricalSnapshots(formattedData);
     };
-
     fetchSnapshots();
   }, []);
 
-  // --- 1. GLOBAL TIMEFRAME CONTROLLER ---
-  const startDate = useMemo(() => {
-    const date = new Date();
+  // --- GLOBAL TIMEFRAME CONTROLLER ---
+  const { startDate, endDate } = useMemo(() => {
+    const start = new Date();
+    let end = new Date();
     switch(timeframe) {
-      case '24H': date.setHours(date.getHours() - 24); break;
-      case '3D': date.setDate(date.getDate() - 3); break;
-      case '7D': date.setDate(date.getDate() - 7); break;
-      case '1M': date.setMonth(date.getMonth() - 1); break;
-      case '3M': date.setMonth(date.getMonth() - 3); break;
-      case '6M': date.setMonth(date.getMonth() - 6); break;
-      case '1Y': date.setFullYear(date.getFullYear() - 1); break;
-      case '5Y': date.setFullYear(date.getFullYear() - 5); break;
-      case 'MAX': return new Date(0); // Dawn of time
-      default: return new Date(0);
+      case '24H': start.setHours(start.getHours() - 24); break;
+      case '3D': start.setDate(start.getDate() - 3); break;
+      case '7D': start.setDate(start.getDate() - 7); break;
+      case '1M': start.setMonth(start.getMonth() - 1); break;
+      case '3M': start.setMonth(start.getMonth() - 3); break;
+      case '6M': start.setMonth(start.getMonth() - 6); break;
+      case 'YTD': start.setMonth(0, 1); start.setHours(0,0,0,0); break;
+      case '1Y': start.setFullYear(start.getFullYear() - 1); break;
+      case '5Y': start.setFullYear(start.getFullYear() - 5); break;
+      case 'CUSTOM': 
+        if (customStart && customEnd) {
+           return { startDate: new Date(customStart), endDate: new Date(`${customEnd}T23:59:59`) };
+        }
+        break;
+      case 'MAX': return { startDate: new Date(0), endDate: end };
+      default: return { startDate: new Date(0), endDate: end };
     }
-    return date;
-  }, [timeframe]);
+    return { startDate: start, endDate: end };
+  }, [timeframe, customStart, customEnd]);
 
-  // --- 2. DUAL PIPELINE DATA AGGREGATOR ---
-  // allEvents: Bypasses the timeframe filter so the Comparator always has full history.
   const allEvents = useMemo(() => {
-      const hEvents = history.map(h => ({ 
-          id: h.id, date: h.date, type: h.type, amount: h.amount, title: h.title,
-          isTelemetry: false, categoryGroup: undefined 
-      }));
-      const tEvents = telemetry.map(t => ({ 
-          id: t.id, date: t.date, type: t.type, amount: t.amount, title: t.title,
-          isTelemetry: true, categoryGroup: t.categoryGroup 
-      }));
+      const hEvents = history.map(h => ({ id: h.id, date: h.date, type: h.type, amount: h.amount, title: h.title, isTelemetry: false, categoryGroup: undefined }));
+      const tEvents = telemetry.map(t => ({ id: t.id, date: t.date, type: t.type, amount: t.amount, title: t.title, isTelemetry: true, categoryGroup: t.categoryGroup }));
       return [...hEvents, ...tEvents].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [history, telemetry]);
 
-  // filteredEvents: Obeys the Master Timeframe for all other charts and tables.
-  const filteredEvents = useMemo(() => allEvents.filter(e => new Date(e.date) >= startDate), [allEvents, startDate]);
-  const filteredTelemetry = useMemo(() => telemetry.filter(t => new Date(t.date) >= startDate), [telemetry, startDate]);
+  const filteredEvents = useMemo(() => allEvents.filter(e => {
+      const d = new Date(e.date); return d >= startDate && d <= endDate;
+  }), [allEvents, startDate, endDate]);
 
-  // --- CHART 1: DYNAMIC BURN VELOCITY ---
+  const filteredTelemetry = useMemo(() => telemetry.filter(t => {
+      const d = new Date(t.date); return d >= startDate && d <= endDate;
+  }), [telemetry, startDate, endDate]);
+
+  // NEW: Filtered Snapshots so historical charts obey the Master Timeframe
+  const filteredSnapshots = useMemo(() => historicalSnapshots.filter(s => {
+      const d = new Date(s.date); return d >= startDate && d <= endDate;
+  }), [historicalSnapshots, startDate, endDate]);
+
   const burnHistory = useMemo(() => {
     if (filteredEvents.length === 0) return [];
-
     const isDaily = ['24H', '3D', '7D', '1M'].includes(timeframe);
     const dataMap: Record<string, { date: string; burn: number }> = {};
-
     filteredEvents.forEach(e => {
       if (e.type === 'SPEND' || e.type === 'GENEROSITY' || e.type === 'GENEROSITY_GIFT') {
         const d = new Date(e.date);
-        let sortKey = '';
-        let displayKey = '';
-
-        if (isDaily) {
-            sortKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            displayKey = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        } else {
-            sortKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-            displayKey = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-        }
+        let sortKey = isDaily ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        let displayKey = isDaily ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
 
         if (!dataMap[sortKey]) dataMap[sortKey] = { date: displayKey, burn: 0 };
         dataMap[sortKey].burn += Math.abs(e.amount || 0);
       }
     });
-
     return Object.keys(dataMap).sort().map(k => dataMap[k]);
   }, [filteredEvents, timeframe]);
 
-  // --- CHART 2: CATEGORY SPLIT ---
   const categorySplit = useMemo(() => {
     const map: Record<string, number> = {};
     filteredEvents.filter(e => e.type === 'SPEND').forEach(e => {
@@ -116,7 +97,6 @@ export const useAnalytics = (timeframe: string = 'MAX') => {
     return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [filteredEvents]);
 
-  // --- TABLE 1: TOP MERCHANTS ---
   const topMerchants = useMemo(() => {
     const map: Record<string, { merchant: string; total: number; count: number; category: string }> = {};
     filteredTelemetry.filter(t => t.type === 'SPEND').forEach(t => {
@@ -128,20 +108,26 @@ export const useAnalytics = (timeframe: string = 'MAX') => {
     return Object.values(map).sort((a, b) => b.total - a.total).slice(0, 15);
   }, [filteredTelemetry]);
 
-  // --- TABLE 2: ALPHA LEADERBOARD ---
+  // NEW: Expanded Signal Intelligence Metrics
   const signalStats = useMemo(() => {
     const data = signals.filter(s => s.totalGenerated > 0 || s.hoursLogged > 0).map(s => ({
         id: s.id, name: s.title, sector: s.sector, effort: s.hoursLogged, profit: s.totalGenerated,
         roi: s.hoursLogged > 0 ? (s.totalGenerated / s.hoursLogged) : 0
       })).sort((a, b) => b.roi - a.roi);
 
+    const funnel = [
+        { name: 'Active', value: signals.filter(s => s.phase !== 'harvested' && s.phase !== 'graveyard').length, fill: '#3b82f6' },
+        { name: 'Harvested', value: signals.filter(s => s.phase === 'harvested').length, fill: '#10b981' },
+        { name: 'Graveyard', value: signals.filter(s => s.phase === 'graveyard').length, fill: '#ef4444' }
+    ].filter(f => f.value > 0);
+
     const totalProfit = data.reduce((sum, s) => sum + s.profit, 0);
     const totalEffort = data.reduce((sum, s) => sum + s.effort, 0);
     const globalYield = totalEffort > 0 ? totalProfit / totalEffort : 0;
-    return { scatter: data, leaderboard: data, globalYield };
+    
+    return { leaderboard: data, funnel, globalYield };
   }, [signals]);
 
-  // --- TABLE 3: MONTHLY STATEMENTS ---
   const monthlyStatement = useMemo(() => {
     const map = new Map<string, { income: number; expense: number }>();
     filteredEvents.forEach(log => {
@@ -151,31 +137,21 @@ export const useAnalytics = (timeframe: string = 'MAX') => {
       if (log.type === 'DROP' || log.type === 'TRIAGE_SESSION') entry.income += (log.amount || 0);
       if (log.type === 'SPEND' || log.type === 'GENEROSITY' || log.type === 'GENEROSITY_GIFT') entry.expense += (log.amount || 0);
     });
-
     return Array.from(map.entries()).map(([month, data]) => {
       const net = data.income - data.expense;
       return { month, ...data, net, savingsRate: data.income > 0 ? (net / data.income) * 100 : 0 };
     }).sort((a, b) => b.month.localeCompare(a.month)); 
   }, [filteredEvents]);
 
-  // --- EXECUTIVE RIBBON STATS ---
   const ribbon = useMemo(() => {
     const lastMonth = monthlyStatement[0] || { savingsRate: 0 };
     const prevMonth = monthlyStatement[1] || { savingsRate: 0 };
     const largestLeak = categorySplit[0] ? { name: categorySplit[0].name, amount: categorySplit[0].value } : null;
-    return { 
-        savingsRate: lastMonth.savingsRate, 
-        savingsDelta: lastMonth.savingsRate - prevMonth.savingsRate, 
-        alphaYield: signalStats.globalYield, 
-        largestLeak 
-    };
+    return { savingsRate: lastMonth.savingsRate, savingsDelta: lastMonth.savingsRate - prevMonth.savingsRate, alphaYield: signalStats.globalYield, largestLeak };
   }, [monthlyStatement, categorySplit, signalStats]);
 
-  // --- TABLE 4: BLEED FORENSICS ---
   const bleedForensics = useMemo(() => {
     const map: Record<string, { desc: string; category: string; count: number; total: number; latestDate: string }> = {};
-
-    // Looks at the selected timeframe instead of just currentMonthKey
     filteredTelemetry.filter(t => t.highVelocityFlag).forEach(b => {
         const rawDesc = (b.description || b.title || 'Unknown Friction').split(' - ')[0].trim();
         if (!map[rawDesc]) map[rawDesc] = { desc: rawDesc, category: b.categoryGroup || 'General', count: 0, total: 0, latestDate: b.date };
@@ -186,7 +162,6 @@ export const useAnalytics = (timeframe: string = 'MAX') => {
     return Object.values(map).sort((a, b) => b.total - a.total);
   }, [filteredTelemetry]);
 
-  // --- COMPARATOR ENGINE (USES ALL EVENTS TO AVOID TIMEFRAME CHOKING) ---
   const getComparatorData = (keys: string[], mode: 'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED') => {
     return keys.map(key => {
         let total = 0;
@@ -196,12 +171,10 @@ export const useAnalytics = (timeframe: string = 'MAX') => {
             else if (key.startsWith('Q')) effectiveMode = 'QUARTERLY';    
             else effectiveMode = 'MONTHLY';                               
         }
-
         allEvents.filter(h => h.type === 'SPEND' || h.type === 'GENEROSITY' || h.type === 'GENEROSITY_GIFT').forEach(log => {
             const dateStr = log.date; 
             const year = dateStr.slice(0, 4);
             const month = parseInt(dateStr.slice(5, 7)); 
-
             if (effectiveMode === 'ANNUAL' && dateStr.startsWith(key)) total += Math.abs(log.amount || 0);
             else if (effectiveMode === 'MONTHLY' && dateStr.startsWith(key)) total += Math.abs(log.amount || 0);
             else if (effectiveMode === 'QUARTERLY') {
@@ -213,7 +186,6 @@ export const useAnalytics = (timeframe: string = 'MAX') => {
                 }
             }
         });
-
         let displayName = key;
         if (key.includes('-') && key.length === 7) {
            const [y, m] = key.split('-');
@@ -227,7 +199,6 @@ export const useAnalytics = (timeframe: string = 'MAX') => {
       const years = new Set<string>();
       const months = new Set<string>();
       const quarters = new Set<string>();
-
       allEvents.forEach(h => {
           const d = new Date(h.date);
           const y = d.getFullYear().toString();
@@ -235,18 +206,14 @@ export const useAnalytics = (timeframe: string = 'MAX') => {
           months.add(h.date.slice(0, 7)); 
           quarters.add(`Q${Math.ceil((d.getMonth() + 1) / 3)} ${y}`);
       });
-
-      return {
-          years: Array.from(years).sort().reverse(),
-          quarters: Array.from(quarters).sort().reverse(), 
-          months: Array.from(months).sort().reverse()
-      };
+      return { years: Array.from(years).sort().reverse(), quarters: Array.from(quarters).sort().reverse(), months: Array.from(months).sort().reverse() };
   }, [allEvents]);
 
   return { 
-    burnHistory, categorySplit, signalLeaderboard: signalStats.leaderboard,
+    burnHistory, categorySplit, 
+    signalLeaderboard: signalStats.leaderboard, signalFunnel: signalStats.funnel,
     monthlyStatement, ribbon, bleedForensics, topMerchants,
     getComparatorData, availablePeriods,
-    historicalSnapshots // <-- NEW RETURN VARIABLE EXPORTED TO ANALYTICS PAGE
+    filteredSnapshots // <-- This is the LIVE DB data filtered by your timeframe
   };
 };

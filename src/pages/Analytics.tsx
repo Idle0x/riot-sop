@@ -37,6 +37,7 @@ const formatPeriodLabel = (p: string) => {
 };
 
 type AnalyticsTab = 'VELOCITY' | 'SOVEREIGNTY' | 'ALLOCATION' | 'INTELLIGENCE';
+type ComparatorMetric = 'BURN' | 'INCOME' | 'NET_WORTH' | 'RUNWAY' | 'GOALS' | 'IDLE' | 'YIELD';
 
 export const Analytics = () => {
   const { user } = useUser();
@@ -50,6 +51,20 @@ export const Analytics = () => {
   const [customEnd, setCustomEnd] = useState('');
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('VELOCITY');
 
+  // --- COMPARATOR STATE ---
+  const [compMetric, setCompMetric] = useState<ComparatorMetric>('BURN');
+  const [compMode, setCompMode] = useState<'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED'>('ANNUAL');
+  const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
+  const [periodToAdd, setPeriodToAdd] = useState('');
+
+  // Auto-sync the comparator metric when the tab changes
+  useEffect(() => {
+      if (activeTab === 'VELOCITY') setCompMetric('BURN');
+      else if (activeTab === 'SOVEREIGNTY') setCompMetric('NET_WORTH');
+      else if (activeTab === 'ALLOCATION') setCompMetric('GOALS');
+      else if (activeTab === 'INTELLIGENCE') setCompMetric('YIELD');
+  }, [activeTab]);
+
   // Hooks
   const { 
     burnHistory, categorySplit,
@@ -62,6 +77,8 @@ export const Analytics = () => {
     trueInflow, trueOutflow, trueNetFlow, inflowDelta, outflowDelta 
   } = useFinancialStats(masterTimeframe, customStart, customEnd);
 
+  const comparisonData = getComparatorData(selectedPeriods, compMode, compMetric as any);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get('view') === 'leaks') {
@@ -72,10 +89,6 @@ export const Analytics = () => {
     }
   }, [location]);
 
-  const [compMode, setCompMode] = useState<'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED'>('ANNUAL');
-  const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
-  const [periodToAdd, setPeriodToAdd] = useState('');
-
   useEffect(() => {
     if (!isInit.current && availablePeriods.years.length > 0) {
         const curY = new Date().getFullYear().toString();
@@ -85,8 +98,6 @@ export const Analytics = () => {
         isInit.current = true;
     }
   }, [availablePeriods]);
-
-  const comparisonData = getComparatorData(selectedPeriods, compMode);
 
   const handleModeSwitch = (mode: 'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED') => {
       setCompMode(mode);
@@ -132,17 +143,106 @@ export const Analytics = () => {
       return (
         <div className="bg-black/90 border border-white/10 p-3 rounded-lg shadow-xl text-xs z-50">
           <p className="font-bold text-white mb-2">{label}</p>
-          {payload.map((p: any, idx: number) => (
-            <p key={idx} style={{ color: p.color || '#fff' }} className="flex items-center gap-1">
-              {p.name === 'value' ? 'Amount' : p.name}: 
-              {typeof p.value === 'number' ? <span className="font-mono">{p.name === 'Liquid Runway' ? `${p.value}mo` : <><Naira/>{formatNumber(p.value)}</>}</span> : p.value}
-            </p>
-          ))}
+          {payload.map((p: any, idx: number) => {
+             const isRunway = p.name === 'Liquid Runway' || compMetric === 'RUNWAY';
+             return (
+              <p key={idx} style={{ color: p.color || '#fff' }} className="flex items-center gap-1">
+                {p.name === 'value' ? 'Amount' : p.name}: 
+                {typeof p.value === 'number' ? (
+                   <span className="font-mono">
+                     {isRunway ? `${p.value.toFixed(1)}mo` : <><Naira/>{formatNumber(p.value)}</>}
+                   </span>
+                ) : p.value}
+              </p>
+             );
+          })}
         </div>
       );
     }
     return null;
   };
+
+  // --- THE CONTEXTUAL COMPARATOR WIDGET ---
+  const renderComparator = (allowedMetrics: {label: string, val: ComparatorMetric}[]) => (
+    <GlassCard className="p-6 h-[450px] flex flex-col w-full">
+      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-4">
+        <div className="flex items-center gap-2">
+           <Calendar className="text-blue-400" size={20}/>
+           <h3 className="font-bold text-white">Contextual Comparator</h3>
+        </div>
+        <div className="flex gap-1 bg-black/40 p-1 rounded-lg border border-white/10">
+           {allowedMetrics.map(m => (
+             <button
+               key={m.val}
+               onClick={() => setCompMetric(m.val)}
+               className={`text-[10px] px-3 py-1.5 rounded transition-colors font-bold uppercase tracking-wider ${compMetric === m.val ? 'bg-white text-black' : 'text-gray-400 hover:text-white'}`}
+             >
+               {m.label}
+             </button>
+           ))}
+        </div>
+      </div>
+      
+      <div className="flex gap-2 mb-4">
+         {['ANNUAL', 'QUARTERLY', 'MONTHLY', 'MIXED'].map((m) => (
+             <button 
+               key={m} 
+               onClick={() => handleModeSwitch(m as any)} 
+               className={`text-[10px] px-2 py-1.5 rounded border transition-colors flex-1 font-bold ${compMode === m ? 'bg-blue-500 text-white border-blue-500' : 'text-gray-500 border-white/10 hover:border-white/30 hover:bg-white/5'}`}
+             >
+                 {m === 'MIXED' ? 'UNIVERSAL' : m}
+             </button>
+         ))}
+      </div>
+
+      <div className="flex gap-2 mb-4">
+         <select 
+           className="bg-black/40 border border-white/10 text-white text-xs rounded px-2 py-2 flex-1 focus:border-white/30 outline-none"
+           value={periodToAdd}
+           onChange={(e) => setPeriodToAdd(e.target.value)}
+         >
+            <option value="">
+                {compMode === 'MIXED' ? 'Select period...' : `Add ${compMode.toLowerCase().slice(0, -2)}...`}
+            </option>
+            {periodOptions.map(p => (
+                <option key={p} value={p}>{formatPeriodLabel(p)}</option>
+            ))}
+         </select>
+         <button onClick={addPeriod} disabled={!periodToAdd} className="bg-white/10 hover:bg-white/20 text-white p-2 rounded disabled:opacity-50 transition-colors"><Plus size={16}/></button>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-4 min-h-[24px]">
+         {selectedPeriods.map(p => (
+             <div key={p} className="flex items-center gap-1 bg-blue-500/20 border border-blue-500/50 text-blue-300 text-[10px] px-2 py-1 rounded-full">
+                {formatPeriodLabel(p)} <button onClick={() => removePeriod(p)} className="hover:text-white ml-1"><X size={10}/></button>
+             </div>
+         ))}
+         {selectedPeriods.length > 0 && <button onClick={clearAll} className="text-[10px] text-gray-500 underline ml-auto hover:text-white">Clear</button>}
+      </div>
+
+      <div className="flex-1 min-h-0">
+        {comparisonData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={comparisonData}>
+                    <XAxis dataKey="name" stroke="#555" fontSize={10} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#555" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => compMetric === 'RUNWAY' ? `${val}mo` : `₦${formatAxisAmount(val)}`} />
+                    <Tooltip content={<CustomTooltip />}/>
+                    <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={40}>
+                        {comparisonData.map((_entry, index) => (
+                            <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#3b82f6' : '#60a5fa'} />
+                        ))}
+                    </Bar>
+                </BarChart>
+            </ResponsiveContainer>
+        ) : (
+            <div className="h-full flex flex-col items-center justify-center text-gray-600 border border-dashed border-white/5 rounded-xl">
+                <BarChart2 size={32} className="mb-2 opacity-50"/>
+                <span className="text-xs font-medium">No Periods Selected</span>
+            </div>
+        )}
+      </div>
+    </GlassCard>
+  );
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 pb-20 animate-fade-in">
@@ -225,7 +325,7 @@ export const Analytics = () => {
                  </>
               )}
            </div>
-           <div className="text-[10px] text-red-400 mt-1">Total Category Spend ({masterTimeframe})</div>
+           <div className="text-[10px] text-red-400 mt-1">Total Category Spend</div>
         </GlassCard>
 
         <GlassCard className="p-4 relative overflow-hidden">
@@ -315,75 +415,7 @@ export const Analytics = () => {
               </ResponsiveContainer>
             </GlassCard>
 
-            <GlassCard className="p-6 h-[450px] flex flex-col">
-              <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-4">
-                <div className="flex items-center gap-2">
-                   <Calendar className="text-blue-400" size={20}/>
-                   <h3 className="font-bold text-white">Comparator Engine</h3>
-                </div>
-                <div className="flex gap-2">
-                   {['ANNUAL', 'QUARTERLY', 'MONTHLY'].map((m) => (
-                       <button 
-                         key={m} 
-                         onClick={() => handleModeSwitch(m as any)} 
-                         className={`text-[10px] px-2 py-1 rounded border transition-colors ${compMode === m ? 'bg-blue-500 text-white border-blue-500' : 'text-gray-500 border-white/10 hover:border-white/30'}`}
-                       >
-                           {m.charAt(0) + m.slice(1, 3).toLowerCase()}
-                       </button>
-                   ))}
-                   <button 
-                     onClick={() => handleModeSwitch('MIXED')} 
-                     className={`text-[10px] px-2 py-1 rounded border transition-colors flex items-center gap-1 ${compMode === 'MIXED' ? 'bg-purple-500 text-white border-purple-500' : 'text-gray-500 border-white/10 hover:border-white/30'}`}
-                   >
-                       <Layers size={10}/> Universal
-                   </button>
-                </div>
-              </div>
-              <div className="flex gap-2 mb-4">
-                 <select 
-                   className="bg-black/40 border border-white/10 text-white text-xs rounded px-2 py-2 flex-1 focus:border-white/30 outline-none"
-                   value={periodToAdd}
-                   onChange={(e) => setPeriodToAdd(e.target.value)}
-                 >
-                    <option value="">
-                        {compMode === 'MIXED' ? 'Select key (Year, Quarter, Month)...' : `Add ${compMode.toLowerCase().slice(0, -2)}...`}
-                    </option>
-                    {periodOptions.map(p => (
-                        <option key={p} value={p}>{formatPeriodLabel(p)}</option>
-                    ))}
-                 </select>
-                 <button onClick={addPeriod} disabled={!periodToAdd} className="bg-white/10 hover:bg-white/20 text-white p-2 rounded disabled:opacity-50"><Plus size={16}/></button>
-              </div>
-              <div className="flex flex-wrap gap-2 mb-4 min-h-[24px]">
-                 {selectedPeriods.map(p => (
-                     <div key={p} className="flex items-center gap-1 bg-blue-500/20 border border-blue-500/50 text-blue-300 text-[10px] px-2 py-1 rounded-full">
-                        {formatPeriodLabel(p)} <button onClick={() => removePeriod(p)} className="hover:text-white ml-1"><X size={10}/></button>
-                     </div>
-                 ))}
-                 {selectedPeriods.length > 0 && <button onClick={clearAll} className="text-[10px] text-gray-500 underline ml-auto hover:text-white">Clear</button>}
-              </div>
-              <div className="flex-1 min-h-0">
-                {comparisonData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={comparisonData}>
-                            <XAxis dataKey="name" stroke="#555" fontSize={10} />
-                            <YAxis stroke="#555" fontSize={10} tickFormatter={(val) => `₦${formatAxisAmount(val)}`} />
-                            <Tooltip content={<CustomTooltip />}/>
-                            <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={40}>
-                                {comparisonData.map((_entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#3b82f6' : '#60a5fa'} />
-                                ))}
-                            </Bar>
-                        </BarChart>
-                    </ResponsiveContainer>
-                ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-gray-600">
-                        <BarChart2 size={32} className="mb-2 opacity-50"/>
-                        <span className="text-xs">No Data Selected</span>
-                    </div>
-                )}
-              </div>
-            </GlassCard>
+            {renderComparator([{label: 'True Burn', val: 'BURN'}, {label: 'True Income', val: 'INCOME'}])}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -440,7 +472,6 @@ export const Analytics = () => {
             </GlassCard>
           </div>
 
-          {/* NEW: LIFESTYLE CREEP CHART */}
           <GlassCard className="p-6 h-[400px]">
             <div className="flex flex-col mb-6">
               <h3 className="font-bold text-white flex items-center gap-2">
@@ -572,7 +603,7 @@ export const Analytics = () => {
               </h3>
               <p className="text-xs text-gray-400 mt-1">
                  Tracking the correlation between Total System Value (Net Worth) and Survival Duration (Runway). 
-                 <br/><span className="text-yellow-500">*Chart updates dynamically as daily snapshots are collected. Check back tomorrow to see lines form.</span>
+                 <br/><span className="text-yellow-500">*Chart updates dynamically as daily snapshots are collected.</span>
               </p>
             </div>
             
@@ -597,6 +628,9 @@ export const Analytics = () => {
               )}
             </ResponsiveContainer>
           </GlassCard>
+
+          {/* Contextual Comparator */}
+          {renderComparator([{label: 'Net Worth', val: 'NET_WORTH'}, {label: 'Liquid Runway', val: 'RUNWAY'}])}
         </div>
       )}
 
@@ -635,17 +669,19 @@ export const Analytics = () => {
               )}
             </ResponsiveContainer>
           </GlassCard>
+
+          {/* Contextual Comparator */}
+          {renderComparator([{label: 'War Room Goals', val: 'GOALS'}, {label: 'Idle Holding', val: 'IDLE'}])}
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 4: SIGNAL INTELLIGENCE (NEW FUNNEL & YIELD CHARTS ADDED) */}
+      {/* TAB 4: SIGNAL INTELLIGENCE */}
       {/* ========================================================================= */}
       {activeTab === 'INTELLIGENCE' && (
         <div className="space-y-6 animate-fade-in">
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* NEW: Signal Funnel Chart */}
             <GlassCard className="p-6 h-[350px]">
               <div className="flex items-center gap-2 mb-2">
                 <PieIcon className="text-blue-400" size={20}/>
@@ -670,7 +706,6 @@ export const Analytics = () => {
               </ResponsiveContainer>
             </GlassCard>
 
-            {/* NEW: Cumulative Yield Trajectory */}
             <GlassCard className="p-6 h-[350px] lg:col-span-2">
               <div className="flex flex-col mb-4">
                 <h3 className="font-bold text-white flex items-center gap-2">
@@ -702,41 +737,46 @@ export const Analytics = () => {
             </GlassCard>
           </div>
 
-          <GlassCard className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-white flex items-center gap-2">
-                 <Zap className="text-yellow-400" size={20}/> Alpha Leaderboard (ROI Engine)
-              </h3>
-            </div>
-            <div className="overflow-x-auto max-h-[500px] overflow-y-auto pr-2">
-              <table className="w-full text-xs text-left text-gray-400 relative">
-                <thead className="text-gray-500 border-b border-white/10 uppercase sticky top-0 bg-[#0a0a0a] z-10">
-                  <tr>
-                    <th className="py-2">Signal</th>
-                    <th className="py-2 text-right">Profit</th>
-                    <th className="py-2 text-right">Hours</th>
-                    <th className="py-2 text-right text-yellow-500">Yield/Hr</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {signalLeaderboard.map((s) => (
-                    <tr key={s.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                      <td className="py-3">
-                         <div className="font-bold text-white">{s.name}</div>
-                         <div className="text-[10px] text-gray-500">{s.sector}</div>
-                      </td>
-                      <td className="py-3 text-right text-green-400"><Naira/>{formatNumber(s.profit)}</td>
-                      <td className="py-3 text-right">{s.effort}h</td>
-                      <td className="py-3 text-right font-mono font-bold text-yellow-400">
-                         <Naira/>{formatNumber(s.roi)}
-                      </td>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <GlassCard className="p-6 h-[450px]">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-white flex items-center gap-2">
+                  <Zap className="text-yellow-400" size={20}/> Alpha Leaderboard
+                </h3>
+              </div>
+              <div className="overflow-x-auto max-h-[350px] overflow-y-auto pr-2">
+                <table className="w-full text-xs text-left text-gray-400 relative">
+                  <thead className="text-gray-500 border-b border-white/10 uppercase sticky top-0 bg-[#0a0a0a] z-10">
+                    <tr>
+                      <th className="py-2">Signal</th>
+                      <th className="py-2 text-right">Profit</th>
+                      <th className="py-2 text-right">Hours</th>
+                      <th className="py-2 text-right text-yellow-500">Yield/Hr</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              {signalLeaderboard.length === 0 && <div className="text-center py-12 italic text-gray-600">No winning signals harvested yet.</div>}
-            </div>
-          </GlassCard>
+                  </thead>
+                  <tbody>
+                    {signalLeaderboard.map((s) => (
+                      <tr key={s.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                        <td className="py-3">
+                          <div className="font-bold text-white">{s.name}</div>
+                          <div className="text-[10px] text-gray-500">{s.sector}</div>
+                        </td>
+                        <td className="py-3 text-right text-green-400"><Naira/>{formatNumber(s.profit)}</td>
+                        <td className="py-3 text-right">{s.effort}h</td>
+                        <td className="py-3 text-right font-mono font-bold text-yellow-400">
+                          <Naira/>{formatNumber(s.roi)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {signalLeaderboard.length === 0 && <div className="text-center py-12 italic text-gray-600">No winning signals harvested yet.</div>}
+              </div>
+            </GlassCard>
+
+            {/* Contextual Comparator */}
+            {renderComparator([{label: 'Alpha Yield', val: 'YIELD'}])}
+          </div>
         </div>
       )}
 

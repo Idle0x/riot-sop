@@ -17,7 +17,6 @@ import { CashFlowChart } from '../components/dashboard/CashFlowChart';
 import { ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 
 import { ActionCenter } from '../components/ActionCenter';
-// NEW: Import the Simulator Drawer
 import { RunwayDrawer } from '../components/ui/RunwayDrawer'; 
 
 import { 
@@ -32,9 +31,8 @@ export const Dashboard = () => {
   const [time, setTime] = useState(new Date());
 
   const [showActionCenter, setShowActionCenter] = useState(false);
-  // NEW: State to control the simulator drawer
   const [showRunwayDrawer, setShowRunwayDrawer] = useState(false); 
-  
+
   const [chartTimeframe, setChartTimeframe] = useState('1M');
 
   const { runwayMonths, history, telemetry } = useLedger();
@@ -51,6 +49,13 @@ export const Dashboard = () => {
 
   const burnCap = user?.burnCap || 0;
   const burnRatio = burnCap > 0 ? (outflow / burnCap) * 100 : 0;
+
+  // NEW: Run-Rate Pacing Math
+  const currentDay = time.getDate();
+  const daysInMonth = new Date(time.getFullYear(), time.getMonth() + 1, 0).getDate();
+  const expectedBurnSoFar = burnCap > 0 ? (burnCap / daysInMonth) * currentDay : 0;
+  const pacingDiff = outflow - expectedBurnSoFar;
+  const isOverPacing = pacingDiff > 0;
 
   const currentMonthKey = new Date().toISOString().slice(0, 7);
   const activeBleedCategories = Array.from(new Set(
@@ -215,7 +220,6 @@ export const Dashboard = () => {
                     Runway Health
                     <button onClick={() => navigate('/analytics')} className="text-gray-500 hover:text-white transition-colors" title="View Analytics"><BarChart3 size={14}/></button>
                   </h3>
-                  {/* NEW: Simulation Trigger Badge */}
                   <button 
                     onClick={() => setShowRunwayDrawer(true)} 
                     className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full flex items-center gap-1 hover:bg-blue-500/40 border border-blue-500/30 transition-colors uppercase font-bold tracking-widest"
@@ -223,8 +227,7 @@ export const Dashboard = () => {
                     <Activity size={10}/> Simulate
                   </button>
                 </div>
-                
-                {/* NEW: Make the Runway Number clickable to open the simulator */}
+
                 <button 
                   onClick={() => setShowRunwayDrawer(true)}
                   className={`text-5xl font-mono font-bold mt-2 text-left hover:scale-105 origin-left transition-transform cursor-pointer ${runwayMonths < 3 ? 'text-red-500' : runwayMonths < 6 ? 'text-orange-500' : 'text-green-500'}`}
@@ -242,16 +245,27 @@ export const Dashboard = () => {
                 <div className="text-2xl font-mono font-bold text-white flex items-center justify-start md:justify-end gap-1">
                    <Naira/>{formatNumber(outflow)} <span className="text-sm text-gray-500">/ <Naira/>{formatNumber(burnCap)}</span>
                 </div>
-                <div className="flex items-center gap-3 mt-1 text-xs justify-start md:justify-end">
-                   <span className={`${burnRatio > 100 ? 'text-red-500' : 'text-gray-400'}`}>
-                      {burnRatio.toFixed(0)}% of Cap Used
-                   </span>
-                   <span className="text-gray-600">|</span>
-                   {burnDelta > 0 ? (
-                      <span className="text-red-400 font-mono">▲ {burnDelta.toFixed(1)}% Velocity</span>
-                    ) : (
-                      <span className="text-green-400 font-mono">▼ {Math.abs(burnDelta).toFixed(1)}% Velocity</span>
-                    )}
+                
+                {/* UPGRADED: Pacing & Velocity Stack */}
+                <div className="flex flex-col items-start md:items-end mt-2 text-xs gap-1.5">
+                   <div className="flex items-center gap-2">
+                       <span className={`${burnRatio > 100 ? 'text-red-500' : 'text-gray-400'}`}>
+                          {burnRatio.toFixed(0)}% of Cap Used
+                       </span>
+                       <span className="text-gray-600">•</span>
+                       {burnDelta > 0 ? (
+                          <span className="text-red-400 font-mono">▲ {burnDelta.toFixed(1)}% Velocity</span>
+                        ) : (
+                          <span className="text-green-400 font-mono">▼ {Math.abs(burnDelta).toFixed(1)}% Velocity</span>
+                        )}
+                   </div>
+                   
+                   {/* THE RUN-RATE PACING INDICATOR */}
+                   {burnCap > 0 && (
+                     <div className={`font-mono font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wider ${isOverPacing ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                        {isOverPacing ? 'Over Pacing' : 'Under Pacing'} by <Naira/>{formatNumber(Math.abs(pacingDiff))} (Day {currentDay})
+                     </div>
+                   )}
                 </div>
             </div>
           </div>
@@ -407,8 +421,7 @@ export const Dashboard = () => {
           </div>
         </GlassCard>
       </div>
-      
-      {/* NEW: Render the Simulator Drawer component */}
+
       <RunwayDrawer 
         isOpen={showRunwayDrawer} 
         onClose={() => setShowRunwayDrawer(false)} 

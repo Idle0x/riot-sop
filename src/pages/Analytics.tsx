@@ -45,19 +45,20 @@ export const Analytics = () => {
   const bleedSectionRef = useRef<HTMLDivElement>(null);
   const isInit = useRef(false);
 
-  // --- MASTER STATE ---
+  // Set defaults so CUSTOM dates do not crash the chart render immediately
+  const [customStart, setCustomStart] = useState(() => {
+     const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0];
+  });
+  const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split('T')[0]);
+  
   const [masterTimeframe, setMasterTimeframe] = useState('1M');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('VELOCITY');
 
-  // --- COMPARATOR STATE ---
   const [compMetric, setCompMetric] = useState<ComparatorMetric>('BURN');
   const [compMode, setCompMode] = useState<'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED'>('ANNUAL');
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
   const [periodToAdd, setPeriodToAdd] = useState('');
 
-  // Auto-sync the comparator metric when the tab changes
   useEffect(() => {
       if (activeTab === 'VELOCITY') setCompMetric('BURN');
       else if (activeTab === 'SOVEREIGNTY') setCompMetric('NET_WORTH');
@@ -65,7 +66,6 @@ export const Analytics = () => {
       else if (activeTab === 'INTELLIGENCE') setCompMetric('YIELD');
   }, [activeTab]);
 
-  // Hooks
   const { 
     burnHistory, categorySplit,
     monthlyStatement, ribbon, signalLeaderboard, signalFunnel,
@@ -76,6 +76,11 @@ export const Analytics = () => {
   const { 
     trueInflow, trueOutflow, trueNetFlow, inflowDelta, outflowDelta 
   } = useFinancialStats(masterTimeframe, customStart, customEnd);
+
+  // EXACT TIMEFRAME NSR CALCULATION FOR TOP RIBBON
+  const currentNSR = trueInflow > 0 ? ((trueInflow - trueOutflow) / trueInflow) * 100 : 0;
+  const prevNSR = prevTrueInflow > 0 ? ((prevTrueInflow - prevTrueOutflow) / prevTrueInflow) * 100 : 0;
+  const nsrDelta = currentNSR - prevNSR;
 
   const comparisonData = getComparatorData(selectedPeriods, compMode, compMetric as any);
 
@@ -162,7 +167,6 @@ export const Analytics = () => {
     return null;
   };
 
-  // --- THE CONTEXTUAL COMPARATOR WIDGET ---
   const renderComparator = (allowedMetrics: {label: string, val: ComparatorMetric}[]) => (
     <GlassCard className="p-6 h-[450px] flex flex-col w-full">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-4">
@@ -247,7 +251,6 @@ export const Analytics = () => {
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 pb-20 animate-fade-in">
 
-      {/* --- HEADER WITH MASTER TIMEFRAME --- */}
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
            <h1 className="text-3xl font-bold text-white tracking-tight">Intelligence Hub</h1>
@@ -255,12 +258,11 @@ export const Analytics = () => {
         </div>
         <div className="flex flex-col md:flex-row items-end md:items-center gap-3">
            
-           {/* CUSTOM DATE PICKER UI */}
            {masterTimeframe === 'CUSTOM' && (
              <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg p-1">
-                <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="bg-transparent text-xs text-white outline-none px-2" />
+                <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="bg-transparent text-xs text-white outline-none px-2 [color-scheme:dark]" />
                 <span className="text-gray-500 text-xs">to</span>
-                <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="bg-transparent text-xs text-white outline-none px-2" />
+                <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="bg-transparent text-xs text-white outline-none px-2 [color-scheme:dark]" />
              </div>
            )}
 
@@ -287,15 +289,14 @@ export const Analytics = () => {
         </div>
       </div>
 
-      {/* --- TIER 1: GLOBAL EXECUTIVE RIBBON (Always Visible) --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <GlassCard className="p-4 relative overflow-hidden">
            <div className="flex items-center gap-2 mb-2 text-blue-400">
              <ShieldCheck size={16}/> <span className="text-xs font-bold uppercase">Net Savings Rate</span>
            </div>
-           <div className="text-2xl font-mono font-bold text-white">{ribbon.savingsRate.toFixed(1)}%</div>
-           <div className={`text-[10px] mt-1 ${ribbon.savingsDelta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-             {ribbon.savingsDelta >= 0 ? '▲' : '▼'} {Math.abs(ribbon.savingsDelta).toFixed(1)}% vs Prev Period
+           <div className="text-2xl font-mono font-bold text-white">{currentNSR.toFixed(1)}%</div>
+           <div className={`text-[10px] mt-1 ${nsrDelta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+             {nsrDelta >= 0 ? '▲' : '▼'} {Math.abs(nsrDelta).toFixed(1)}% vs Prev Period
            </div>
         </GlassCard>
 
@@ -313,7 +314,7 @@ export const Analytics = () => {
            <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 text-red-400">
                 <AlertTriangle size={16}/> 
-                <span className="text-xs font-bold uppercase">Largest Leak</span>
+                <span className="text-xs font-bold uppercase">Largest OpEx Leak</span>
               </div>
            </div>
            <div className="text-lg font-bold text-white flex flex-col md:flex-row md:items-baseline gap-1 md:gap-2">
@@ -325,7 +326,7 @@ export const Analytics = () => {
                  </>
               )}
            </div>
-           <div className="text-[10px] text-red-400 mt-1">Total Category Spend</div>
+           <div className="text-[10px] text-red-400 mt-1">Selected Timeframe</div>
         </GlassCard>
 
         <GlassCard className="p-4 relative overflow-hidden">
@@ -339,7 +340,6 @@ export const Analytics = () => {
         </GlassCard>
       </div>
 
-      {/* --- UX TABS NAVIGATION --- */}
       <div className="flex gap-2 overflow-x-auto border-b border-white/10 pb-4 scrollbar-hide">
         {[
           { id: 'VELOCITY', icon: <Activity size={16}/>, label: 'Flow & Velocity' },
@@ -361,9 +361,6 @@ export const Analytics = () => {
         ))}
       </div>
 
-      {/* ========================================================================= */}
-      {/* TAB 1: FLOW & VELOCITY */}
-      {/* ========================================================================= */}
       {activeTab === 'VELOCITY' && (
         <div className="space-y-6 animate-fade-in">
           
@@ -591,9 +588,6 @@ export const Analytics = () => {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* TAB 2: SOVEREIGNTY (LIVE DATA) */}
-      {/* ========================================================================= */}
       {activeTab === 'SOVEREIGNTY' && (
         <div className="space-y-6 animate-fade-in">
           <GlassCard className="p-6 h-[500px]">
@@ -629,14 +623,10 @@ export const Analytics = () => {
             </ResponsiveContainer>
           </GlassCard>
 
-          {/* Contextual Comparator */}
           {renderComparator([{label: 'Net Worth', val: 'NET_WORTH'}, {label: 'Liquid Runway', val: 'RUNWAY'}])}
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* TAB 3: CAPITAL ALLOCATION (LIVE DATA) */}
-      {/* ========================================================================= */}
       {activeTab === 'ALLOCATION' && (
         <div className="space-y-6 animate-fade-in">
           <GlassCard className="p-6 h-[500px]">
@@ -670,14 +660,10 @@ export const Analytics = () => {
             </ResponsiveContainer>
           </GlassCard>
 
-          {/* Contextual Comparator */}
           {renderComparator([{label: 'War Room Goals', val: 'GOALS'}, {label: 'Idle Holding', val: 'IDLE'}])}
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* TAB 4: SIGNAL INTELLIGENCE */}
-      {/* ========================================================================= */}
       {activeTab === 'INTELLIGENCE' && (
         <div className="space-y-6 animate-fade-in">
           
@@ -774,7 +760,6 @@ export const Analytics = () => {
               </div>
             </GlassCard>
 
-            {/* Contextual Comparator */}
             {renderComparator([{label: 'Alpha Yield', val: 'YIELD'}])}
           </div>
         </div>

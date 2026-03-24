@@ -5,6 +5,7 @@ import { useUser } from './UserContext';
 import { calculateMonthlyBurn } from '../utils/finance';
 import { generateSmartPrompt } from '../utils/journalEngine';
 import { formatNumber } from '../utils/format';
+import { guestDB } from '../lib/guestDB'; // THE INTERCEPTOR DB
 import { 
   type Account, type Budget, type Goal, type Signal, type HistoryLog, 
   type AccountType, type LogType, type TelemetryRecord, type JournalEntry,
@@ -61,17 +62,19 @@ interface LedgerContextType {
 const LedgerContext = createContext<LedgerContextType | null>(null);
 
 export const LedgerProvider = ({ children }: { children: ReactNode }) => {
-  const { session, user } = useUser();
+  const { session, user, isGuestMode } = useUser();
   const queryClient = useQueryClient();
   const userId = session?.user?.id;
 
   const [activeJournalPrompt, setActiveJournalPrompt] = useState<ActiveJournalPrompt | null>(null);
 
-  // --- QUERIES ---
+  // --- QUERIES (INTERCEPTED) ---
   const { data: accounts = [], isLoading: loadingAccounts } = useQuery({
-    queryKey: ['accounts', userId],
-    enabled: !!userId,
+    queryKey: ['accounts', userId, isGuestMode],
+    enabled: !!userId || isGuestMode,
     queryFn: async () => {
+      if (isGuestMode) return guestDB.accounts;
+
       const { data, error } = await supabase.from('accounts').select('*');
       if (error) throw error;
       return data || [];
@@ -79,9 +82,11 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
   });
 
   const { data: budgets = [], isLoading: loadingBudgets } = useQuery({
-    queryKey: ['budgets', userId],
-    enabled: !!userId,
+    queryKey: ['budgets', userId, isGuestMode],
+    enabled: !!userId || isGuestMode,
     queryFn: async () => {
+      if (isGuestMode) return guestDB.budgets;
+
       const { data, error } = await supabase.from('budgets').select('*');
       if (error) throw error;
       return (data || []).map((b: any) => ({
@@ -95,9 +100,11 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
   });
 
   const { data: goals = [] } = useQuery({
-    queryKey: ['goals', userId],
-    enabled: !!userId,
+    queryKey: ['goals', userId, isGuestMode],
+    enabled: !!userId || isGuestMode,
     queryFn: async () => {
+      if (isGuestMode) return guestDB.goals;
+
       const { data, error } = await supabase.from('goals').select('*');
       if (error) throw error;
       return (data || []).map((g: any) => ({
@@ -111,9 +118,11 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
   });
 
   const { data: signals = [] } = useQuery({
-    queryKey: ['signals', userId],
-    enabled: !!userId,
+    queryKey: ['signals', userId, isGuestMode],
+    enabled: !!userId || isGuestMode,
     queryFn: async () => {
+      if (isGuestMode) return guestDB.signals;
+
       const { data, error } = await supabase.from('signals').select('*');
       if (error) throw error;
       return (data || []).map((s: any) => ({
@@ -131,11 +140,12 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     }
   });
 
-  // UNLOCKED: Recursive Paginator for History (Bypasses 1,000 row limit)
   const { data: history = [] } = useQuery({
-    queryKey: ['history', userId],
-    enabled: !!userId,
+    queryKey: ['history', userId, isGuestMode],
+    enabled: !!userId || isGuestMode,
     queryFn: async () => {
+      if (isGuestMode) return guestDB.history;
+
       let allData: any[] = [];
       let from = 0;
       const step = 1000;
@@ -165,11 +175,12 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
     }
   });
 
-  // UNLOCKED: Recursive Paginator for Telemetry (Bypasses 1,000 row limit)
   const { data: telemetry = [] } = useQuery({
-    queryKey: ['telemetry', userId],
-    enabled: !!userId,
+    queryKey: ['telemetry', userId, isGuestMode],
+    enabled: !!userId || isGuestMode,
     queryFn: async () => {
+      if (isGuestMode) return guestDB.telemetry;
+
       let allData: any[] = [];
       let from = 0;
       const step = 1000;
@@ -199,9 +210,11 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
   });
 
   const { data: journals = [] } = useQuery({
-    queryKey: ['journals', userId],
-    enabled: !!userId,
+    queryKey: ['journals', userId, isGuestMode],
+    enabled: !!userId || isGuestMode,
     queryFn: async () => {
+      if (isGuestMode) return guestDB.journals;
+
       const { data, error } = await supabase.from('journal').select('*').order('date', { ascending: false });
       if (error) throw error;
       return data.map((j: any) => ({
@@ -213,6 +226,12 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
   });
 
   const autoLog = async (type: LogType, title: string, desc?: string, amount?: number, signalId?: string, goalId?: string) => {
+    if (isGuestMode) {
+       guestDB.commitAction({ date: new Date().toISOString(), type, title, description: desc, amount, linkedSignalId: signalId, linkedGoalId: goalId });
+       queryClient.invalidateQueries({ queryKey: ['history'] });
+       return;
+    }
+
     await supabase.from('history').insert({
       user_id: userId,
       date: new Date().toISOString(),
@@ -258,28 +277,25 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const closeJournalPrompt = () => setActiveJournalPrompt(null);
 
-  // --- NEW: SMART SYNC ENGINE (Daily Database Heartbeat Updater) ---
+  // --- SMART SYNC ENGINE ---
   useEffect(() => {
     const syncDailySnapshot = async () => {
-      if (!userId || accounts.length === 0) return;
-      
+      if (isGuestMode || !userId || accounts.length === 0) return; // Do not sync snapshots in guest mode
+
       try {
         const reserved = accounts.find(a => a.type === 'vault')?.balance || 0;
         const idle = unallocatedCash;
         const generosity = accounts.find(a => a.type === 'generosity')?.balance || 0;
         const goalsAllocated = goals.filter(g => !g.isCompleted).reduce((sum, g) => sum + g.currentAmount, 0);
-        
-        // Calculate the absolute state
+
         const totalNetWorth = totalLiquid + reserved + idle + generosity + goalsAllocated;
         const totalBudgetCap = user?.burnCap || 0; 
 
-        // Extract Signal Intelligence
         const activeSignals = signals.filter(s => s.phase !== 'harvested' && s.phase !== 'graveyard').length;
         const harvestedSignals = signals.filter(s => s.phase === 'harvested').length;
         const graveyardSignals = signals.filter(s => s.phase === 'graveyard').length;
         const totalSignalYield = signals.reduce((sum, s) => sum + (Number(s.totalGenerated) || 0), 0);
-        
-        // Push to the RPC Backfill Engine
+
         await supabase.rpc('upsert_daily_snapshot', {
             p_date: new Date().toISOString().split('T')[0],
             p_net_worth: totalNetWorth,
@@ -300,14 +316,15 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
       }
     };
 
-    // The sync will fire whenever any of these critical state variables change
     syncDailySnapshot();
-  }, [accounts, goals, signals, runwayMonths, monthlyBurn, user?.burnCap, userId, totalLiquid, unallocatedCash]);
+  }, [accounts, goals, signals, runwayMonths, monthlyBurn, user?.burnCap, userId, totalLiquid, unallocatedCash, isGuestMode]);
 
 
-  // --- MUTATIONS ---
+  // --- MUTATIONS (INTERCEPTED) ---
   const updateAccountMutation = useMutation({
     mutationFn: async ({ id, amount }: { id: AccountType; amount: number }) => {
+      if (isGuestMode) { guestDB.updateAccount(id, amount); return; }
+
       const { data: current } = await supabase.from('accounts').select('balance').eq('type', id).eq('user_id', userId).single();
       if (!current) throw new Error(`Account '${id}' not found.`);
       const newBalance = Number(current.balance) + amount;
@@ -318,6 +335,12 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const addGoalMutation = useMutation({
     mutationFn: async (goal: Omit<Goal, 'id'>) => {
+       if (isGuestMode) {
+          guestDB.addGoal(goal);
+          guestDB.commitAction({ date: new Date().toISOString(), type: 'GOAL_CREATE', title: `New Target Locked: ${goal.title}`, description: `Requires ₦${formatNumber(goal.targetAmount)}`, amount: goal.targetAmount });
+          return;
+       }
+
        const dbGoal = {
          user_id: userId,
          title: goal.title,
@@ -336,8 +359,9 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const updateGoalMutation = useMutation({
     mutationFn: async (goal: Goal) => {
-       const oldGoal = goals.find(g => g.id === goal.id);
+       if (isGuestMode) { guestDB.updateGoal(goal); return; }
 
+       const oldGoal = goals.find(g => g.id === goal.id);
        const { error } = await supabase.from('goals').update({
          target_amount: goal.targetAmount,
          current_amount: goal.currentAmount,
@@ -358,6 +382,8 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const fundGoalMutation = useMutation({
     mutationFn: async ({ id, amount }: { id: string; amount: number }) => {
+      if (isGuestMode) { guestDB.fundGoal(id, amount); return; }
+
       const goal = goals.find(g => g.id === id);
       if (!goal) return;
       const newAmount = Number(goal.currentAmount) + amount;
@@ -369,6 +395,8 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteGoalMutation = useMutation({
     mutationFn: async ({ id, reclaimAmount }: { id: string; reclaimAmount: boolean }) => {
+      if (isGuestMode) { guestDB.deleteGoal(id); return; }
+
       const goal = goals.find(g => g.id === id);
       if (!goal) return;
       if (reclaimAmount && goal.currentAmount > 0) {
@@ -390,6 +418,8 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const addLogMutation = useMutation({
     mutationFn: async (log: Omit<HistoryLog, 'id'>) => {
+       if (isGuestMode) { guestDB.commitAction(log); return; }
+
        const { error } = await supabase.from('history').insert({
          user_id: userId,
          ...log,
@@ -406,6 +436,12 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const addBudgetMutation = useMutation({
     mutationFn: async (budget: Omit<Budget, 'id'>) => {
+      if (isGuestMode) { 
+         guestDB.addBudget(budget); 
+         guestDB.commitAction({ date: new Date().toISOString(), type: 'BUDGET_CREATE', title: `Cap Established: ${budget.name}`, description: `Limit: ₦${formatNumber(budget.amount)} | Freq: ${budget.frequency}`, amount: budget.amount });
+         return; 
+      }
+
       const dbBudget = {
         user_id: userId,
         name: budget.name,
@@ -425,6 +461,8 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteBudgetMutation = useMutation({
     mutationFn: async (id: string) => {
+      if (isGuestMode) { guestDB.deleteBudget(id); return; }
+
       const budget = budgets.find(b => b.id === id);
       await supabase.from('budgets').delete().eq('id', id);
       if (budget) autoLog('BUDGET_DELETE', `Cap Removed: ${budget.name}`, 'Liability eliminated.');
@@ -434,6 +472,8 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const updateBudgetSpentMutation = useMutation({
     mutationFn: async ({ id, amount }: { id: string, amount: number }) => {
+        if (isGuestMode) { guestDB.updateBudgetSpent(id, amount); return; }
+
         const budget = budgets.find(b => b.id === id);
         if(!budget) return;
         await supabase.from('budgets').update({ spent: Number(budget.spent) + amount }).eq('id', id);
@@ -443,6 +483,7 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const resetBudgetCountersMutation = useMutation({
     mutationFn: async () => {
+      if (isGuestMode) { guestDB.resetBudgetCounters(); return; }
       await supabase.from('budgets').update({ spent: 0 }).eq('user_id', userId);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budgets'] })
@@ -450,6 +491,8 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const updateSignalMutation = useMutation({
     mutationFn: async (signal: Signal) => {
+      if (isGuestMode) { guestDB.updateSignal(signal); return; }
+
       const oldSignal = signals.find(s => s.id === signal.id);
 
       const { id, ...rest } = signal;
@@ -502,6 +545,12 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const addSignalMutation = useMutation({
     mutationFn: async (signal: Omit<Signal, 'id'>) => {
+       if (isGuestMode) { 
+          guestDB.addSignal(signal); 
+          guestDB.commitAction({ date: new Date().toISOString(), type: 'SIGNAL_CREATE', title: `New Deal Sourced: ${signal.title}`, description: `Sector: ${signal.sector}`});
+          return; 
+       }
+
        const dbSignal = {
         user_id: userId,
         title: signal.title,
@@ -532,6 +581,8 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteTransactionMutation = useMutation({
     mutationFn: async (id: string) => {
+      if (isGuestMode) { guestDB.deleteTransaction(id); return; }
+
       const log = history.find(h => h.id === id);
       if (!log) return;
       if (log.type === 'SPEND' && log.amount) {
@@ -556,6 +607,8 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const insertTelemetryBatchMutation = useMutation({
     mutationFn: async (records: Omit<TelemetryRecord, 'id'>[]) => {
+      if (isGuestMode) return guestDB.insertTelemetryBatch(records);
+
       const payload = records.map(r => ({
         user_id: userId,
         batch_id: r.batchId,
@@ -587,6 +640,12 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const addJournalEntryMutation = useMutation({
     mutationFn: async (entry: Omit<JournalEntry, 'id'>) => {
+        if (isGuestMode) { 
+           guestDB.addJournalEntry(entry); 
+           guestDB.commitAction({ date: new Date().toISOString(), type: 'JOURNAL_LOGGED', title: entry.tags?.includes('system_audit') ? 'Audit Reviewed & Signed' : 'Operator Log Committed' });
+           return; 
+        }
+
         const { data, error } = await supabase.from('journal').insert({
             user_id: userId,
             date: entry.date,
@@ -608,6 +667,8 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const recordGenerosityMutation = useMutation({
     mutationFn: async ({ name, tier, amount, notes }: { name: string, tier: 'T1'|'T2'|'T3', amount: number, notes?: string }) => {
+        if (isGuestMode) { guestDB.recordGenerosity(name, tier, amount, notes); return; }
+
         const { data: current } = await supabase.from('accounts').select('balance').eq('type', 'generosity').eq('user_id', userId).single();
         if (!current || current.balance < amount) throw new Error("Insufficient Generosity funds");
         await supabase.from('accounts').update({ balance: current.balance - amount }).eq('type', 'generosity').eq('user_id', userId);
@@ -630,6 +691,8 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const logWorkSessionMutation = useMutation({
     mutationFn: async ({ signalId, title, hours, notes }: { signalId: string, title: string, hours: number, notes: string }) => {
+        if (isGuestMode) { guestDB.logWorkSession(signalId, title, hours, notes); return; }
+
         await supabase.from('history').insert({
             user_id: userId,
             date: new Date().toISOString(),
@@ -645,6 +708,8 @@ export const LedgerProvider = ({ children }: { children: ReactNode }) => {
 
   const resetModuleMutation = useMutation({
     mutationFn: async (module: ResetModule) => {
+      if (isGuestMode) { guestDB.resetModule(module); return; }
+
       if (module === 'signals' || module === 'all') {
         await supabase.from('history').update({ linked_signal_id: null }).eq('user_id', userId);
         await supabase.from('signals').delete().eq('user_id', userId);

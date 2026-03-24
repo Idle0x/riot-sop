@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useUser } from '../../context/UserContext'; // Added Hook
 import { GlassCard } from '../ui/GlassCard';
 import { GlassInput } from '../ui/GlassInput';
 import { GlassButton } from '../ui/GlassButton';
-import { Shield, Mail, Lock, Loader2, AlertTriangle, Key } from 'lucide-react';
+import { Shield, Mail, Lock, Loader2, AlertTriangle, Key, ArrowRight } from 'lucide-react';
 
 interface Props {
   onAuthenticated: () => void;
@@ -12,6 +13,7 @@ interface Props {
 type AuthView = 'login' | 'signup' | 'forgot' | 'update';
 
 export const AuthScreen = ({ onAuthenticated }: Props) => {
+  const { loginAsGuest } = useUser(); // Grab the guest login function
   const [view, setView] = useState<AuthView>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -64,6 +66,11 @@ export const AuthScreen = ({ onAuthenticated }: Props) => {
     }
   };
 
+  const handleGuestEntry = () => {
+      loginAsGuest();
+      onAuthenticated();
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-black p-4 relative overflow-hidden">
       <GlassCard className="w-full max-w-md p-5 md:p-8 relative z-10 border-white/10">
@@ -107,6 +114,24 @@ export const AuthScreen = ({ onAuthenticated }: Props) => {
              )}
           </div>
         </div>
+
+        {/* DEMO ENTRY POINT */}
+        {view === 'login' && (
+          <div className="mt-8 pt-6 border-t border-white/10 animate-fade-in">
+             <button 
+                onClick={handleGuestEntry} 
+                className="w-full group flex items-center justify-between p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+             >
+                <div className="text-left">
+                   <div className="text-xs md:text-sm font-bold text-white mb-0.5">Enter Demo Environment</div>
+                   <div className="text-[9px] md:text-[10px] text-gray-400">Explore full features with simulated data.</div>
+                </div>
+                <div className="p-1.5 bg-white/10 rounded-lg text-white group-hover:bg-white text-black transition-colors">
+                   <ArrowRight size={14}/>
+                </div>
+             </button>
+          </div>
+        )}
       </GlassCard>
     </div>
   );

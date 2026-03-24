@@ -46,20 +46,18 @@ export const Analytics = () => {
   const bleedSectionRef = useRef<HTMLDivElement>(null);
   const isInit = useRef(false);
 
-  // Set defaults so CUSTOM dates do not crash the chart render immediately
   const [customStart, setCustomStart] = useState(() => {
      const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0];
   });
   const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split('T')[0]);
-  
+
   const [masterTimeframe, setMasterTimeframe] = useState('1M');
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('VELOCITY');
 
   const [compMetric, setCompMetric] = useState<ComparatorMetric>('BURN');
   const [compMode, setCompMode] = useState<'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'MIXED'>('ANNUAL');
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
-  
-  // NEW: Drawer State
+
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   useEffect(() => {
@@ -74,7 +72,7 @@ export const Analytics = () => {
     monthlyStatement, ribbon, signalLeaderboard, signalFunnel,
     bleedForensics, topMerchants,
     getComparatorData, availablePeriods, filteredSnapshots,
-    filteredEvents // Extracted for the Drawer
+    filteredEvents 
   } = useAnalytics(masterTimeframe, customStart, customEnd);
 
   const { 
@@ -82,7 +80,6 @@ export const Analytics = () => {
     prevTrueInflow, prevTrueOutflow
   } = useFinancialStats(masterTimeframe, customStart, customEnd);
 
-  // EXACT TIMEFRAME NSR CALCULATION FOR TOP RIBBON
   const currentNSR = trueInflow > 0 ? ((trueInflow - trueOutflow) / trueInflow) * 100 : 0;
   const prevNSR = prevTrueInflow > 0 ? ((prevTrueInflow - prevTrueOutflow) / prevTrueInflow) * 100 : 0;
   const nsrDelta = currentNSR - prevNSR;
@@ -144,15 +141,15 @@ export const Analytics = () => {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-black/90 border border-white/10 p-3 rounded-lg shadow-xl text-xs z-50">
-          <p className="font-bold text-white mb-2">{label}</p>
+        <div className="bg-black/90 border border-white/10 p-2 md:p-3 rounded-lg shadow-xl text-[10px] md:text-xs z-50">
+          <p className="font-bold text-white mb-1.5 md:mb-2">{label}</p>
           {payload.map((p: any, idx: number) => {
              const isRunway = p.name === 'Liquid Runway' || compMetric === 'RUNWAY';
              return (
-              <p key={idx} style={{ color: p.color || '#fff' }} className="flex items-center gap-1">
+              <p key={idx} style={{ color: p.color || '#fff' }} className="flex items-center gap-1 font-bold">
                 {p.name === 'value' ? 'Amount' : p.name}: 
                 {typeof p.value === 'number' ? (
-                   <span className="font-mono">
+                   <span className="font-mono font-bold">
                      {isRunway ? `${p.value.toFixed(1)}mo` : <><Naira/>{formatNumber(p.value)}</>}
                    </span>
                 ) : p.value}
@@ -166,41 +163,40 @@ export const Analytics = () => {
   };
 
   const renderComparator = (allowedMetrics: {label: string, val: ComparatorMetric}[]) => (
-    <GlassCard className="p-6 h-[450px] flex flex-col w-full">
-      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-4">
+    <GlassCard className="p-4 md:p-6 h-[350px] md:h-[450px] flex flex-col w-full">
+      <div className="flex flex-col md:flex-row justify-between md:items-center gap-3 md:gap-4 mb-3 md:mb-4">
         <div className="flex items-center gap-2">
-           <Calendar className="text-blue-400" size={20}/>
-           <h3 className="font-bold text-white">Contextual Comparator</h3>
+           <Calendar className="text-blue-400 w-4 h-4 md:w-5 md:h-5"/>
+           <h3 className="font-bold text-white text-sm md:text-base">Contextual Comparator</h3>
         </div>
-        <div className="flex gap-1 bg-black/40 p-1 rounded-lg border border-white/10">
+        <div className="flex flex-wrap gap-1 bg-black/40 p-1 rounded-lg border border-white/10">
            {allowedMetrics.map(m => (
              <button
                key={m.val}
                onClick={() => setCompMetric(m.val)}
-               className={`text-[10px] px-3 py-1.5 rounded transition-colors font-bold uppercase tracking-wider ${compMetric === m.val ? 'bg-white text-black' : 'text-gray-400 hover:text-white'}`}
+               className={`text-[9px] md:text-[10px] px-2.5 py-1 md:px-3 md:py-1.5 rounded transition-colors font-bold uppercase tracking-wider ${compMetric === m.val ? 'bg-white text-black' : 'text-gray-400 hover:text-white'}`}
              >
                {m.label}
              </button>
            ))}
         </div>
       </div>
-      
-      <div className="flex gap-2 mb-4">
+
+      <div className="flex flex-wrap gap-1.5 md:gap-2 mb-3 md:mb-4">
          {['ANNUAL', 'QUARTERLY', 'MONTHLY', 'MIXED'].map((m) => (
              <button 
                key={m} 
                onClick={() => handleModeSwitch(m as any)} 
-               className={`text-[10px] px-2 py-1.5 rounded border transition-colors flex-1 font-bold ${compMode === m ? 'bg-blue-500 text-white border-blue-500' : 'text-gray-500 border-white/10 hover:border-white/30 hover:bg-white/5'}`}
+               className={`text-[9px] md:text-[10px] px-2 py-1 md:py-1.5 rounded border transition-colors flex-1 font-bold ${compMode === m ? 'bg-blue-500 text-white border-blue-500' : 'text-gray-500 border-white/10 hover:border-white/30 hover:bg-white/5'}`}
              >
                  {m === 'MIXED' ? 'UNIVERSAL' : m}
              </button>
          ))}
       </div>
 
-      {/* AUTO-ADD SELECTOR (NO PLUS BUTTON NEEDED) */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-3 md:mb-4">
          <select 
-           className="bg-black/40 border border-white/10 text-white text-xs rounded px-2 py-2 flex-1 focus:border-white/30 outline-none cursor-pointer"
+           className="bg-black/40 border border-white/10 text-white text-[10px] md:text-xs rounded-lg px-2 py-1.5 md:py-2 flex-1 focus:border-white/30 outline-none cursor-pointer font-bold"
            value="" 
            onChange={(e) => {
                const val = e.target.value;
@@ -218,23 +214,23 @@ export const Analytics = () => {
          </select>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-4 min-h-[24px]">
+      <div className="flex flex-wrap gap-1.5 md:gap-2 mb-3 md:mb-4 min-h-[20px] md:min-h-[24px]">
          {selectedPeriods.map(p => (
-             <div key={p} className="flex items-center gap-1 bg-blue-500/20 border border-blue-500/50 text-blue-300 text-[10px] px-2 py-1 rounded-full">
+             <div key={p} className="flex items-center gap-1 bg-blue-500/20 border border-blue-500/50 text-blue-300 text-[9px] md:text-[10px] font-bold px-2 py-0.5 md:py-1 rounded-full">
                 {formatPeriodLabel(p)} <button onClick={() => removePeriod(p)} className="hover:text-white ml-1"><X size={10}/></button>
              </div>
          ))}
-         {selectedPeriods.length > 0 && <button onClick={clearAll} className="text-[10px] text-gray-500 underline ml-auto hover:text-white">Clear</button>}
+         {selectedPeriods.length > 0 && <button onClick={clearAll} className="text-[9px] md:text-[10px] text-gray-500 font-bold underline ml-auto hover:text-white mt-1 md:mt-0">Clear</button>}
       </div>
 
       <div className="flex-1 min-h-0">
         {comparisonData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={comparisonData}>
-                    <XAxis dataKey="name" stroke="#555" fontSize={10} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#555" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => compMetric === 'RUNWAY' ? `${val}mo` : `₦${formatAxisAmount(val)}`} />
+                    <XAxis dataKey="name" stroke="#555" fontSize={9} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#555" fontSize={9} tickLine={false} axisLine={false} tickFormatter={(val) => compMetric === 'RUNWAY' ? `${val}mo` : `₦${formatAxisAmount(val)}`} width={40}/>
                     <Tooltip content={<CustomTooltip />}/>
-                    <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={40}>
+                    <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={25}>
                         {comparisonData.map((_entry, index) => (
                             <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#3b82f6' : '#60a5fa'} />
                         ))}
@@ -243,8 +239,8 @@ export const Analytics = () => {
             </ResponsiveContainer>
         ) : (
             <div className="h-full flex flex-col items-center justify-center text-gray-600 border border-dashed border-white/5 rounded-xl">
-                <BarChart2 size={32} className="mb-2 opacity-50"/>
-                <span className="text-xs font-medium">No Periods Selected</span>
+                <BarChart2 className="w-6 h-6 md:w-8 md:h-8 mb-2 opacity-50"/>
+                <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">No Periods Selected</span>
             </div>
         )}
       </div>
@@ -252,76 +248,80 @@ export const Analytics = () => {
   );
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 pb-20 animate-fade-in">
+    <div className="max-w-7xl mx-auto p-3 md:p-8 space-y-5 md:space-y-8 pb-16 md:pb-20 animate-fade-in">
 
-      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row justify-between md:items-end gap-3 md:gap-4">
         <div>
-           <h1 className="text-3xl font-bold text-white tracking-tight">Intelligence Hub</h1>
-           <p className="text-gray-400 text-sm">Forensic analysis of aggregated system & bank data.</p>
+           <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight">Intelligence Hub</h1>
+           <p className="text-[10px] md:text-sm text-gray-400 mt-0.5">Forensic analysis of aggregated system & bank data.</p>
         </div>
-        <div className="flex flex-col md:flex-row items-end md:items-center gap-3">
-           
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 md:gap-3">
+
            {masterTimeframe === 'CUSTOM' && (
-             <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg p-1">
-                <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="bg-transparent text-xs text-white outline-none px-2 [color-scheme:dark]" />
-                <span className="text-gray-500 text-xs">to</span>
-                <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="bg-transparent text-xs text-white outline-none px-2 [color-scheme:dark]" />
+             <div className="flex items-center justify-between sm:justify-start gap-2 bg-white/5 border border-white/10 rounded-lg p-1.5 w-full sm:w-auto">
+                <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="bg-transparent text-[10px] md:text-xs text-white font-bold outline-none px-1 md:px-2 [color-scheme:dark] w-full" />
+                <span className="text-gray-500 text-[10px] font-bold px-1">to</span>
+                <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="bg-transparent text-[10px] md:text-xs text-white font-bold outline-none px-1 md:px-2 [color-scheme:dark] w-full" />
              </div>
            )}
 
-           <select 
-              value={masterTimeframe}
-              onChange={(e) => setMasterTimeframe(e.target.value)}
-              className="bg-black/40 border border-white/20 text-white text-sm font-bold rounded-lg px-3 py-2 outline-none focus:border-blue-500 transition-colors cursor-pointer"
-           >
-              <option value="24H">Last 24 Hours</option>
-              <option value="3D">Last 3 Days</option>
-              <option value="7D">Last 7 Days</option>
-              <option value="1M">1 Month</option>
-              <option value="3M">3 Months</option>
-              <option value="6M">6 Months</option>
-              <option value="YTD">Year to Date (YTD)</option>
-              <option value="1Y">1 Year</option>
-              <option value="5Y">5 Years</option>
-              <option value="MAX">Max (All-Time)</option>
-              <option value="CUSTOM">Custom Range...</option>
-           </select>
-           <GlassButton size="sm" onClick={handleExport}>
-             <Download size={16}/> <span className="hidden md:inline ml-2">Export Data Lake</span>
-           </GlassButton>
+           <div className="flex items-center gap-2 w-full sm:w-auto">
+             <select 
+                value={masterTimeframe}
+                onChange={(e) => setMasterTimeframe(e.target.value)}
+                className="flex-1 sm:flex-none bg-black/40 border border-white/20 text-white text-[10px] md:text-sm font-bold rounded-lg px-2.5 py-2 md:px-3 md:py-2 outline-none focus:border-blue-500 transition-colors cursor-pointer"
+             >
+                <option value="24H">24 Hours</option>
+                <option value="3D">3 Days</option>
+                <option value="7D">7 Days</option>
+                <option value="1M">1 Month</option>
+                <option value="3M">3 Months</option>
+                <option value="6M">6 Months</option>
+                <option value="YTD">YTD</option>
+                <option value="1Y">1 Year</option>
+                <option value="5Y">5 Years</option>
+                <option value="MAX">All-Time</option>
+                <option value="CUSTOM">Custom...</option>
+             </select>
+             <GlassButton size="sm" onClick={handleExport} className="shrink-0 px-3 py-2 md:px-4 text-[10px] md:text-sm">
+               <Download size={14} className="md:w-4 md:h-4"/> <span className="hidden md:inline ml-2">Export Lake</span>
+             </GlassButton>
+           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <GlassCard className="p-4 relative overflow-hidden">
-           <div className="flex items-center gap-2 mb-2 text-blue-400">
-             <ShieldCheck size={16}/> <span className="text-xs font-bold uppercase">Net Savings Rate</span>
+      {/* KPI HUD */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+        <GlassCard className="p-3 md:p-4 relative overflow-hidden">
+           <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-2 text-blue-400">
+             <ShieldCheck size={14} className="md:w-4 md:h-4 shrink-0"/> <span className="text-[9px] md:text-xs font-bold uppercase truncate">Net Savings Rate</span>
            </div>
-           <div className="text-2xl font-mono font-bold text-white">{currentNSR.toFixed(1)}%</div>
-           <div className={`text-[10px] mt-1 ${nsrDelta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-             {nsrDelta >= 0 ? '▲' : '▼'} {Math.abs(nsrDelta).toFixed(1)}% vs Prev Period
+           <div className="text-lg md:text-2xl font-mono font-bold text-white">{currentNSR.toFixed(1)}%</div>
+           <div className={`text-[8px] md:text-[10px] mt-0.5 md:mt-1 font-bold ${nsrDelta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+             {nsrDelta >= 0 ? '▲' : '▼'} {Math.abs(nsrDelta).toFixed(1)}% <span className="hidden sm:inline">vs Prev Period</span>
            </div>
         </GlassCard>
 
-        <GlassCard className="p-4 relative overflow-hidden">
-           <div className="flex items-center gap-2 mb-2 text-yellow-400">
-             <Zap size={16}/> <span className="text-xs font-bold uppercase">Global Alpha Yield</span>
+        <GlassCard className="p-3 md:p-4 relative overflow-hidden">
+           <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-2 text-yellow-400">
+             <Zap size={14} className="md:w-4 md:h-4 shrink-0"/> <span className="text-[9px] md:text-xs font-bold uppercase truncate">Global Alpha Yield</span>
            </div>
-           <div className="text-2xl font-mono font-bold text-white flex items-center gap-1">
-             <Naira/>{formatNumber(ribbon.alphaYield)}<span className="text-sm text-gray-500 font-normal">/hr</span>
+           <div className="text-lg md:text-2xl font-mono font-bold text-white flex items-center gap-0.5 md:gap-1">
+             <Naira/>{formatNumber(ribbon.alphaYield)}<span className="text-[10px] md:text-sm text-gray-500 font-normal">/hr</span>
            </div>
-           <div className="text-[10px] text-gray-500 mt-1">Total Signal ROI</div>
+           <div className="text-[8px] md:text-[10px] text-gray-500 font-bold mt-0.5 md:mt-1">Total Signal ROI</div>
         </GlassCard>
 
-        <GlassCard className="p-4 relative overflow-hidden border-red-500/30 bg-red-950/10">
-           <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2 text-red-400">
-                <AlertTriangle size={16}/> 
-                <span className="text-xs font-bold uppercase">Largest OpEx Leak</span>
+        <GlassCard className="p-3 md:p-4 relative overflow-hidden border-red-500/30 bg-red-950/10">
+           <div className="flex items-center justify-between mb-1 md:mb-2">
+              <div className="flex items-center gap-1.5 md:gap-2 text-red-400">
+                <AlertTriangle size={14} className="md:w-4 md:h-4 shrink-0"/> 
+                <span className="text-[9px] md:text-xs font-bold uppercase truncate">Largest OpEx Leak</span>
               </div>
            </div>
-           <div className="text-lg font-bold text-white flex flex-col md:flex-row md:items-baseline gap-1 md:gap-2">
-              <span className="truncate max-w-[120px]">{ribbon.largestLeak?.name || 'None'}</span>
+           <div className="text-sm md:text-lg font-bold text-white flex flex-col md:flex-row md:items-baseline gap-0.5 md:gap-2">
+              <span className="truncate">{ribbon.largestLeak?.name || 'None'}</span>
               {ribbon.largestLeak && (
                  <>
                    <span className="hidden md:inline text-gray-600">•</span>
@@ -329,34 +329,35 @@ export const Analytics = () => {
                  </>
               )}
            </div>
-           <div className="text-[10px] text-red-400 mt-1">Selected Timeframe</div>
+           <div className="text-[8px] md:text-[10px] text-red-400 mt-0.5 md:mt-1 font-bold">Selected Timeframe</div>
         </GlassCard>
 
-        <GlassCard className="p-4 relative overflow-hidden">
-           <div className="flex items-center gap-2 mb-2 text-green-400">
-             <Target size={16}/> <span className="text-xs font-bold uppercase">Signal Win Rate</span>
+        <GlassCard className="p-3 md:p-4 relative overflow-hidden">
+           <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-2 text-green-400">
+             <Target size={14} className="md:w-4 md:h-4 shrink-0"/> <span className="text-[9px] md:text-xs font-bold uppercase truncate">Signal Win Rate</span>
            </div>
-           <div className="text-2xl font-mono font-bold text-white">
+           <div className="text-lg md:text-2xl font-mono font-bold text-white">
              {signalLeaderboard.length > 0 ? ((signalLeaderboard.filter(s => s.profit > 0).length / signalLeaderboard.length) * 100).toFixed(0) : 0}%
            </div>
-           <div className="text-[10px] text-gray-500 mt-1">Profitable vs Attempted</div>
+           <div className="text-[8px] md:text-[10px] text-gray-500 font-bold mt-0.5 md:mt-1">Profitable vs Attempted</div>
         </GlassCard>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto border-b border-white/10 pb-4 scrollbar-hide">
+      {/* NAVIGATION TABS */}
+      <div className="flex gap-2 overflow-x-auto border-b border-white/10 pb-3 md:pb-4 scrollbar-hide">
         {[
-          { id: 'VELOCITY', icon: <Activity size={16}/>, label: 'Flow & Velocity' },
-          { id: 'SOVEREIGNTY', icon: <LineChart size={16}/>, label: 'Runway Sovereignty' },
-          { id: 'ALLOCATION', icon: <Landmark size={16}/>, label: 'Capital Allocation' },
-          { id: 'INTELLIGENCE', icon: <Zap size={16}/>, label: 'Signal Intelligence' },
+          { id: 'VELOCITY', icon: <Activity size={14} className="md:w-4 md:h-4"/>, label: 'Flow & Velocity' },
+          { id: 'SOVEREIGNTY', icon: <LineChart size={14} className="md:w-4 md:h-4"/>, label: 'Runway Sovereignty' },
+          { id: 'ALLOCATION', icon: <Landmark size={14} className="md:w-4 md:h-4"/>, label: 'Capital Allocation' },
+          { id: 'INTELLIGENCE', icon: <Zap size={14} className="md:w-4 md:h-4"/>, label: 'Signal Intelligence' },
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as AnalyticsTab)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
+            className={`flex items-center gap-1.5 md:gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl text-[10px] md:text-sm font-bold transition-all whitespace-nowrap border ${
               activeTab === tab.id 
-                ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.2)]' 
-                : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                ? 'bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.2)]' 
+                : 'text-gray-400 border-transparent hover:bg-white/5 hover:border-white/10 hover:text-white'
             }`}
           >
             {tab.icon} {tab.label}
@@ -364,42 +365,45 @@ export const Analytics = () => {
         ))}
       </div>
 
+      {/* --------------------------------------------------------- */}
+      {/* TAB 1: VELOCITY */}
+      {/* --------------------------------------------------------- */}
       {activeTab === 'VELOCITY' && (
-        <div className="space-y-6 animate-fade-in">
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-             <div className="p-4 rounded-xl border border-white/10 bg-white/5">
-                <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Total Income (Excl. Transfers)</div>
-                <div className="text-2xl font-mono font-bold text-white"><Naira/>{formatNumber(trueInflow)}</div>
-                <div className={`text-xs mt-1 font-bold ${inflowDelta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                   {inflowDelta >= 0 ? '▲' : '▼'} {Math.abs(inflowDelta).toFixed(1)}% vs Prev Period
+        <div className="space-y-4 md:space-y-6 animate-fade-in">
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+             <div className="p-3 md:p-4 rounded-xl border border-white/10 bg-white/5">
+                <div className="text-[9px] md:text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Total Income <span className="hidden sm:inline">(Excl. Transfers)</span></div>
+                <div className="text-xl md:text-2xl font-mono font-bold text-white"><Naira/>{formatNumber(trueInflow)}</div>
+                <div className={`text-[10px] md:text-xs mt-1 font-bold ${inflowDelta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                   {inflowDelta >= 0 ? '▲' : '▼'} {Math.abs(inflowDelta).toFixed(1)}% <span className="hidden sm:inline">vs Prev Period</span>
                 </div>
              </div>
-             <div className="p-4 rounded-xl border border-white/10 bg-white/5">
-                <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Total Expenses (Excl. Transfers)</div>
-                <div className="text-2xl font-mono font-bold text-white"><Naira/>{formatNumber(trueOutflow)}</div>
-                <div className={`text-xs mt-1 font-bold ${outflowDelta <= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                   {outflowDelta <= 0 ? '▼' : '▲'} {Math.abs(outflowDelta).toFixed(1)}% vs Prev Period
+             <div className="p-3 md:p-4 rounded-xl border border-white/10 bg-white/5">
+                <div className="text-[9px] md:text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Total Expenses <span className="hidden sm:inline">(Excl. Transfers)</span></div>
+                <div className="text-xl md:text-2xl font-mono font-bold text-white"><Naira/>{formatNumber(trueOutflow)}</div>
+                <div className={`text-[10px] md:text-xs mt-1 font-bold ${outflowDelta <= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                   {outflowDelta <= 0 ? '▼' : '▲'} {Math.abs(outflowDelta).toFixed(1)}% <span className="hidden sm:inline">vs Prev Period</span>
                 </div>
              </div>
-             <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-900/10">
-                <div className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Net Flow</div>
-                <div className={`text-2xl font-mono font-bold ${trueNetFlow >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
+             <div className="p-3 md:p-4 rounded-xl border border-blue-500/30 bg-blue-900/10">
+                <div className="text-[9px] md:text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Net Flow</div>
+                <div className={`text-xl md:text-2xl font-mono font-bold ${trueNetFlow >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
                    {trueNetFlow >= 0 ? '+' : '-'}<Naira/>{formatNumber(Math.abs(trueNetFlow))}
                 </div>
-                <div className="text-xs mt-1 text-gray-500 font-bold">Absolute Liquidity Generated</div>
+                <div className="text-[10px] md:text-xs mt-1 text-gray-500 font-bold">Absolute Liquidity Generated</div>
              </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <GlassCard className="p-6 h-[450px]">
-              <div className="flex justify-between items-start mb-6">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="text-red-500" size={20}/>
-                    <h3 className="font-bold text-white">Burn Velocity</h3>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+            <GlassCard className="p-4 md:p-6 h-[250px] md:h-[450px]">
+              <div className="flex justify-between items-start mb-4 md:mb-6">
+                  <div className="flex items-center gap-1.5 md:gap-2">
+                    <TrendingUp className="text-red-500 w-4 h-4 md:w-5 md:h-5"/>
+                    <h3 className="font-bold text-white text-sm md:text-base">Burn Velocity</h3>
                   </div>
               </div>
-              <ResponsiveContainer width="100%" height="85%">
+              <ResponsiveContainer width="100%" height="80%">
                 <AreaChart data={burnHistory}>
                   <defs>
                     <linearGradient id="colorBurn" x1="0" y1="0" x2="0" y2="1">
@@ -407,8 +411,8 @@ export const Analytics = () => {
                       <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="date" stroke="#555" fontSize={10} tickLine={false} axisLine={false} minTickGap={30}/>
-                  <YAxis stroke="#555" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `₦${formatAxisAmount(val)}`}/>
+                  <XAxis dataKey="date" stroke="#555" fontSize={9} tickLine={false} axisLine={false} minTickGap={30}/>
+                  <YAxis stroke="#555" fontSize={9} tickLine={false} axisLine={false} tickFormatter={(val) => `₦${formatAxisAmount(val)}`} width={40}/>
                   <Tooltip content={<CustomTooltip />}/>
                   <Area type="monotone" dataKey="burn" stroke="#ef4444" fillOpacity={1} fill="url(#colorBurn)" strokeWidth={2} name="Burn" />
                 </AreaChart>
@@ -418,23 +422,25 @@ export const Analytics = () => {
             {renderComparator([{label: 'Total Expenses', val: 'BURN'}, {label: 'Total Income', val: 'INCOME'}])}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <GlassCard className="p-6 h-[400px]">
-              <div className="flex items-center gap-2 mb-6">
-                <PieIcon className="text-purple-400" size={20}/>
-                <h3 className="font-bold text-white">Category Distribution</h3>
-                <span className="text-[10px] text-gray-500 ml-2 border border-white/10 px-2 py-0.5 rounded-full">Tap bars to drill-down</span>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+            <GlassCard className="p-4 md:p-6 h-[300px] md:h-[400px]">
+              <div className="flex items-center justify-between mb-4 md:mb-6">
+                <div className="flex items-center gap-1.5 md:gap-2">
+                  <PieIcon className="text-purple-400 w-4 h-4 md:w-5 md:h-5"/>
+                  <h3 className="font-bold text-white text-sm md:text-base">Category Distribution</h3>
+                </div>
+                <span className="text-[8px] md:text-[10px] text-gray-500 font-bold border border-white/10 px-1.5 py-0.5 rounded-full">Tap bars</span>
               </div>
-              <ResponsiveContainer width="100%" height="85%">
-                <BarChart data={categorySplit} layout="vertical" margin={{ left: 10 }}>
-                  <XAxis type="number" stroke="#555" fontSize={10} tickFormatter={(val) => `₦${formatAxisAmount(val)}`}/>
-                  <YAxis dataKey="name" type="category" stroke="#fff" fontSize={10} width={100}/>
+              <ResponsiveContainer width="100%" height="80%">
+                <BarChart data={categorySplit} layout="vertical" margin={{ left: 0 }}>
+                  <XAxis type="number" stroke="#555" fontSize={9} tickFormatter={(val) => `₦${formatAxisAmount(val)}`}/>
+                  <YAxis dataKey="name" type="category" stroke="#fff" fontSize={9} width={80}/>
                   <Bar 
                     dataKey="value" 
                     fill="#8b5cf6" 
                     radius={[0, 4, 4, 0]} 
                     name="Spent" 
-                    barSize={20}
+                    barSize={15}
                     className="cursor-pointer hover:opacity-80 transition-opacity"
                     onClick={(data) => setSelectedCategory(data.name || data.payload?.name)}
                   >
@@ -453,52 +459,52 @@ export const Analytics = () => {
                events={filteredEvents} 
             />
 
-            <GlassCard className="p-6 h-[400px] flex flex-col">
-                <div className="flex items-center gap-2 mb-4">
-                  <Briefcase className="text-cyan-400" size={20}/>
-                  <h3 className="font-bold text-white">Top Merchants (Vendor Concentration)</h3>
+            <GlassCard className="p-4 md:p-6 h-[300px] md:h-[400px] flex flex-col">
+                <div className="flex items-center gap-1.5 md:gap-2 mb-3 md:mb-4">
+                  <Briefcase className="text-cyan-400 w-4 h-4 md:w-5 md:h-5"/>
+                  <h3 className="font-bold text-white text-sm md:text-base">Top Merchants <span className="hidden sm:inline">(Vendor Concentration)</span></h3>
                 </div>
-                <div className="overflow-x-auto max-h-[300px] overflow-y-auto flex-1 pr-2 relative">
-                  <table className="w-full text-xs text-left text-gray-400">
-                    <thead className="text-gray-500 border-b border-white/10 uppercase sticky top-0 bg-[#0a0a0a] z-10">
+                <div className="overflow-x-auto overflow-y-auto flex-1 pr-1 md:pr-2 relative scrollbar-hide">
+                  <table className="w-full text-[10px] md:text-xs text-left text-gray-400">
+                    <thead className="text-gray-500 border-b border-white/10 uppercase sticky top-0 bg-[#0a0a0a] z-10 font-bold">
                       <tr>
-                        <th className="py-2">Merchant</th>
-                        <th className="py-2 text-center">Freq</th>
-                        <th className="py-2 text-right">Total Volume</th>
+                        <th className="py-1.5 md:py-2">Merchant</th>
+                        <th className="py-1.5 md:py-2 text-center">Freq</th>
+                        <th className="py-1.5 md:py-2 text-right">Volume</th>
                       </tr>
                     </thead>
                     <tbody>
                       {topMerchants.map((m, idx) => (
                         <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                          <td className="py-3">
-                             <div className="font-bold text-white">{m.merchant}</div>
-                             <div className="text-[9px] text-cyan-500/80 uppercase font-normal">{m.category}</div>
+                          <td className="py-2 md:py-3">
+                             <div className="font-bold text-white truncate max-w-[120px] md:max-w-full">{m.merchant}</div>
+                             <div className="text-[8px] md:text-[9px] text-cyan-500/80 uppercase font-bold truncate max-w-[120px] md:max-w-full">{m.category}</div>
                           </td>
-                          <td className="py-3 text-center font-mono">{m.count}x</td>
-                          <td className="py-3 text-right font-mono font-bold text-cyan-400">
+                          <td className="py-2 md:py-3 text-center font-mono">{m.count}x</td>
+                          <td className="py-2 md:py-3 text-right font-mono font-bold text-cyan-400">
                              <Naira/>{formatNumber(m.total)}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                  {topMerchants.length === 0 && <div className="text-center py-12 italic text-gray-600">Upload bank statements to build merchant profile.</div>}
+                  {topMerchants.length === 0 && <div className="text-center py-8 italic text-gray-600 text-xs font-bold">Awaiting Data Lake sync.</div>}
                 </div>
             </GlassCard>
           </div>
 
-          <GlassCard className="p-6 h-[400px]">
-            <div className="flex flex-col mb-6">
-              <h3 className="font-bold text-white flex items-center gap-2">
-                 <Activity className="text-orange-400" size={20}/> Lifestyle Inflation Tracker
+          <GlassCard className="p-4 md:p-6 h-[300px] md:h-[400px]">
+            <div className="flex flex-col mb-4 md:mb-6">
+              <h3 className="font-bold text-white flex items-center gap-1.5 md:gap-2 text-sm md:text-base">
+                 <Activity className="text-orange-400 w-4 h-4 md:w-5 md:h-5"/> Lifestyle Inflation Tracker
               </h3>
-              <p className="text-xs text-gray-400 mt-1">
-                Plots your rolling 30-day burn against your hard budget cap. If the orange area crosses the red line, you are bleeding out.
+              <p className="text-[9px] md:text-xs text-gray-400 mt-1 font-bold">
+                Plots rolling 30D burn against hard budget cap. If orange crosses red, you are bleeding out.
               </p>
             </div>
-            <ResponsiveContainer width="100%" height="80%">
+            <ResponsiveContainer width="100%" height="75%">
               {filteredSnapshots.length > 0 ? (
-                <ComposedChart data={filteredSnapshots}>
+                <ComposedChart data={filteredSnapshots} margin={{ left: -15, bottom: -10 }}>
                   <defs>
                     <linearGradient id="colorCreep" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#f97316" stopOpacity={0.4}/>
@@ -506,136 +512,138 @@ export const Analytics = () => {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                  <XAxis dataKey="month" stroke="#777" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#777" fontSize={10} tickFormatter={(val) => `₦${formatAxisAmount(val)}`} tickLine={false} axisLine={false} />
+                  <XAxis dataKey="month" stroke="#777" fontSize={9} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#777" fontSize={9} tickFormatter={(val) => `₦${formatAxisAmount(val)}`} tickLine={false} axisLine={false} width={40}/>
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                  
+                  <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '5px' }} iconSize={10} />
+
                   <Area type="monotone" dataKey="rollingBurn" fill="url(#colorCreep)" stroke="#f97316" strokeWidth={2} name="Trailing 30D Burn" />
-                  <Line type="stepAfter" dataKey="budgetCap" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Total Budget Cap" />
+                  <Line type="stepAfter" dataKey="budgetCap" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Budget Cap" />
                 </ComposedChart>
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-gray-500 border border-dashed border-white/10 rounded-xl">
-                    <Activity size={32} className="mb-2 opacity-50"/>
-                    <span className="text-sm">Awaiting first nightly snapshot.</span>
+                    <Activity className="mb-2 opacity-50 w-6 h-6 md:w-8 md:h-8"/>
+                    <span className="text-[10px] md:text-sm font-bold uppercase tracking-widest">Awaiting first nightly snapshot.</span>
                 </div>
               )}
             </ResponsiveContainer>
           </GlassCard>
 
-          <div ref={bleedSectionRef} id="bleed-forensics" className="pt-4">
-            <GlassCard className="p-6 border-red-500/30 bg-red-950/10">
-              <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-6">
+          <div ref={bleedSectionRef} id="bleed-forensics" className="pt-2 md:pt-4">
+            <GlassCard className="p-4 md:p-6 border-red-500/30 bg-red-950/10">
+              <div className="flex flex-col md:flex-row justify-between md:items-end gap-3 md:gap-4 mb-4 md:mb-6">
                  <div>
-                    <h3 className="font-bold text-red-500 flex items-center gap-2 text-xl tracking-tight">
-                      <Search size={22}/> Systemic Friction & Bleed Forensics
+                    <h3 className="font-bold text-red-500 flex items-center gap-1.5 md:gap-2 text-base md:text-xl tracking-tight">
+                      <Search size={18} className="md:w-[22px] md:h-[22px]"/> Systemic Friction & Bleed Forensics
                     </h3>
-                    <p className="text-xs text-red-400/80 mt-1">High-velocity records flagged by the circuit breaker.</p>
+                    <p className="text-[10px] md:text-xs text-red-400/80 mt-1 font-bold">High-velocity records flagged by the circuit breaker.</p>
                  </div>
-                 <div className="text-right">
-                    <div className="text-[10px] text-gray-500 uppercase font-bold">Timeframe Damage</div>
-                    <div className="text-2xl font-mono font-bold text-red-500">
+                 <div className="text-left md:text-right mt-1 md:mt-0">
+                    <div className="text-[9px] md:text-[10px] text-gray-500 uppercase font-bold">Timeframe Damage</div>
+                    <div className="text-xl md:text-2xl font-mono font-bold text-red-500 flex items-center gap-0.5">
                        <Naira/>{formatNumber(bleedForensics.reduce((sum, item) => sum + item.total, 0))}
                     </div>
                  </div>
               </div>
 
-              <div className="overflow-x-auto max-h-[400px] overflow-y-auto pr-2 relative">
-                <table className="w-full text-sm text-left">
-                   <thead className="text-xs text-gray-500 border-b border-white/10 uppercase tracking-wider sticky top-0 bg-[#290808] z-10">
+              <div className="overflow-x-auto max-h-[300px] md:max-h-[400px] overflow-y-auto pr-1 md:pr-2 relative scrollbar-hide">
+                <table className="w-full text-[10px] md:text-sm text-left">
+                   <thead className="text-[9px] md:text-xs text-gray-500 border-b border-white/10 uppercase tracking-wider sticky top-0 bg-[#290808] z-10 font-bold">
                       <tr>
-                         <th className="py-3 font-bold">Culprit</th>
-                         <th className="py-3 font-bold text-center">Frequency</th>
-                         <th className="py-3 font-bold text-right">Total Damage</th>
-                         <th className="py-3 font-bold text-right">Last Date</th>
+                         <th className="py-2 md:py-3">Culprit</th>
+                         <th className="py-2 md:py-3 text-center">Freq</th>
+                         <th className="py-2 md:py-3 text-right">Damage</th>
+                         <th className="py-2 md:py-3 text-right hidden sm:table-cell">Last Date</th>
                       </tr>
                    </thead>
                    <tbody>
                       {bleedForensics.map((bleed, idx) => (
                          <tr key={idx} className="border-b border-white/5 hover:bg-red-500/5 transition-colors">
-                            <td className="py-4">
-                               <div className="font-bold text-gray-200">{bleed.desc}</div>
-                               <div className="text-[10px] text-red-400 uppercase font-normal">{bleed.category}</div>
+                            <td className="py-2.5 md:py-4">
+                               <div className="font-bold text-gray-200 truncate max-w-[120px] md:max-w-full">{bleed.desc}</div>
+                               <div className="text-[8px] md:text-[10px] text-red-400 uppercase font-bold truncate max-w-[120px] md:max-w-full">{bleed.category}</div>
                             </td>
-                            <td className="py-4 text-center font-mono text-gray-300">{bleed.count}x</td>
-                            <td className="py-4 text-right font-bold text-red-400 font-mono"><Naira/>{formatNumber(bleed.total)}</td>
-                            <td className="py-4 text-right text-xs text-gray-500">{new Date(bleed.latestDate).toLocaleDateString()}</td>
+                            <td className="py-2.5 md:py-4 text-center font-mono text-gray-300 font-bold">{bleed.count}x</td>
+                            <td className="py-2.5 md:py-4 text-right font-bold text-red-400 font-mono"><Naira/>{formatNumber(bleed.total)}</td>
+                            <td className="py-2.5 md:py-4 text-right text-[9px] md:text-xs text-gray-500 font-bold hidden sm:table-cell">{new Date(bleed.latestDate).toLocaleDateString()}</td>
                          </tr>
                       ))}
                    </tbody>
                 </table>
-                {bleedForensics.length === 0 && <div className="text-center py-12 text-green-500/80 font-mono">ZERO SYSTEMIC FRICTION DETECTED.</div>}
+                {bleedForensics.length === 0 && <div className="text-center py-8 md:py-12 text-green-500/80 font-mono font-bold text-xs md:text-sm">ZERO SYSTEMIC FRICTION DETECTED.</div>}
               </div>
             </GlassCard>
           </div>
 
-          <GlassCard className="p-6">
-             <div className="flex items-center justify-between mb-4">
-               <h3 className="font-bold text-white flex items-center gap-2">
-                  <ShieldCheck className="text-blue-400" size={20}/> Macro Statements
+          <GlassCard className="p-4 md:p-6">
+             <div className="flex items-center justify-between mb-3 md:mb-4">
+               <h3 className="font-bold text-white flex items-center gap-1.5 md:gap-2 text-sm md:text-base">
+                  <ShieldCheck className="text-blue-400 w-4 h-4 md:w-5 md:h-5"/> Macro Statements
                </h3>
              </div>
-             <div className="overflow-x-auto max-h-[350px] overflow-y-auto pr-2">
-               <table className="w-full text-xs text-left text-gray-400 relative">
-                 <thead className="text-gray-500 border-b border-white/10 uppercase sticky top-0 bg-[#0a0a0a] z-10">
+             <div className="overflow-x-auto max-h-[250px] md:max-h-[350px] overflow-y-auto pr-1 md:pr-2 scrollbar-hide">
+               <table className="w-full text-[10px] md:text-xs text-left text-gray-400 relative">
+                 <thead className="text-gray-500 border-b border-white/10 uppercase sticky top-0 bg-[#0a0a0a] z-10 font-bold">
                    <tr>
-                     <th className="py-2">Period</th>
-                     <th className="py-2 text-right">Income</th>
-                     <th className="py-2 text-right">Expense</th>
-                     <th className="py-2 text-right">Net Flow</th>
-                     <th className="py-2 text-right">NSR</th>
+                     <th className="py-1.5 md:py-2">Period</th>
+                     <th className="py-1.5 md:py-2 text-right">Income</th>
+                     <th className="py-1.5 md:py-2 text-right">Expense</th>
+                     <th className="py-1.5 md:py-2 text-right">Net Flow</th>
+                     <th className="py-1.5 md:py-2 text-right">NSR</th>
                    </tr>
                  </thead>
                  <tbody>
                    {monthlyStatement.map((m) => (
                      <tr key={m.month} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                       <td className="py-3 font-mono text-white">{m.month}</td>
-                       <td className="py-3 text-right text-green-400"><Naira/>{formatNumber(m.income)}</td>
-                       <td className="py-3 text-right text-red-400"><Naira/>{formatNumber(m.expense)}</td>
-                       <td className={`py-3 text-right font-bold ${m.net >= 0 ? 'text-blue-400' : 'text-red-500'}`}>
+                       <td className="py-2.5 md:py-3 font-mono text-white font-bold">{m.month}</td>
+                       <td className="py-2.5 md:py-3 text-right text-green-400 font-bold"><Naira/>{formatNumber(m.income)}</td>
+                       <td className="py-2.5 md:py-3 text-right text-red-400 font-bold"><Naira/>{formatNumber(m.expense)}</td>
+                       <td className={`py-2.5 md:py-3 text-right font-mono font-bold ${m.net >= 0 ? 'text-blue-400' : 'text-red-500'}`}>
                           {m.net >= 0 ? '+' : '-'}<Naira/>{formatNumber(Math.abs(m.net))}
                        </td>
-                       <td className="py-3 text-right">{m.savingsRate.toFixed(1)}%</td>
+                       <td className="py-2.5 md:py-3 text-right font-bold text-white">{m.savingsRate.toFixed(1)}%</td>
                      </tr>
                    ))}
                  </tbody>
                </table>
-               {monthlyStatement.length === 0 && <div className="text-center py-4 italic text-gray-600">No statement data found.</div>}
+               {monthlyStatement.length === 0 && <div className="text-center py-6 md:py-8 italic text-gray-600 text-[10px] md:text-xs font-bold">No statement data found.</div>}
              </div>
           </GlassCard>
         </div>
       )}
 
+      {/* --------------------------------------------------------- */}
+      {/* TAB 2: SOVEREIGNTY */}
+      {/* --------------------------------------------------------- */}
       {activeTab === 'SOVEREIGNTY' && (
-        <div className="space-y-6 animate-fade-in">
-          <GlassCard className="p-6 h-[500px]">
-            <div className="flex flex-col mb-6">
-              <h3 className="font-bold text-white flex items-center gap-2 text-xl">
-                 <LineChart className="text-emerald-400" size={24}/> Historical Sovereignty Protocol
+        <div className="space-y-4 md:space-y-6 animate-fade-in">
+          <GlassCard className="p-4 md:p-6 h-[350px] md:h-[500px]">
+            <div className="flex flex-col mb-4 md:mb-6">
+              <h3 className="font-bold text-white flex items-center gap-1.5 md:gap-2 text-sm md:text-xl">
+                 <LineChart className="text-emerald-400 w-4 h-4 md:w-6 md:h-6"/> Historical Sovereignty Protocol
               </h3>
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-[9px] md:text-xs text-gray-400 mt-1 font-bold">
                  Tracking the correlation between Total System Value (Net Worth) and Survival Duration (Runway). 
-                 <br/><span className="text-yellow-500">*Chart updates dynamically as daily snapshots are collected.</span>
               </p>
             </div>
-            
+
             <ResponsiveContainer width="100%" height="80%">
               {filteredSnapshots.length > 0 ? (
-                <ComposedChart data={filteredSnapshots}>
+                <ComposedChart data={filteredSnapshots} margin={{ left: -15, right: -15, bottom: -10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                  <XAxis dataKey="month" stroke="#777" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis yAxisId="left" stroke="#10b981" fontSize={10} tickFormatter={(val) => `₦${formatAxisAmount(val)}`} tickLine={false} axisLine={false} />
-                  <YAxis yAxisId="right" orientation="right" stroke="#3b82f6" fontSize={10} tickFormatter={(val) => `${val}mo`} tickLine={false} axisLine={false} />
+                  <XAxis dataKey="month" stroke="#777" fontSize={9} tickLine={false} axisLine={false} />
+                  <YAxis yAxisId="left" stroke="#10b981" fontSize={9} tickFormatter={(val) => `₦${formatAxisAmount(val)}`} tickLine={false} axisLine={false} width={40} />
+                  <YAxis yAxisId="right" orientation="right" stroke="#3b82f6" fontSize={9} tickFormatter={(val) => `${val}mo`} tickLine={false} axisLine={false} width={30} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '20px' }} />
-                  
-                  <Area yAxisId="left" type="monotone" dataKey="netWorth" fill="#10b981" fillOpacity={0.1} stroke="#10b981" strokeWidth={3} name="Total Net Worth" />
-                  <Line yAxisId="right" type="monotone" dataKey="runway" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6', strokeWidth: 0 }} name="Liquid Runway" />
+                  <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} iconSize={10} />
+
+                  <Area yAxisId="left" type="monotone" dataKey="netWorth" fill="#10b981" fillOpacity={0.1} stroke="#10b981" strokeWidth={2} name="Total Net Worth" />
+                  <Line yAxisId="right" type="monotone" dataKey="runway" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3, fill: '#3b82f6', strokeWidth: 0 }} name="Liquid Runway" />
                 </ComposedChart>
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-gray-500 border border-dashed border-white/10 rounded-xl">
-                    <LineChart size={32} className="mb-2 opacity-50"/>
-                    <span className="text-sm">Database Syncing. Awaiting first nightly snapshot.</span>
+                    <LineChart className="mb-2 opacity-50 w-6 h-6 md:w-8 md:h-8"/>
+                    <span className="text-[10px] md:text-sm font-bold uppercase tracking-widest">Database Syncing. Awaiting first nightly snapshot.</span>
                 </div>
               )}
             </ResponsiveContainer>
@@ -645,34 +653,37 @@ export const Analytics = () => {
         </div>
       )}
 
+      {/* --------------------------------------------------------- */}
+      {/* TAB 3: ALLOCATION */}
+      {/* --------------------------------------------------------- */}
       {activeTab === 'ALLOCATION' && (
-        <div className="space-y-6 animate-fade-in">
-          <GlassCard className="p-6 h-[500px]">
-            <div className="flex flex-col mb-6">
-              <h3 className="font-bold text-white flex items-center gap-2 text-xl">
-                 <Landmark className="text-purple-400" size={24}/> Capital Deployment History
+        <div className="space-y-4 md:space-y-6 animate-fade-in">
+          <GlassCard className="p-4 md:p-6 h-[350px] md:h-[500px]">
+            <div className="flex flex-col mb-4 md:mb-6">
+              <h3 className="font-bold text-white flex items-center gap-1.5 md:gap-2 text-sm md:text-xl">
+                 <Landmark className="text-purple-400 w-4 h-4 md:w-6 md:h-6"/> Capital Deployment History
               </h3>
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-[9px] md:text-xs text-gray-400 mt-1 font-bold">
                  Visualizing how unallocated liquidity transitions into funded War Room goals and Generosity.
               </p>
             </div>
             <ResponsiveContainer width="100%" height="80%">
               {filteredSnapshots.length > 0 ? (
-                <AreaChart data={filteredSnapshots}>
+                <AreaChart data={filteredSnapshots} margin={{ left: -15, bottom: -10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                  <XAxis dataKey="month" stroke="#777" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#777" fontSize={10} tickFormatter={(val) => `₦${formatAxisAmount(val)}`} tickLine={false} axisLine={false} />
+                  <XAxis dataKey="month" stroke="#777" fontSize={9} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#777" fontSize={9} tickFormatter={(val) => `₦${formatAxisAmount(val)}`} tickLine={false} axisLine={false} width={40} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '20px' }} />
-                  
+                  <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} iconSize={10} />
+
                   <Area type="monotone" dataKey="idle" stackId="1" stroke="#eab308" fill="#eab308" fillOpacity={0.3} name="Idle / Holding" />
                   <Area type="monotone" dataKey="goals" stackId="1" stroke="#a855f7" fill="#a855f7" fillOpacity={0.5} name="War Room Goals" />
                   <Area type="monotone" dataKey="generosity" stackId="1" stroke="#ec4899" fill="#ec4899" fillOpacity={0.7} name="Generosity" />
                 </AreaChart>
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-gray-500 border border-dashed border-white/10 rounded-xl">
-                    <Landmark size={32} className="mb-2 opacity-50"/>
-                    <span className="text-sm">Database Syncing. Awaiting first nightly snapshot.</span>
+                    <Landmark className="mb-2 opacity-50 w-6 h-6 md:w-8 md:h-8"/>
+                    <span className="text-[10px] md:text-sm font-bold uppercase tracking-widest">Database Syncing. Awaiting first nightly snapshot.</span>
                 </div>
               )}
             </ResponsiveContainer>
@@ -682,44 +693,47 @@ export const Analytics = () => {
         </div>
       )}
 
+      {/* --------------------------------------------------------- */}
+      {/* TAB 4: INTELLIGENCE */}
+      {/* --------------------------------------------------------- */}
       {activeTab === 'INTELLIGENCE' && (
-        <div className="space-y-6 animate-fade-in">
-          
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <GlassCard className="p-6 h-[350px]">
-              <div className="flex items-center gap-2 mb-2">
-                <PieIcon className="text-blue-400" size={20}/>
-                <h3 className="font-bold text-white">Conversion Funnel</h3>
+        <div className="space-y-4 md:space-y-6 animate-fade-in">
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+            <GlassCard className="p-4 md:p-6 h-[250px] md:h-[350px]">
+              <div className="flex items-center gap-1.5 md:gap-2 mb-2">
+                <PieIcon className="text-blue-400 w-4 h-4 md:w-5 md:h-5"/>
+                <h3 className="font-bold text-white text-sm md:text-base">Conversion Funnel</h3>
               </div>
               <ResponsiveContainer width="100%" height="90%">
                 {signalFunnel.length > 0 ? (
                   <PieChart>
-                    <Pie data={signalFunnel} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                    <Pie data={signalFunnel} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value">
                       {signalFunnel.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.fill} />
                       ))}
                     </Pie>
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend verticalAlign="bottom" height={36}/>
+                    <Legend verticalAlign="bottom" height={30} wrapperStyle={{ fontSize: '10px' }} iconSize={10}/>
                   </PieChart>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center text-gray-600">
-                      <span className="text-xs">No Signal Data</span>
+                      <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">No Signal Data</span>
                   </div>
                 )}
               </ResponsiveContainer>
             </GlassCard>
 
-            <GlassCard className="p-6 h-[350px] lg:col-span-2">
-              <div className="flex flex-col mb-4">
-                <h3 className="font-bold text-white flex items-center gap-2">
-                   <TrendingUp className="text-green-400" size={20}/> Cumulative Yield Trajectory
+            <GlassCard className="p-4 md:p-6 h-[250px] md:h-[350px] lg:col-span-2">
+              <div className="flex flex-col mb-3 md:mb-4">
+                <h3 className="font-bold text-white flex items-center gap-1.5 md:gap-2 text-sm md:text-base">
+                   <TrendingUp className="text-green-400 w-4 h-4 md:w-5 md:h-5"/> Cumulative Yield Trajectory
                 </h3>
-                <p className="text-xs text-gray-400 mt-1">Total revenue generated from harvested signals over time.</p>
+                <p className="text-[9px] md:text-xs text-gray-400 mt-1 font-bold">Total revenue generated from harvested signals over time.</p>
               </div>
               <ResponsiveContainer width="100%" height="80%">
                 {filteredSnapshots.length > 0 ? (
-                  <AreaChart data={filteredSnapshots}>
+                  <AreaChart data={filteredSnapshots} margin={{ left: -15, bottom: -10 }}>
                     <defs>
                       <linearGradient id="colorYield" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
@@ -727,54 +741,54 @@ export const Analytics = () => {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                    <XAxis dataKey="month" stroke="#777" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#10b981" fontSize={10} tickFormatter={(val) => `₦${formatAxisAmount(val)}`} tickLine={false} axisLine={false} />
+                    <XAxis dataKey="month" stroke="#777" fontSize={9} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#10b981" fontSize={9} tickFormatter={(val) => `₦${formatAxisAmount(val)}`} tickLine={false} axisLine={false} width={40} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Area type="monotone" dataKey="signalYield" stroke="#10b981" fill="url(#colorYield)" strokeWidth={3} name="Total Harvested Revenue" />
+                    <Area type="monotone" dataKey="signalYield" stroke="#10b981" fill="url(#colorYield)" strokeWidth={2} name="Total Harvested Revenue" />
                   </AreaChart>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center text-gray-500 border border-dashed border-white/10 rounded-xl">
-                      <span className="text-sm">Awaiting first nightly snapshot.</span>
+                      <span className="text-[10px] md:text-sm font-bold uppercase tracking-widest">Awaiting first nightly snapshot.</span>
                   </div>
                 )}
               </ResponsiveContainer>
             </GlassCard>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <GlassCard className="p-6 h-[450px]">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-white flex items-center gap-2">
-                  <Zap className="text-yellow-400" size={20}/> Alpha Leaderboard
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+            <GlassCard className="p-4 md:p-6 h-[300px] md:h-[450px] flex flex-col">
+              <div className="flex items-center justify-between mb-3 md:mb-4 shrink-0">
+                <h3 className="font-bold text-white flex items-center gap-1.5 md:gap-2 text-sm md:text-base">
+                  <Zap className="text-yellow-400 w-4 h-4 md:w-5 md:h-5"/> Alpha Leaderboard
                 </h3>
               </div>
-              <div className="overflow-x-auto max-h-[350px] overflow-y-auto pr-2">
-                <table className="w-full text-xs text-left text-gray-400 relative">
-                  <thead className="text-gray-500 border-b border-white/10 uppercase sticky top-0 bg-[#0a0a0a] z-10">
+              <div className="overflow-x-auto overflow-y-auto flex-1 pr-1 md:pr-2 relative scrollbar-hide">
+                <table className="w-full text-[10px] md:text-xs text-left text-gray-400">
+                  <thead className="text-gray-500 border-b border-white/10 uppercase sticky top-0 bg-[#0a0a0a] z-10 font-bold">
                     <tr>
-                      <th className="py-2">Signal</th>
-                      <th className="py-2 text-right">Profit</th>
-                      <th className="py-2 text-right">Hours</th>
-                      <th className="py-2 text-right text-yellow-500">Yield/Hr</th>
+                      <th className="py-1.5 md:py-2">Signal</th>
+                      <th className="py-1.5 md:py-2 text-right">Profit</th>
+                      <th className="py-1.5 md:py-2 text-right">Hours</th>
+                      <th className="py-1.5 md:py-2 text-right text-yellow-500">Yield/Hr</th>
                     </tr>
                   </thead>
                   <tbody>
                     {signalLeaderboard.map((s) => (
                       <tr key={s.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                        <td className="py-3">
-                          <div className="font-bold text-white">{s.name}</div>
-                          <div className="text-[10px] text-gray-500">{s.sector}</div>
+                        <td className="py-2.5 md:py-3">
+                          <div className="font-bold text-white truncate max-w-[100px] md:max-w-full">{s.name}</div>
+                          <div className="text-[8px] md:text-[10px] text-gray-500 uppercase font-bold truncate max-w-[100px] md:max-w-full">{s.sector}</div>
                         </td>
-                        <td className="py-3 text-right text-green-400"><Naira/>{formatNumber(s.profit)}</td>
-                        <td className="py-3 text-right">{s.effort}h</td>
-                        <td className="py-3 text-right font-mono font-bold text-yellow-400">
+                        <td className="py-2.5 md:py-3 text-right text-green-400 font-bold"><Naira/>{formatNumber(s.profit)}</td>
+                        <td className="py-2.5 md:py-3 text-right font-bold text-white">{s.effort}h</td>
+                        <td className="py-2.5 md:py-3 text-right font-mono font-bold text-yellow-400">
                           <Naira/>{formatNumber(s.roi)}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                {signalLeaderboard.length === 0 && <div className="text-center py-12 italic text-gray-600">No winning signals harvested yet.</div>}
+                {signalLeaderboard.length === 0 && <div className="text-center py-8 italic text-gray-600 text-[10px] md:text-xs font-bold">No winning signals harvested yet.</div>}
               </div>
             </GlassCard>
 

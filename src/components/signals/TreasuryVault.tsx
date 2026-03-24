@@ -5,6 +5,7 @@ import { formatNumber } from '../../utils/format';
 import { getSectorStyle } from '../../utils/colors';
 import { X, TrendingUp, Calendar, DollarSign, Activity, Layers, PieChart, Landmark } from 'lucide-react';
 import { type SignalPhase } from '../../types';
+import { Naira } from '../ui/Naira';
 
 interface Props {
   onClose: () => void;

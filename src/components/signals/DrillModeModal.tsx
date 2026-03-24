@@ -18,7 +18,7 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
   const [confidenceCap, setConfidenceCap] = useState(10);
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     title: '',
     sector: '',
@@ -31,7 +31,6 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
     timeEstimates: { weekly: 0, total: 0, completionDate: '' }
   });
 
-  // 1. Sector Autocomplete Logic
   const existingSectors = useMemo(() => {
     const sectors = new Set(signals.map(s => s.sector).filter(Boolean));
     return Array.from(sectors).sort();
@@ -42,15 +41,12 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
     s.toLowerCase() !== formData.sector.toLowerCase()
   );
 
-  // 2. Red Flags Source (Fixed TypeScript Error)
   const RED_FLAGS_SOURCE = useMemo(() => {
     const filterChapter = MANUAL_CHAPTERS.find(c => c.id === 'filters');
-    // FIX: Added (b: any) to allow checking 'variant' on the union type
     const flagBlock = filterChapter?.content.find((b: any) => b.type === 'card_grid' && b.variant === 'danger');
     return (flagBlock as any)?.items || [];
   }, []);
 
-  // 3. Confidence Logic
   useEffect(() => {
     let cap = 10;
     const missing = [];
@@ -59,11 +55,11 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
     if (!formData.links.twitter) { cap -= 1; missing.push("Socials"); }
     if (!formData.findings || formData.findings.length < 50) { cap -= 3; missing.push("Deep Findings"); }
     if (!formData.pickReason) { cap -= 2; missing.push("Alpha Thesis"); }
-    
+
     if (formData.confidence > cap) {
       setFormData(prev => ({ ...prev, confidence: cap }));
     }
-    
+
     setConfidenceCap(cap);
     setMissingFields(missing);
   }, [formData.links, formData.findings, formData.pickReason]);
@@ -101,56 +97,56 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl p-4 animate-fade-in">
-      <GlassCard className="w-full max-w-lg p-0 overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-md p-3 animate-fade-in">
+      <GlassCard className="w-full max-w-lg p-0 overflow-hidden flex flex-col max-h-[90vh] md:max-h-[85vh] shadow-2xl border-white/20">
+        <div className="p-4 md:p-6 border-b border-white/10 flex justify-between items-center bg-white/5 shrink-0">
           <div>
-            <h2 className="text-xl font-bold text-white">Research Drill</h2>
-            <div className="flex gap-2 mt-2">
+            <h2 className="text-lg md:text-xl font-bold text-white">Research Drill</h2>
+            <div className="flex gap-1.5 md:gap-2 mt-1.5 md:mt-2">
               {[1, 2, 3, 4, 5].map(s => (
-                <div key={s} className={`h-1 w-8 rounded-full transition-colors duration-300 ${step >= s ? 'bg-accent-success' : 'bg-white/10'}`} />
+                <div key={s} className={`h-1 w-6 md:w-8 rounded-full transition-colors duration-300 ${step >= s ? 'bg-accent-success' : 'bg-white/10'}`} />
               ))}
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={20}/></button>
+          <button onClick={onClose} className="text-gray-500 hover:text-white p-1"><X size={20}/></button>
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+        <div className="p-4 md:p-6 overflow-y-auto flex-1 space-y-5 md:space-y-6 scrollbar-hide bg-black/40">
           {step === 1 && (
             <div className="space-y-4 animate-fade-in">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2"><LinkIcon size={18} className="text-blue-400"/> The Artifacts</h3>
-              <GlassInput icon={<LinkIcon size={14}/>} placeholder="Website URL" value={formData.links.website} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateLink('website', e.target.value)} />
+              <h3 className="text-base md:text-lg font-bold text-white flex items-center gap-2"><LinkIcon size={16} className="text-blue-400"/> The Artifacts</h3>
+              <GlassInput icon={<LinkIcon size={14}/>} placeholder="Website URL" value={formData.links.website} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateLink('website', e.target.value)} autoFocus/>
               <GlassInput icon={<LinkIcon size={14}/>} placeholder="Twitter/X Link" value={formData.links.twitter} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateLink('twitter', e.target.value)} />
-              <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+              <div className="p-3 bg-white/5 rounded-lg md:rounded-xl border border-white/10">
                 <GlassInput icon={<Database size={14}/>} placeholder="GitHub / Codebase" value={formData.links.github} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateLink('github', e.target.value)} />
-                <textarea className="w-full bg-black/20 border border-white/10 rounded-lg p-2 text-xs text-white mt-2 h-16 resize-none" placeholder="Repo Activity Notes" onChange={(e) => setFormData(p => ({...p, drillNotes: {...p.drillNotes, github: e.target.value}}))}/>
+                <textarea className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-[10px] md:text-xs text-white mt-2 h-16 resize-none focus:outline-none focus:border-white/30" placeholder="Repo Activity Notes" onChange={(e) => setFormData(p => ({...p, drillNotes: {...p.drillNotes, github: e.target.value}}))}/>
               </div>
             </div>
           )}
           {step === 2 && (
             <div className="space-y-4 animate-fade-in">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2"><AlertCircle size={18} className="text-yellow-400"/> Tokenomics</h3>
+              <h3 className="text-base md:text-lg font-bold text-white flex items-center gap-2"><AlertCircle size={16} className="text-yellow-400"/> Tokenomics</h3>
               <div className="grid grid-cols-3 gap-2">
                 {['live', 'pending', 'none'].map(s => (
-                  <button key={s} onClick={() => updateToken('status', s)} className={`p-3 rounded-xl border text-xs font-bold uppercase ${formData.token.status === s ? 'bg-white text-black border-white' : 'bg-transparent text-gray-500 border-white/10'}`}>{s}</button>
+                  <button key={s} onClick={() => updateToken('status', s)} className={`p-2.5 md:p-3 rounded-lg md:rounded-xl border text-[10px] md:text-xs font-bold uppercase transition-colors ${formData.token.status === s ? 'bg-white text-black border-white shadow-md' : 'bg-transparent text-gray-500 border-white/10 hover:bg-white/5'}`}>{s}</button>
                 ))}
               </div>
-              {formData.token.status === 'live' && <GlassInput label="Utility" value={formData.token.utility} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateToken('utility', e.target.value)} />}
-              {formData.token.status === 'pending' && <div className="space-y-3 p-4 bg-white/5 rounded-xl"><GlassInput label="TGE Date" type="date" value={formData.token.tgeDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateToken('tgeDate', e.target.value)} /><GlassInput label="Launch Plan" value={formData.token.launchPlan} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateToken('launchPlan', e.target.value)} /></div>}
+              {formData.token.status === 'live' && <GlassInput label="Utility" value={formData.token.utility} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateToken('utility', e.target.value)} autoFocus/>}
+              {formData.token.status === 'pending' && <div className="space-y-3 p-3 md:p-4 bg-white/5 rounded-lg md:rounded-xl border border-white/5"><GlassInput label="TGE Date" type="date" value={formData.token.tgeDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateToken('tgeDate', e.target.value)} /><GlassInput label="Launch Plan" value={formData.token.launchPlan} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateToken('launchPlan', e.target.value)} /></div>}
             </div>
           )}
           {step === 3 && (
             <div className="space-y-4 animate-fade-in">
-              <h3 className="text-lg font-bold text-white">Deep Work</h3>
-              <textarea className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white h-24" placeholder="Why did you pick this? (Alpha Thesis)" value={formData.pickReason} onChange={(e) => setFormData(p => ({...p, pickReason: e.target.value}))}/>
-              <textarea className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-sm text-white h-32" placeholder="Specific Findings (Min 50 chars)" value={formData.findings} onChange={(e) => setFormData(p => ({...p, findings: e.target.value}))}/>
+              <h3 className="text-base md:text-lg font-bold text-white">Deep Work</h3>
+              <textarea className="w-full bg-black/40 border border-white/10 rounded-lg md:rounded-xl p-3 text-xs md:text-sm text-white h-20 md:h-24 resize-none focus:outline-none focus:border-white/30" placeholder="Why did you pick this? (Alpha Thesis)" value={formData.pickReason} onChange={(e) => setFormData(p => ({...p, pickReason: e.target.value}))} autoFocus/>
+              <textarea className="w-full bg-black/40 border border-white/10 rounded-lg md:rounded-xl p-3 text-xs md:text-sm text-white h-28 md:h-32 resize-none focus:outline-none focus:border-white/30" placeholder="Specific Findings (Min 50 chars)" value={formData.findings} onChange={(e) => setFormData(p => ({...p, findings: e.target.value}))}/>
             </div>
           )}
           {step === 4 && (
             <div className="space-y-4 animate-fade-in">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2"><Clock size={18} className="text-purple-400"/> Time Commitment</h3>
-              <div className="grid grid-cols-2 gap-4">
-                 <GlassInput label="Est. Hours/Week" type="number" value={formData.timeEstimates.weekly || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(p => ({...p, timeEstimates: {...p.timeEstimates, weekly: parseFloat(e.target.value)}}))} />
+              <h3 className="text-base md:text-lg font-bold text-white flex items-center gap-2"><Clock size={16} className="text-purple-400"/> Time Commitment</h3>
+              <div className="grid grid-cols-2 gap-3 md:gap-4">
+                 <GlassInput label="Est. Hours/Week" type="number" value={formData.timeEstimates.weekly || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(p => ({...p, timeEstimates: {...p.timeEstimates, weekly: parseFloat(e.target.value)}}))} autoFocus/>
                  <GlassInput label="Target Completion" type="date" value={formData.timeEstimates.completionDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(p => ({...p, timeEstimates: {...p.timeEstimates, completionDate: e.target.value}}))} />
               </div>
               <GlassInput label="Total Hours Est." type="number" value={formData.timeEstimates.total || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(p => ({...p, timeEstimates: {...p.timeEstimates, total: parseFloat(e.target.value)}}))} />
@@ -158,29 +154,29 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
           )}
 
           {step === 5 && (
-            <div className="space-y-6 animate-fade-in text-center py-4">
-              <div className="inline-flex p-4 rounded-full bg-green-500/10 text-green-500 mb-2"><CheckCircle2 size={32}/></div>
-              <h3 className="text-xl font-bold text-white">Name the Asset</h3>
+            <div className="space-y-4 md:space-y-6 animate-fade-in text-center py-2 md:py-4">
+              <div className="inline-flex p-3 md:p-4 rounded-full bg-green-500/10 border border-green-500/20 text-green-500 mb-1 md:mb-2 shadow-[0_0_20px_rgba(34,197,94,0.15)]"><CheckCircle2 size={24} className="md:w-8 md:h-8"/></div>
+              <h3 className="text-lg md:text-xl font-bold text-white">Name the Asset</h3>
 
-              <div className="text-left space-y-4">
+              <div className="text-left space-y-3 md:space-y-4">
                 <GlassInput label="Project Name" value={formData.title} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(p => ({...p, title: e.target.value}))} autoFocus />
-                
+
                 <div className="relative">
-                    <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Sector</label>
+                    <label className="text-[10px] md:text-xs font-bold text-gray-500 uppercase mb-1 block">Sector</label>
                     <input 
                         type="text"
                         value={formData.sector}
                         onChange={(e) => { setFormData(p => ({...p, sector: e.target.value})); setShowSuggestions(true); }}
                         onFocus={() => setShowSuggestions(true)}
                         onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} 
-                        className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-white/30"
+                        className="w-full bg-black/40 border border-white/10 rounded-lg md:rounded-xl p-2.5 md:p-3 text-xs md:text-sm text-white focus:outline-none focus:border-white/30 transition-colors"
                         placeholder="e.g. DePin, AI"
                     />
                     {showSuggestions && filteredSectors.length > 0 && (
-                        <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden max-h-40 overflow-y-auto">
-                            <div className="p-2 text-[10px] text-gray-500 uppercase font-bold bg-white/5">Known Sectors</div>
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-white/10 rounded-lg md:rounded-xl shadow-2xl z-50 overflow-hidden max-h-40 overflow-y-auto">
+                            <div className="p-2 text-[8px] md:text-[10px] text-gray-500 uppercase font-bold bg-white/5 border-b border-white/5">Known Sectors</div>
                             {filteredSectors.map(s => (
-                                <button key={s} onClick={() => { setFormData(p => ({...p, sector: s})); setShowSuggestions(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors">
+                                <button key={s} onClick={() => { setFormData(p => ({...p, sector: s})); setShowSuggestions(false); }} className="w-full text-left px-3 py-2 md:px-4 md:py-2 text-[11px] md:text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors">
                                     {s}
                                 </button>
                             ))}
@@ -188,33 +184,33 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
                     )}
                 </div>
 
-                <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4 mb-2">
-                   <div className="flex items-center gap-2 mb-2 text-red-400">
-                      <AlertTriangle size={14} />
-                      <span className="text-xs font-bold uppercase">Manual Check</span>
+                <div className="bg-red-500/5 border border-red-500/20 rounded-lg md:rounded-xl p-3 md:p-4 mb-2">
+                   <div className="flex items-center gap-1.5 md:gap-2 mb-1.5 md:mb-2 text-red-400">
+                      <AlertTriangle size={12} className="md:w-3.5 md:h-3.5"/>
+                      <span className="text-[10px] md:text-xs font-bold uppercase tracking-wider">Manual Check</span>
                    </div>
                    <div className="grid grid-cols-2 gap-2">
                       {RED_FLAGS_SOURCE.map((flag: any, idx: number) => (
-                         <div key={idx} className="text-[10px] text-gray-400 flex items-start gap-1">
-                            <span className="text-red-500/50">•</span>
-                            <span title={flag.body} className="hover:text-white cursor-help transition-colors">{flag.title}</span>
+                         <div key={idx} className="text-[9px] md:text-[10px] text-gray-400 flex items-start gap-1 font-bold">
+                            <span className="text-red-500/50 shrink-0">•</span>
+                            <span className="truncate">{flag.title}</span>
                          </div>
                       ))}
                    </div>
                 </div>
 
-                <div className={`p-4 rounded-xl border transition-all duration-300 ${missingFields.length > 0 ? 'bg-red-500/5 border-red-500/30' : 'bg-green-500/10 border-green-500/50 shadow-md'}`}>
+                <div className={`p-3 md:p-4 rounded-lg md:rounded-xl border transition-all duration-300 ${missingFields.length > 0 ? 'bg-red-500/5 border-red-500/30' : 'bg-green-500/10 border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.1)]'}`}>
                   <div className="flex justify-between mb-2">
-                    <label className="text-xs font-bold text-gray-500 uppercase">Initial Confidence</label>
-                    <span className={`font-bold ${missingFields.length > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                      {formData.confidence}/10 {missingFields.length > 0 && `(Capped at ${confidenceCap})`}
+                    <label className="text-[10px] md:text-xs font-bold text-gray-500 uppercase">Initial Confidence</label>
+                    <span className={`font-bold text-[11px] md:text-sm ${missingFields.length > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                      {formData.confidence}/10 {missingFields.length > 0 && <span className="hidden sm:inline">(Capped at {confidenceCap})</span>}
                     </span>
                   </div>
-                  <input type="range" min="1" max={confidenceCap} value={formData.confidence} onChange={(e) => setFormData(p => ({...p, confidence: Number(e.target.value)}))} className={`w-full cursor-pointer ${missingFields.length > 0 ? 'accent-red-500' : 'accent-green-500'}`}/>
+                  <input type="range" min="1" max={confidenceCap} value={formData.confidence} onChange={(e) => setFormData(p => ({...p, confidence: Number(e.target.value)}))} className={`w-full cursor-pointer h-1.5 md:h-2 ${missingFields.length > 0 ? 'accent-red-500' : 'accent-green-500'}`}/>
                   {missingFields.length > 0 && (
-                    <div className="mt-3 text-xs text-red-400 flex items-start gap-2">
-                      <AlertTriangle size={12} className="mt-0.5 shrink-0"/>
-                      <div><strong>Confidence Locked:</strong> Missing {missingFields.join(', ')}.</div>
+                    <div className="mt-2.5 md:mt-3 text-[9px] md:text-xs text-red-400 flex items-start gap-1.5 md:gap-2 font-bold">
+                      <AlertTriangle size={10} className="mt-0.5 shrink-0 md:w-3.5 md:h-3.5"/>
+                      <div className="leading-tight"><strong>Locked:</strong> Missing {missingFields.join(', ')}.</div>
                     </div>
                   )}
                 </div>
@@ -223,12 +219,12 @@ export const DrillModeModal = ({ onClose, onSave }: Props) => {
           )}
         </div>
 
-        <div className="p-6 border-t border-white/10 bg-black/20 flex justify-between">
-          <button onClick={() => setStep(s => Math.max(1, s - 1))} className={`text-sm text-gray-500 hover:text-white ${step === 1 ? 'opacity-0 disabled' : ''}`}>Back</button>
+        <div className="p-4 md:p-6 border-t border-white/10 bg-black/60 flex justify-between shrink-0 items-center">
+          <button onClick={() => setStep(s => Math.max(1, s - 1))} className={`text-xs md:text-sm text-gray-500 hover:text-white font-bold transition-colors px-2 py-1 ${step === 1 ? 'opacity-0 disabled pointer-events-none' : ''}`}>Back</button>
           {step < 5 ? (
-            <GlassButton onClick={() => setStep(s => s + 1)} size="sm">Next Step <ArrowRight size={16} className="ml-2"/></GlassButton>
+            <GlassButton onClick={() => setStep(s => s + 1)} size="sm" className="text-[11px] md:text-sm py-2 px-4 md:py-2.5">Next Step <ArrowRight size={14} className="ml-1.5 md:ml-2"/></GlassButton>
           ) : (
-            <GlassButton onClick={handleFinish} disabled={!formData.title} size="sm">Create Signal</GlassButton>
+            <GlassButton onClick={handleFinish} disabled={!formData.title} size="sm" className="text-[11px] md:text-sm py-2 px-4 md:py-2.5">Create Signal</GlassButton>
           )}
         </div>
       </GlassCard>

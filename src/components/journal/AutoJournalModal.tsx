@@ -54,7 +54,7 @@ export const AutoJournalModal = () => {
         {/* PSYCHOLOGICAL PROMPT */}
         <div className="p-4 md:p-6 bg-black/60">
            <div className="flex items-start gap-1.5 md:gap-2 text-white font-bold mb-3 md:mb-4 text-sm md:text-base">
-             <ChevronRight className="text-blue-500 shrink-0 mt-0.5" size={14} className="md:w-4 md:h-4"/>
+             <ChevronRight className="text-blue-500 shrink-0 mt-0.5 md:w-4 md:h-4" size={14} />
              <span>{engineResult.prompt}</span>
            </div>
 

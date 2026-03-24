@@ -180,14 +180,15 @@ export const OperatorsManual = ({ isOpen, onClose, initialChapterId, onAction }:
   const activeChapter = MANUAL_CHAPTERS.find(c => c.id === activeChapterId) || MANUAL_CHAPTERS[0];
 
   const getIcon = (name: string) => {
+    const props = { size: 14, className: "md:w-[18px] md:h-[18px]" };
     switch(name) {
-      case 'Anchor': return <Anchor size={18}/>;
-      case 'Activity': return <Activity size={18}/>;
-      case 'Dumbbell': return <Dumbbell size={18}/>;
-      case 'ShieldAlert': return <ShieldAlert size={18}/>;
-      case 'Wrench': return <Wrench size={18}/>;
-      case 'Archive': return <Archive size={18}/>;
-      default: return <BookOpen size={18}/>;
+      case 'Anchor': return <Anchor {...props}/>;
+      case 'Activity': return <Activity {...props}/>;
+      case 'Dumbbell': return <Dumbbell {...props}/>;
+      case 'ShieldAlert': return <ShieldAlert {...props}/>;
+      case 'Wrench': return <Wrench {...props}/>;
+      case 'Archive': return <Archive {...props}/>;
+      default: return <BookOpen {...props}/>;
     }
   };
 
@@ -201,34 +202,34 @@ export const OperatorsManual = ({ isOpen, onClose, initialChapterId, onAction }:
     >
       <button 
         onClick={onClose} 
-        className="absolute top-6 right-6 z-[210] p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors border border-white/10"
+        className="absolute top-4 md:top-6 right-4 md:right-6 z-[210] p-2 md:p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors border border-white/10"
       >
-        <X size={24}/>
+        <X className="w-5 h-5 md:w-6 md:h-6"/>
       </button>
 
-      <div className="flex-1 flex flex-col md:flex-row max-w-7xl mx-auto w-full md:p-8 overflow-hidden pt-16 md:pt-8">
-        
+      <div className="flex-1 flex flex-col md:flex-row max-w-7xl mx-auto w-full md:p-8 overflow-hidden pt-14 md:pt-8">
+
         {/* SIDEBAR NAVIGATION */}
-        <div className="w-full md:w-1/4 border-b md:border-b-0 md:border-r border-white/10 overflow-y-auto p-4 bg-black/40 md:bg-transparent shrink-0">
+        <div className="w-full md:w-1/4 border-b md:border-b-0 md:border-r border-white/10 overflow-y-auto p-3 md:p-4 bg-black/40 md:bg-transparent shrink-0">
           <div className="mb-6 hidden md:block">
             <h2 className="text-2xl font-bold text-white">The Codex</h2>
             <p className="text-xs text-gray-500 uppercase tracking-widest mt-1">Operator's Manual v2.0</p>
           </div>
-          <div className="space-y-2 flex flex-row md:flex-col overflow-x-auto gap-2 md:gap-0">
+          <div className="space-y-2 flex flex-row md:flex-col overflow-x-auto gap-2 md:gap-0 scrollbar-hide">
             {MANUAL_CHAPTERS.map(chapter => (
               <button 
                 key={chapter.id} 
                 onClick={() => setActiveChapterId(chapter.id)} 
                 className={`
-                  w-auto md:w-full flex items-center justify-between p-3 md:p-4 rounded-xl border transition-all whitespace-nowrap
+                  w-auto md:w-full flex items-center justify-between p-2.5 md:p-4 rounded-lg md:rounded-xl border transition-all whitespace-nowrap
                   ${activeChapterId === chapter.id 
                     ? 'bg-white/10 border-white/20 text-white shadow-lg' 
                     : 'bg-transparent border-transparent text-gray-500 hover:text-white hover:bg-white/5'}
                 `}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 md:gap-3">
                   {getIcon(chapter.icon)}
-                  <span className="font-bold text-sm">{chapter.title}</span>
+                  <span className="font-bold text-xs md:text-sm">{chapter.title}</span>
                 </div>
                 {activeChapterId === chapter.id && <ChevronRight size={16} className="hidden md:block"/>}
               </button>
@@ -237,73 +238,73 @@ export const OperatorsManual = ({ isOpen, onClose, initialChapterId, onAction }:
         </div>
 
         {/* CONTENT RENDERING ENGINE */}
-        <div className="flex-1 h-full overflow-y-auto p-6 md:pl-12 pb-32">
-          <div className="max-w-3xl mx-auto space-y-8 animate-fade-in">
+        <div className="flex-1 h-full overflow-y-auto p-4 md:p-6 md:pl-12 pb-24 md:pb-32">
+          <div className="max-w-3xl mx-auto space-y-6 md:space-y-8 animate-fade-in">
             {activeChapter.content.map((block: any, idx: number) => (
               <div key={idx}>
                 {block.type === 'header' && (
-                  <div className="mb-6 border-b border-white/10 pb-4">
-                    <h1 className="text-3xl font-bold text-white mb-2">{block.text}</h1>
-                    <p className="text-gray-400">{block.description}</p>
+                  <div className="mb-4 md:mb-6 border-b border-white/10 pb-3 md:pb-4">
+                    <h1 className="text-2xl md:text-3xl font-bold text-white mb-1.5 md:mb-2 tracking-tight">{block.text}</h1>
+                    <p className="text-xs md:text-sm text-gray-400">{block.description}</p>
                   </div>
                 )}
 
                 {block.type === 'action' && (
                   <button 
                     onClick={() => { if (onAction) onAction(block.actionId); onClose(); }} 
-                    className={`w-full p-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all transform hover:scale-[1.02] shadow-lg ${block.variant === 'primary' ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'}`}
+                    className={`w-full p-3 md:p-4 rounded-xl font-bold text-sm md:text-base flex items-center justify-center gap-2 md:gap-3 transition-all transform hover:scale-[1.02] shadow-lg ${block.variant === 'primary' ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'}`}
                   >
-                    {block.variant === 'primary' ? <Zap size={18}/> : <ArrowRight size={18}/>}
+                    {block.variant === 'primary' ? <Zap size={16} className="md:w-[18px] md:h-[18px]"/> : <ArrowRight size={16} className="md:w-[18px] md:h-[18px]"/>}
                     {block.label}
                   </button>
                 )}
 
                 {block.type === 'section' && (
-                  <GlassCard className="p-6">
-                    <h3 className="text-xl font-bold text-white mb-3">{block.title}</h3>
-                    <div className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed">{block.body}</div>
+                  <GlassCard className="p-4 md:p-6">
+                    <h3 className="text-lg md:text-xl font-bold text-white mb-2 md:mb-3">{block.title}</h3>
+                    <div className="text-gray-300 text-xs md:text-sm whitespace-pre-wrap leading-relaxed">{block.body}</div>
                   </GlassCard>
                 )}
 
                 {block.type === 'callout' && (
-                  <div className={`p-4 rounded-xl border-l-4 mb-4 ${block.variant === 'success' ? 'bg-green-500/10 border-green-500 text-green-300' : 'bg-yellow-500/10 border-yellow-500 text-yellow-300'}`}>
-                    <p className="font-bold text-sm italic">"{block.text}"</p>
+                  <div className={`p-3 md:p-4 rounded-lg md:rounded-xl border-l-[3px] md:border-l-4 mb-3 md:mb-4 ${block.variant === 'success' ? 'bg-green-500/10 border-green-500 text-green-300' : 'bg-yellow-500/10 border-yellow-500 text-yellow-300'}`}>
+                    <p className="font-bold text-xs md:text-sm italic">"{block.text}"</p>
                   </div>
                 )}
 
                 {block.type === 'card_grid' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-3 md:mb-4">
                     {block.items?.map((item: any, i: number) => (
-                      <div key={i} className={`p-4 rounded-xl border bg-white/5 ${block.variant === 'danger' ? 'border-red-500/30' : 'border-white/10'}`}>
-                        <h4 className={`font-bold text-sm mb-2 ${block.variant === 'danger' ? 'text-red-400' : 'text-white'}`}>{item.title}</h4>
-                        <p className="text-xs text-gray-400">{item.body}</p>
+                      <div key={i} className={`p-3 md:p-4 rounded-lg md:rounded-xl border bg-white/5 ${block.variant === 'danger' ? 'border-red-500/30' : 'border-white/10'}`}>
+                        <h4 className={`font-bold text-xs md:text-sm mb-1.5 md:mb-2 ${block.variant === 'danger' ? 'text-red-400' : 'text-white'}`}>{item.title}</h4>
+                        <p className="text-[10px] md:text-xs text-gray-400">{item.body}</p>
                       </div>
                     ))}
                   </div>
                 )}
 
                 {block.type === 'code_block' && (
-                  <div className="mb-6">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-xs font-bold text-gray-500 uppercase">{block.label}</span>
-                      <button onClick={() => navigator.clipboard.writeText(block.code)} className="text-xs text-blue-400 flex items-center gap-1 hover:text-white">
+                  <div className="mb-4 md:mb-6">
+                    <div className="flex justify-between items-center mb-1.5 md:mb-2">
+                      <span className="text-[10px] md:text-xs font-bold text-gray-500 uppercase">{block.label}</span>
+                      <button onClick={() => navigator.clipboard.writeText(block.code)} className="text-[10px] md:text-xs text-blue-400 flex items-center gap-1 hover:text-white font-bold p-1">
                         <Copy size={12}/> Copy
                       </button>
                     </div>
-                    <pre className="bg-black/50 p-4 rounded-xl border border-white/10 text-xs text-gray-300 font-mono whitespace-pre-wrap overflow-x-auto">{block.code}</pre>
+                    <pre className="bg-black/50 p-3 md:p-4 rounded-lg md:rounded-xl border border-white/10 text-[10px] md:text-xs text-gray-300 font-mono whitespace-pre-wrap overflow-x-auto">{block.code}</pre>
                   </div>
                 )}
 
                 {block.type === 'table' && (
-                  <div className="overflow-x-auto mb-6 rounded-xl border border-white/10">
-                    <table className="w-full text-left text-sm text-gray-300">
-                      <thead className="bg-white/10 text-white uppercase text-xs">
-                        <tr>{block.headers?.map((h: string, i: number) => (<th key={i} className="p-3 font-bold">{h}</th>))}</tr>
+                  <div className="overflow-x-auto mb-4 md:mb-6 rounded-lg md:rounded-xl border border-white/10">
+                    <table className="w-full text-left text-xs md:text-sm text-gray-300 min-w-[300px]">
+                      <thead className="bg-white/10 text-white uppercase text-[10px] md:text-xs tracking-wider">
+                        <tr>{block.headers?.map((h: string, i: number) => (<th key={i} className="p-2 md:p-3 font-bold">{h}</th>))}</tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
                         {block.rows?.map((row: string[], r: number) => (
                           <tr key={r} className="hover:bg-white/5">
-                            {row.map((cell, c) => (<td key={c} className="p-3">{cell}</td>))}
+                            {row.map((cell, c) => (<td key={c} className="p-2 md:p-3 font-mono">{cell}</td>))}
                           </tr>
                         ))}
                       </tbody>
@@ -314,25 +315,25 @@ export const OperatorsManual = ({ isOpen, onClose, initialChapterId, onAction }:
                 {block.type === 'accordion' && (
                    <div className="space-y-2">
                       {block.items.map((item: any, i: number) => (
-                          <div key={i} className="p-4 rounded-xl border border-white/10 bg-white/5">
-                             <h4 className="font-bold text-white text-sm mb-1">{item.title}</h4>
-                             <p className="text-xs text-gray-400">{item.content}</p>
+                          <div key={i} className="p-3 md:p-4 rounded-lg md:rounded-xl border border-white/10 bg-white/5">
+                             <h4 className="font-bold text-white text-xs md:text-sm mb-1">{item.title}</h4>
+                             <p className="text-[10px] md:text-xs text-gray-400">{item.content}</p>
                           </div>
                       ))}
                    </div>
                 )}
 
                 {block.type === 'process_flow' && (
-                    <div className="space-y-4">
+                    <div className="space-y-3 md:space-y-4">
                         {block.steps.map((step: any, i: number) => (
-                            <div key={i} className="flex gap-4 p-4 rounded-xl border border-white/10 bg-white/5 items-start">
-                                <div className="text-xs font-bold bg-white/10 px-2 py-1 rounded text-white">{i + 1}</div>
+                            <div key={i} className="flex gap-3 md:gap-4 p-3 md:p-4 rounded-lg md:rounded-xl border border-white/10 bg-white/5 items-start">
+                                <div className="text-[10px] md:text-xs font-bold bg-white/10 px-2 py-1 rounded text-white shrink-0">{i + 1}</div>
                                 <div>
-                                    <h4 className="font-bold text-white text-sm">{step.title}</h4>
-                                    <p className="text-xs text-gray-400 mb-2">{step.desc}</p>
-                                    <div className="flex gap-2">
+                                    <h4 className="font-bold text-white text-xs md:text-sm mb-0.5 md:mb-1">{step.title}</h4>
+                                    <p className="text-[10px] md:text-xs text-gray-400 mb-2">{step.desc}</p>
+                                    <div className="flex flex-wrap gap-2">
                                         {step.tools.map((t: any, k: number) => (
-                                            <a key={k} href={t.url} target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 hover:text-white border border-blue-400/30 px-2 py-0.5 rounded hover:bg-blue-400/20">
+                                            <a key={k} href={t.url} target="_blank" rel="noreferrer" className="text-[9px] md:text-[10px] text-blue-400 hover:text-white border border-blue-400/30 px-2 py-0.5 rounded hover:bg-blue-400/20 font-bold uppercase tracking-wider">
                                                 {t.label}
                                             </a>
                                         ))}
